@@ -1,0 +1,32 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_round_paper": {
+      "conditions": {
+        "items": [
+          {
+            "items": "witchhatateliermod:round_paper"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_the_recipe": {
+      "conditions": {
+        "recipe": "witchhatateliermod:spell_binder"
+      },
+      "trigger": "minecraft:recipe_unlocked"
+    }
+  },
+  "requirements": [
+    [
+      "has_the_recipe",
+      "has_round_paper"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "witchhatateliermod:spell_binder"
+    ]
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "witchhatateliermod.configuration.title": "WitchHatAtelierMod Configs",
+  "witchhatateliermod.configuration.section.witchhatateliermod.common.toml": "WitchHatAtelierMod Configs",
+  "witchhatateliermod.configuration.section.witchhatateliermod.common.toml.title": "WitchHatAtelierMod Configs",
+
+  "creativetab.witchhatatelier.tab": "Witch Hat Atelier",
+  "item.witchhatateliermod.wand": "Wand",
+  "item.witchhatateliermod.nib": "Nib",
+  "item.witchhatateliermod.spell_paper": "Spell Paper",
+  "item.witchhatateliermod.round_spell_paper": "Round Spell Paper",
+  "item.witchhatateliermod.round_paper": "Round Paper",
+  "item.witchhatateliermod.spell_binder": "Spell Binder",
+
+  "block.witchhatateliermod.round_paper_block": "Round Paper Block"
+
+
+}

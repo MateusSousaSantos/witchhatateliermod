@@ -1,0 +1,24 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "key": {
+    "i": {
+      "item": "minecraft:iron_nugget"
+    },
+    "l": {
+      "item": "minecraft:leather"
+    },
+    "s": {
+      "item": "minecraft:string"
+    }
+  },
+  "pattern": [
+    "s  ",
+    "sli",
+    "s  "
+  ],
+  "result": {
+    "count": 1,
+    "id": "witchhatateliermod:spell_binder"
+  }
+}

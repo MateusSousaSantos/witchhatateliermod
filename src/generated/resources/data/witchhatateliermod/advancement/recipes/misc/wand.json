@@ -1,0 +1,32 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_nib": {
+      "conditions": {
+        "items": [
+          {
+            "items": "witchhatateliermod:nib"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_the_recipe": {
+      "conditions": {
+        "recipe": "witchhatateliermod:wand"
+      },
+      "trigger": "minecraft:recipe_unlocked"
+    }
+  },
+  "requirements": [
+    [
+      "has_the_recipe",
+      "has_nib"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "witchhatateliermod:wand"
+    ]
+  }
+}

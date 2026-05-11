@@ -1,0 +1,18 @@
+{
+  "base": {
+    "parent": "witchhatateliermod:item/wand_3d"
+  },
+  "gui_light": "front",
+  "loader": "neoforge:separate_transforms",
+  "perspectives": {
+    "fixed": {
+      "parent": "witchhatateliermod:item/wand_2d"
+    },
+    "ground": {
+      "parent": "witchhatateliermod:item/wand_2d"
+    },
+    "gui": {
+      "parent": "witchhatateliermod:item/wand_2d"
+    }
+  }
+}
