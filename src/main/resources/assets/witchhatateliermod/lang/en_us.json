@@ -11,7 +11,9 @@
   "item.witchhatateliermod.round_paper": "Round Paper",
   "item.witchhatateliermod.spell_binder": "Spell Binder",
 
-  "block.witchhatateliermod.round_paper_block": "Round Paper Block"
+  "block.witchhatateliermod.round_paper_block": "Round Paper Block",
 
-
+  "screen.witchhatatelier.gesture_canvas": "Sigil Canvas",
+  "screen.witchhatatelier.gesture_canvas.read_only": "✦ View only — equip a Wand to edit ✦",
+  "screen.witchhatatelier.gesture_canvas.paper": "Paper Canvas"
 }

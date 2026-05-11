@@ -7,6 +7,7 @@ import org.slf4j.Logger;
 
 import com.mojang.logging.LogUtils;
 
+import com.crsocial.witchhatatelier.network.SaveGestureHandler;
 import com.crsocial.witchhatatelier.network.SaveGesturePayload;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -42,7 +43,7 @@ public class WitchHatAtelierMod {
         registrar.playToServer(
                 SaveGesturePayload.TYPE,
                 SaveGesturePayload.STREAM_CODEC,
-                SaveGesturePayload::handle
+                SaveGestureHandler::handle
         );
     }
 

@@ -1,6 +1,5 @@
 package com.crsocial.witchhatatelier.client.gesture;
 
-import org.jetbrains.annotations.NotNull;
 
 /**
  * A single point in the flattened point-cloud fed to the $P gesture recognizer.
@@ -13,12 +12,12 @@ public final class GesturePoint {
     /**
      * Normalized canvas X coordinate (pixels, then scaled to [0,1] during recognition).
      */
-    public final float x;
+    private final float x;
 
     /**
      * Normalized canvas Y coordinate (pixels, then scaled to [0,1] during recognition).
      */
-    public final float y;
+    private final float y;
 
     /**
      * Zero-based index of the stroke this point was captured in.

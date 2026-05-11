@@ -4,7 +4,7 @@ import com.crsocial.witchhatatelier.WitchHatAtelierMod;
 import com.crsocial.witchhatatelier.items.SpellPaperItem;
 import com.crsocial.witchhatatelier.network.SaveGesturePayload;
 import net.minecraft.client.Minecraft;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.core.BlockPos;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.api.distmarker.OnlyIn;
@@ -12,98 +12,58 @@ import net.neoforged.neoforge.network.PacketDistributor;
 
 import java.util.List;
 
-
 /**
- * Client-side opener and profile resolver for drawable item screens.
+ * Client-side entry point for opening the gesture canvas.
+ *
+ * <p>Profile resolution lives here so that the profile records themselves
+ * ({@link CanvasProfile.RoundPaperProfile}, etc.) stay free of item references.
+ * To add a new item type, add a branch in {@link #resolveProfile(ItemStack)} that
+ * returns an appropriate {@link CanvasProfile} implementation — no other file needs
+ * to change.</p>
  */
 @OnlyIn(Dist.CLIENT)
 public final class GestureCanvasClient {
 
-    private static final GestureCanvasProfile PAPER_PROFILE = new GestureCanvasProfile(
-            "screen.witchhatatelier.gesture_canvas.paper",
-            "screen.witchhatatelier.gesture_canvas.paper.read_only",
-            ResourceLocation.fromNamespaceAndPath(WitchHatAtelierMod.MODID, "textures/gui/blank.png"),
-            16,
-            16,
-            CanvasInputShape.RECTANGLE,
-            0.55f,
-            0xFFFCFCF2,
-            0xFFF3F3FF,
-            0xFFE9EAEB,
-            0xFF000000,
-            0xFFCF31C2,
-            5,
-            0.5f,   // Lazy-Mouse: moderate drag, good all-round feel
-            true    // angle snap enabled
-    );
+    private GestureCanvasClient() {}
 
+    // ── Public API ───────────────────────────────────────────────────────────────
 
-    private static final GestureCanvasProfile ROUND_PAPER_PROFILE = new GestureCanvasProfile(
-            "screen.witchhatatelier.gesture_canvas.paper",
-            "screen.witchhatatelier.gesture_canvas.paper.read_only",
-            ResourceLocation.fromNamespaceAndPath(WitchHatAtelierMod.MODID, "textures/gui/blank.png"),
-            16,
-            16,
-            CanvasInputShape.CIRCLE,
-            0.55f,
-            0xFFFCFCF2,
-            0xFFF3F3FF,
-            0xFFE9EAEB,
-            0xFF000000,
-            0xFFCF31C2,
-            5,
-            0.5f,   // Lazy-Mouse: moderate drag
-            true    // angle snap enabled
-    );
-
-    private static final GestureCanvasProfile SPELL_PAPER_PROFILE = new GestureCanvasProfile(
-            "screen.witchhatatelier.gesture_canvas.spell_paper",
-            "screen.witchhatatelier.gesture_canvas.spell_paper.read_only",
-            ResourceLocation.fromNamespaceAndPath(WitchHatAtelierMod.MODID, "textures/gui/blank.png"),
-            16,
-            16,
-            CanvasInputShape.RECTANGLE,
-            0.55f,
-            0xFFFCFCF2,
-            0xFFF3F3FF,
-            0xFFE9EAEB,
-            0xFF000000,
-            0xFFCF31C2,
-            5,
-            0.5f,   // Lazy-Mouse: moderate drag
-            true    // angle snap enabled
-    );
-
-    private GestureCanvasClient() {
-    }
-    public static void openCanvas(ItemStack drawableStack, List<GesturePoint> preloadedPoints, boolean editable) {
-        openCanvas(drawableStack, preloadedPoints, editable, null);
+    public static void openCanvas(ItemStack stack, List<GesturePoint> preloaded, boolean editable) {
+        openCanvas(stack, preloaded, editable, null);
     }
 
+    public static void openCanvas(ItemStack stack, List<GesturePoint> preloaded,
+                                  boolean editable, BlockPos origin) {
+        CanvasProfile profile = resolveProfile(stack);
+        Minecraft.getInstance().setScreen(
+                new CanvasScreen(profile, preloaded, editable,
+                        points -> sendToServer(points, origin), origin));
+    }
 
-    private static GestureCanvasProfile resolveProfile(ItemStack drawableStack) {
-        if (drawableStack.getItem() instanceof SpellPaperItem paper) {
-            return paper.isRound() ? ROUND_PAPER_PROFILE : SPELL_PAPER_PROFILE;
+    // ── Profile resolution ───────────────────────────────────────────────────────
+
+    /**
+     * Returns the {@link CanvasProfile} for the given drawable item stack.
+     *
+     * <p>Add a new {@code instanceof} branch here whenever a new drawable item type
+     * is introduced. The profile record itself lives in its own file.</p>
+     */
+    private static CanvasProfile resolveProfile(ItemStack stack) {
+        if (stack.getItem() instanceof SpellPaperItem paper) {
+            return paper.isRound()
+                    ? new CanvasProfile.RoundPaperProfile()
+                    : new CanvasProfile.SpellPaperProfile();
         }
-        return GestureCanvasProfile.fallback();
+        return new CanvasProfile.FallbackProfile();
     }
 
-    public static void openCanvas(ItemStack drawableStack, List<GesturePoint> preloadedPoints, boolean editable, net.minecraft.core.BlockPos origin) {
-        GestureCanvasProfile profile = resolveProfile(drawableStack);
-        Minecraft.getInstance().setScreen(new GestureCanvasScreen(profile, preloadedPoints, editable, points -> sendToServer(points, origin), origin));
-    }
+    // ── Network ──────────────────────────────────────────────────────────────────
 
-
-    private static void sendToServer(List<GesturePoint> pointCloud, net.minecraft.core.BlockPos origin) {
+    private static void sendToServer(List<GesturePoint> pointCloud, BlockPos origin) {
         var mc = Minecraft.getInstance();
-        if (mc.player == null) {
-            return;
-        }
-
-        var playerPos = mc.player.position();
-        WitchHatAtelierMod.LOGGER.info("[GestureCanvas] Closing - {} point(s). Sending to server.", pointCloud.size());
-        PacketDistributor.sendToServer(new SaveGesturePayload(pointCloud, playerPos, origin));
+        if (mc.player == null) return;
+        WitchHatAtelierMod.LOGGER.info(
+                "[GestureCanvas] Closing — {} point(s). Sending to server.", pointCloud.size());
+        PacketDistributor.sendToServer(new SaveGesturePayload(pointCloud, mc.player.position(), origin));
     }
-
 }
-
