@@ -2,6 +2,7 @@ package com.crsocial.witchhatatelier.client.gesture;
 
 import com.crsocial.witchhatatelier.Config;
 import com.crsocial.witchhatatelier.WitchHatAtelierMod;
+import com.crsocial.witchhatatelier.items.PaperType;
 import net.minecraft.resources.ResourceLocation;
 import org.jetbrains.annotations.Nullable;
 
@@ -16,19 +17,14 @@ import org.jetbrains.annotations.Nullable;
  * <h3>Input-shape enum</h3>
  * {@link Shape} is declared here because it is exclusively a profile concern.
  *
- * <h3>Sealed permitted types</h3>
+ * <h3>Known implementations</h3>
  * <ul>
- *   <li>{@link RoundPaperProfile}  — circular canvas for round spell-papers</li>
- *   <li>{@link SpellPaperProfile}  — rectangular canvas for flat spell-papers</li>
- *   <li>{@link FallbackProfile}    — sensible defaults driven by global config</li>
+ *   <li>{@link PaperTypeProfile} — primary profile; derives shape and canvas size from a {@link PaperType}</li>
+ *   <li>{@link FallbackProfile}  — sensible defaults driven by global config</li>
  * </ul>
- * To add a new item type, create a {@code non-sealed record MyItemProfile implements CanvasProfile}
- * in its own file; this interface does not need to be modified.
+ * To add a new item type, create a record or class that implements this interface.
  */
-public sealed interface CanvasProfile
-        permits CanvasProfile.RoundPaperProfile,
-                CanvasProfile.SpellPaperProfile,
-                CanvasProfile.FallbackProfile {
+public interface CanvasProfile {
 
     // ── Input shape ─────────────────────────────────────────────────────────────
 
@@ -43,8 +39,11 @@ public sealed interface CanvasProfile
     /** I18n key for the "read-only" label shown below the canvas when not editable. */
     String readOnlyKey();
 
-    /** Fraction of min(screenW, screenH) used as the canvas side length. */
-    float canvasFraction();
+    /**
+     * Fixed logical canvas size in canvas pixels (e.g. {@code 256×256}).
+     * Zoom magnifies these pixels on screen but never changes the resolution.
+     */
+    CanvasSize canvasSize();
 
     /** Drawable region shape. */
     Shape inputShape();
@@ -113,86 +112,55 @@ public sealed interface CanvasProfile
     // ── Named profile records ───────────────────────────────────────────────────
 
     /**
-     * Circular canvas profile for round spell-papers.
-     * Hotspot is centred on the cursor texture.
+     * Primary profile for all mod paper items.
+     * Canvas shape and size are derived directly from the item's {@link PaperType};
+     * colours, stroke settings, and cursor are shared across all paper variants.
      */
-    record RoundPaperProfile() implements CanvasProfile {
+    record PaperTypeProfile(PaperType paperType) implements CanvasProfile {
         private static final ResourceLocation SPRITE =
                 ResourceLocation.fromNamespaceAndPath(WitchHatAtelierMod.MODID, "textures/gui/blank.png");
         private static final ResourceLocation CURSOR =
                 ResourceLocation.fromNamespaceAndPath(WitchHatAtelierMod.MODID, "textures/gui/cursor.png");
 
-        @Override public String titleKey()            { return "screen.witchhatatelier.gesture_canvas.paper"; }
-        @Override public String readOnlyKey()         { return "screen.witchhatatelier.gesture_canvas.paper.read_only"; }
-        @Override public float  canvasFraction()      { return 0.55f; }
-        @Override public Shape  inputShape()          { return Shape.CIRCLE; }
-        @Override public int    canvasBgColor()       { return 0xFFFCFCF2; }
-        @Override public int    canvasBgReadOnlyColor(){ return 0xFFF3F3FF; }
-        @Override public int    canvasBorderColor()   { return 0xFFE9EAEB; }
-        @Override public int    borderThickness()     { return 5; }
-        @Override public int    strokeColor()         { return 0xFF000000; }
-        @Override public int    activeStrokeColor()   { return 0xFFCF31C2; }
-        @Override public float  strokeSmoothingFactor(){ return 0.5f; }
-        @Override public boolean angleSnapEnabled()   { return true; }
-        @Override public ResourceLocation screenSprite()     { return SPRITE; }
-        @Override public int    screenSpriteWidth()   { return 16; }
-        @Override public int    screenSpriteHeight()  { return 16; }
-        @Override public ResourceLocation cursorSprite() { return CURSOR; }
-        /** Hotspot at image centre (cursor texture is assumed square). */
-        @Override public int cursorHotspotX()         { return -1; } // -1 = derive from image centre at load time
-        @Override public int cursorHotspotY()         { return -1; }
+        @Override public String     titleKey()            { return "screen.witchhatatelier.gesture_canvas." + paperType.getId(); }
+        @Override public String     readOnlyKey()         { return titleKey() + ".read_only"; }
+        @Override public CanvasSize canvasSize()          { return paperType.getCanvasSize(); }
+        @Override public Shape      inputShape()          { return paperType.isRound() ? Shape.CIRCLE : Shape.RECTANGLE; }
+        @Override public int        canvasBgColor()       { return 0xFFFCFCF2; }
+        @Override public int        canvasBgReadOnlyColor(){ return 0xFFF3F3FF; }
+        @Override public int        canvasBorderColor()   { return 0xFFE9EAEB; }
+        @Override public int        borderThickness()     { return 5; }
+        @Override public int        strokeColor()         { return 0xFF000000; }
+        @Override public int        activeStrokeColor()   { return 0xFFCF31C2; }
+        @Override public float      strokeSmoothingFactor(){ return 1f; }
+        @Override public boolean    angleSnapEnabled()    { return false; }
+        @Override public ResourceLocation screenSprite()  { return SPRITE; }
+        @Override public int        screenSpriteWidth()   { return 16; }
+        @Override public int        screenSpriteHeight()  { return 16; }
+        @Override public ResourceLocation cursorSprite()  { return CURSOR; }
+        @Override public int        cursorHotspotX()      { return -1; }
+        @Override public int        cursorHotspotY()      { return -1; }
     }
 
     /**
-     * Rectangular canvas profile for flat spell-papers.
-     */
-    record SpellPaperProfile() implements CanvasProfile {
-        private static final ResourceLocation SPRITE =
-                ResourceLocation.fromNamespaceAndPath(WitchHatAtelierMod.MODID, "textures/gui/blank.png");
-        private static final ResourceLocation CURSOR =
-                ResourceLocation.fromNamespaceAndPath(WitchHatAtelierMod.MODID, "textures/gui/cursor.png");
-
-        @Override public String titleKey()            { return "screen.witchhatatelier.gesture_canvas.spell_paper"; }
-        @Override public String readOnlyKey()         { return "screen.witchhatatelier.gesture_canvas.spell_paper.read_only"; }
-        @Override public float  canvasFraction()      { return 0.55f; }
-        @Override public Shape  inputShape()          { return Shape.RECTANGLE; }
-        @Override public int    canvasBgColor()       { return 0xFFFCFCF2; }
-        @Override public int    canvasBgReadOnlyColor(){ return 0xFFF3F3FF; }
-        @Override public int    canvasBorderColor()   { return 0xFFE9EAEB; }
-        @Override public int    borderThickness()     { return 5; }
-        @Override public int    strokeColor()         { return 0xFF000000; }
-        @Override public int    activeStrokeColor()   { return 0xFFCF31C2; }
-        @Override public float  strokeSmoothingFactor(){ return 0.5f; }
-        @Override public boolean angleSnapEnabled()   { return true; }
-        @Override public ResourceLocation screenSprite()     { return SPRITE; }
-        @Override public int    screenSpriteWidth()  { return 16; }
-        @Override public int    screenSpriteHeight() { return 16; }
-        @Override public ResourceLocation cursorSprite() { return CURSOR; }
-        @Override public int cursorHotspotX() { return -1; }
-        @Override public int cursorHotspotY() { return -1; }
-    }
-
-    /**
-     * Fallback profile — reads smoothing and snap toggles from the global config
-     * so players can tune them without code changes.
+     * Fallback profile — reads smoothing and snap toggles from the global config.
+     * Used when no known item type is in hand (e.g. debug/editor scenarios).
      */
     record FallbackProfile() implements CanvasProfile {
-        @Override public String titleKey()            { return "screen.witchhatatelier.gesture_canvas"; }
-        @Override public String readOnlyKey()         { return "screen.witchhatatelier.gesture_canvas.read_only"; }
-        @Override public float  canvasFraction()      { return 0.65f; }
-        @Override public Shape  inputShape()          { return Shape.RECTANGLE; }
-        @Override public int    canvasBgColor()       { return 0xFFFFFFF3; }
-        @Override public int    canvasBgReadOnlyColor(){ return 0xFFF3F3FF; }
-        @Override public int    canvasBorderColor()   { return 0xFFFFFFFF; }
-        @Override public int    borderThickness()     { return 1; }
-        @Override public int    strokeColor()         { return 0xFF000000; }
-        @Override public int    activeStrokeColor()   { return 0xFFCF31C2; }
-        @Override public float  strokeSmoothingFactor(){ return Config.STROKE_SMOOTHING_FACTOR.get().floatValue(); }
-        @Override public boolean angleSnapEnabled()   { return Config.ANGLE_SNAP_ENABLED.get(); }
+        @Override public String     titleKey()            { return "screen.witchhatatelier.gesture_canvas"; }
+        @Override public String     readOnlyKey()         { return "screen.witchhatatelier.gesture_canvas.read_only"; }
+        @Override public CanvasSize canvasSize()          { return new CanvasSize(256, 256); }
+        @Override public Shape      inputShape()          { return Shape.RECTANGLE; }
+        @Override public int        canvasBgColor()       { return 0xFFFFFFF3; }
+        @Override public int        canvasBgReadOnlyColor(){ return 0xFFF3F3FF; }
+        @Override public int        canvasBorderColor()   { return 0xFFFFFFFF; }
+        @Override public int        borderThickness()     { return 1; }
+        @Override public int        strokeColor()         { return 0xFF000000; }
+        @Override public int        activeStrokeColor()   { return 0xFFCF31C2; }
+        @Override public float      strokeSmoothingFactor(){ return Config.STROKE_SMOOTHING_FACTOR.get().floatValue(); }
+        @Override public boolean    angleSnapEnabled()    { return Config.ANGLE_SNAP_ENABLED.get(); }
         @Override public @Nullable ResourceLocation screenSprite() { return null; }
-        @Override public int    screenSpriteWidth()  { return 16; }
-        @Override public int    screenSpriteHeight() { return 16; }
+        @Override public int        screenSpriteWidth()  { return 16; }
+        @Override public int        screenSpriteHeight() { return 16; }
     }
 }
-
-

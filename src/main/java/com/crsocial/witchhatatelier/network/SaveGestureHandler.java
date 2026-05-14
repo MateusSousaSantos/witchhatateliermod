@@ -1,9 +1,12 @@
 package com.crsocial.witchhatatelier.network;
 
 import com.crsocial.witchhatatelier.WitchHatAtelierMod;
+import com.crsocial.witchhatatelier.blocks.PlacedPaperBlockEntity;
 import com.crsocial.witchhatatelier.client.gesture.GesturePoint;
 import com.crsocial.witchhatatelier.items.ModItems;
+import com.crsocial.witchhatatelier.items.PaperType;
 import com.crsocial.witchhatatelier.items.SpellPaperItem;
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -12,45 +15,57 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.component.CustomData;
+import net.minecraft.world.level.block.entity.BlockEntity;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 import org.jetbrains.annotations.NotNull;
 
 /**
  * Server-side handler for {@link SaveGesturePayload}.
  *
- * <p>Separated from the payload record so that business logic (inventory
- * manipulation, NBT building, item creation) does not live inside the
- * data-transfer object.</p>
+ * <h2>Two save paths</h2>
+ * <ol>
+ *   <li><b>Block-entity path</b> — when the payload carries a non-null
+ *       {@code blockOrigin}, the gesture data is written to the
+ *       {@link PlacedPaperBlockEntity} at that position.</li>
+ *   <li><b>Item path</b> — when {@code blockOrigin} is null, the handler looks
+ *       for a paper item in the player's hands:
+ *       <ul>
+ *         <li>Blank paper ({@link SpellPaperItem#isBlank()}) — consumes one, produces
+ *             the corresponding inscribed spell-paper.</li>
+ *         <li>Inscribed paper — overwrites the gesture data in place.</li>
+ *         <li>Vanilla {@code minecraft:paper} — treated as
+ *             {@link PaperType#MEDIUM_SQUARE}.</li>
+ *       </ul>
+ *   </li>
+ * </ol>
  */
 public final class SaveGestureHandler {
 
     private SaveGestureHandler() {}
 
-    /**
-     * Runs on the server thread.
-     * <p>Looks for a paper item in the player's <strong>main hand first</strong>, then the
-     * <strong>off-hand</strong>.  Accepts vanilla {@code minecraft:paper} (converts it to a
-     * new {@code spell_paper}) or an existing {@code spell_paper} / {@code round_spell_paper}
-     * (overwrites its data in-place).</p>
-     */
     public static void handle(final SaveGesturePayload payload, final IPayloadContext context) {
         context.enqueueWork(() -> {
             Player player = context.player();
 
-            // Search main hand first (vanilla paper opened via right-click), then off-hand.
-            InteractionHand paperHand = null;
-            ItemStack paperStack = ItemStack.EMPTY;
-
-            for (InteractionHand hand : InteractionHand.values()) {
-                ItemStack s = player.getItemInHand(hand);
-                if (s.is(Items.PAPER) || s.is(ModItems.ROUND_PAPER.get())
-                        || s.getItem() instanceof SpellPaperItem) {
-                    paperHand = hand;
-                    paperStack = s;
-                    break;
+            // ── Block-entity path ──────────────────────────────────────────────
+            BlockPos origin = payload.blockOrigin();
+            if (origin != null) {
+                BlockEntity be = player.level().getBlockEntity(origin);
+                if (be instanceof PlacedPaperBlockEntity placed) {
+                    placed.setGestureData(buildNbt(payload));
+                    WitchHatAtelierMod.LOGGER.info(
+                            "[SaveGesture] Saved {} point(s) to placed_paper at {} for player '{}'.",
+                            payload.points().size(), origin, player.getScoreboardName());
+                } else {
+                    WitchHatAtelierMod.LOGGER.warn(
+                            "[SaveGesture] No PlacedPaperBlockEntity at {} for player '{}'.",
+                            origin, player.getScoreboardName());
                 }
+                return;
             }
 
+            // ── Item path ──────────────────────────────────────────────────────
+            InteractionHand paperHand = findPaperHand(player);
             if (paperHand == null) {
                 WitchHatAtelierMod.LOGGER.warn(
                         "[SaveGesture] Ignored – player '{}' had no paper in either hand.",
@@ -58,45 +73,65 @@ public final class SaveGestureHandler {
                 return;
             }
 
-            // ── Build NBT ──────────────────────────────────────────────────────
-            CompoundTag root = buildNbt(payload);
+            ItemStack paperStack = player.getItemInHand(paperHand);
+            CompoundTag nbt = buildNbt(payload);
 
-            // An already-drawn spell paper (stacksTo 1) is overwritten in-place.
-            // A blank paper (vanilla paper or round_paper, which can stack) consumes one
-            // and produces a new spell_paper / round_spell_paper.
-            boolean isAlreadySpellPaper = paperStack.is(ModItems.SPELL_PAPER.get())
-                    || paperStack.is(ModItems.ROUND_SPELL_PAPER.get());
-            boolean isRoundPaper = paperStack.is(ModItems.ROUND_PAPER.get());
-
-            if (isAlreadySpellPaper) {
-                // Overwrite existing spell_paper in-place (single item, no stack concern).
-                ItemStack result = paperStack.copy();
-                result.set(DataComponents.CUSTOM_DATA, CustomData.of(root));
-                player.setItemInHand(paperHand, result);
-            } else {
-                // Blank paper (vanilla or round_paper) → consume exactly one, produce one spell_paper.
-                paperStack.shrink(1);
-                ItemStack result = new ItemStack(
-                        isRoundPaper ? ModItems.ROUND_SPELL_PAPER.get() : ModItems.SPELL_PAPER.get());
-                result.set(DataComponents.CUSTOM_DATA, CustomData.of(root));
-                if (player.getItemInHand(paperHand).isEmpty()) {
+            if (paperStack.getItem() instanceof SpellPaperItem paper) {
+                if (paper.isBlank()) {
+                    // Consume one blank → produce the corresponding inscribed item.
+                    PaperType type = paper.getPaperType();
+                    paperStack.shrink(1);
+                    ItemStack result = new ItemStack(ModItems.inscribedFor(type).get());
+                    result.set(DataComponents.CUSTOM_DATA, CustomData.of(nbt));
+                    giveOrDrop(player, paperHand, paperStack, result);
+                    WitchHatAtelierMod.LOGGER.info(
+                            "[SaveGesture] Created {} with {} point(s) for player '{}'.",
+                            type.getId() + "_spell_paper", payload.points().size(),
+                            player.getScoreboardName());
+                } else {
+                    // Overwrite existing inscribed paper in-place.
+                    ItemStack result = paperStack.copy();
+                    result.set(DataComponents.CUSTOM_DATA, CustomData.of(nbt));
                     player.setItemInHand(paperHand, result);
-                } else if (!player.getInventory().add(result)) {
-                    player.drop(result, false);
+                    WitchHatAtelierMod.LOGGER.info(
+                            "[SaveGesture] Updated {} with {} point(s) for player '{}'.",
+                            paper.getPaperType().getId() + "_spell_paper", payload.points().size(),
+                            player.getScoreboardName());
                 }
+            } else if (paperStack.is(Items.PAPER)) {
+                // Vanilla paper → medium-square inscribed paper.
+                paperStack.shrink(1);
+                ItemStack result = new ItemStack(ModItems.inscribedFor(PaperType.MEDIUM_SQUARE).get());
+                result.set(DataComponents.CUSTOM_DATA, CustomData.of(nbt));
+                giveOrDrop(player, paperHand, paperStack, result);
+                WitchHatAtelierMod.LOGGER.info(
+                        "[SaveGesture] Converted vanilla paper → medium_square_spell_paper for player '{}'.",
+                        player.getScoreboardName());
             }
-
-            WitchHatAtelierMod.LOGGER.info(
-                    "[SaveGesture] {} {} stroke(s), {} point(s) for player '{}'.",
-                    isAlreadySpellPaper ? "Updated spell_paper –" : "Created spell_paper with",
-                    root.getInt("strokeCount"), payload.points().size(), player.getScoreboardName());
         });
     }
 
-    /**
-     * Serialises the payload's gesture data into a {@link CompoundTag} that is
-     * stored on the resulting spell-paper item.
-     */
+    // ── Helpers ──────────────────────────────────────────────────────────────────
+
+    private static InteractionHand findPaperHand(Player player) {
+        for (InteractionHand hand : InteractionHand.values()) {
+            ItemStack s = player.getItemInHand(hand);
+            if (s.is(Items.PAPER) || s.getItem() instanceof SpellPaperItem) {
+                return hand;
+            }
+        }
+        return null;
+    }
+
+    private static void giveOrDrop(Player player, InteractionHand hand,
+                                   ItemStack handStack, ItemStack result) {
+        if (handStack.isEmpty()) {
+            player.setItemInHand(hand, result);
+        } else if (!player.getInventory().add(result)) {
+            player.drop(result, false);
+        }
+    }
+
     @NotNull
     static CompoundTag buildNbt(SaveGesturePayload payload) {
         CompoundTag root = new CompoundTag();
@@ -119,4 +154,3 @@ public final class SaveGestureHandler {
         return root;
     }
 }
-

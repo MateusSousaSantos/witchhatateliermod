@@ -4,7 +4,6 @@ import com.crsocial.witchhatatelier.WitchHatAtelierMod;
 import com.crsocial.witchhatatelier.blocks.ModBlocks;
 import net.minecraft.data.PackOutput;
 import net.neoforged.neoforge.client.model.generators.BlockStateProvider;
-import net.neoforged.neoforge.client.model.generators.ModelFile;
 import net.neoforged.neoforge.common.data.ExistingFileHelper;
 
 public class ModBlockStateProvider extends BlockStateProvider {
@@ -12,7 +11,25 @@ public class ModBlockStateProvider extends BlockStateProvider {
         super(output, WitchHatAtelierMod.MODID, existingFileHelper);
     }
     protected void registerStatesAndModels() {
-        ModelFile model = models().getExistingFile(modLoc("block/placed_paper"));
-        directionalBlock(ModBlocks.PLACED_PAPER.get(), model);
+        directionalBlock(ModBlocks.PLACED_PAPER.get(),
+                models().getExistingFile(modLoc("block/placed_paper")));
+        directionalBlock(ModBlocks.PLACED_SQUARE_PAPER.get(),
+                models().getExistingFile(modLoc("block/placed_square_paper")));
+        directionalBlock(ModBlocks.PLACED_ROUND_PAPER.get(),
+                models().getExistingFile(modLoc("block/placed_round_paper")));
+
+        directionalBlock(ModBlocks.PLACED_SMALL_SQUARE_PAPER.get(),
+                models().getExistingFile(modLoc("block/placed_small_square_paper")));
+        directionalBlock(ModBlocks.PLACED_MEDIUM_SQUARE_PAPER.get(),
+                models().getExistingFile(modLoc("block/placed_medium_square_paper")));
+        directionalBlock(ModBlocks.PLACED_LARGE_SQUARE_PAPER.get(),
+                models().getExistingFile(modLoc("block/placed_large_square_paper")));
+
+        directionalBlock(ModBlocks.PLACED_SMALL_ROUND_PAPER.get(),
+                models().getExistingFile(modLoc("block/placed_small_round_paper")));
+        directionalBlock(ModBlocks.PLACED_MEDIUM_ROUND_PAPER.get(),
+                models().getExistingFile(modLoc("block/placed_medium_round_paper")));
+        directionalBlock(ModBlocks.PLACED_LARGE_ROUND_PAPER.get(),
+                models().getExistingFile(modLoc("block/placed_large_round_paper")));
     }
 }

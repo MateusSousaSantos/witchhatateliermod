@@ -1,6 +1,10 @@
 package com.crsocial.witchhatatelier.blocks;
 
 import com.mojang.serialization.MapCodec;
+import com.crsocial.witchhatatelier.client.gesture.GestureCanvasClient;
+import com.crsocial.witchhatatelier.client.gesture.GesturePoint;
+import com.crsocial.witchhatatelier.items.SpellPaperItem;
+import com.crsocial.witchhatatelier.items.Wand;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.InteractionHand;
@@ -15,29 +19,34 @@ import net.minecraft.world.level.LevelReader;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.DirectionalBlock;
+import net.minecraft.world.level.block.EntityBlock;
 import net.minecraft.world.level.block.Mirror;
 import net.minecraft.world.level.block.Rotation;
+import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.level.block.state.properties.DirectionProperty;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.phys.shapes.VoxelShape;
+import net.neoforged.api.distmarker.Dist;
+import net.neoforged.api.distmarker.OnlyIn;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
-import javax.annotation.Nullable;
+import java.util.List;
 
-public class PlacedPaper extends Block {
+public class PlacedPaper extends Block implements EntityBlock {
     public static final MapCodec<PlacedPaper> CODEC = simpleCodec(PlacedPaper::new);
     public static final DirectionProperty FACING = DirectionalBlock.FACING;
 
-    // Thickness of the paper on the wall (similar to item frame depth)
     protected static final float DEPTH = 0.0325F;
     protected static final VoxelShape NORTH_SHAPE = Block.box(0.0, 0.0, 16.0 - DEPTH * 16, 16.0, 16.0, 16.0);
     protected static final VoxelShape SOUTH_SHAPE = Block.box(0.0, 0.0, 0.0, 16.0, 16.0, DEPTH * 16);
-    protected static final VoxelShape WEST_SHAPE = Block.box(16.0 - DEPTH * 16, 0.0, 0.0, 16.0, 16.0, 16.0);
-    protected static final VoxelShape EAST_SHAPE = Block.box(0.0, 0.0, 0.0, DEPTH * 16, 16.0, 16.0);
-    protected static final VoxelShape UP_SHAPE = Block.box(0.0, 0.0, 0.0, 16.0, DEPTH * 16, 16.0);
-    protected static final VoxelShape DOWN_SHAPE = Block.box(0.0, 16.0 - DEPTH * 16, 0.0, 16.0, 16.0, 16.0);
+    protected static final VoxelShape WEST_SHAPE  = Block.box(16.0 - DEPTH * 16, 0.0, 0.0, 16.0, 16.0, 16.0);
+    protected static final VoxelShape EAST_SHAPE  = Block.box(0.0, 0.0, 0.0, DEPTH * 16, 16.0, 16.0);
+    protected static final VoxelShape UP_SHAPE    = Block.box(0.0, 0.0, 0.0, 16.0, DEPTH * 16, 16.0);
+    protected static final VoxelShape DOWN_SHAPE  = Block.box(0.0, 16.0 - DEPTH * 16, 0.0, 16.0, 16.0, 16.0);
 
     public PlacedPaper(Properties properties) {
         super(properties);
@@ -45,9 +54,38 @@ public class PlacedPaper extends Block {
     }
 
     @Override
-    protected MapCodec<? extends PlacedPaper> codec() {
-        return CODEC;
+    protected MapCodec<? extends PlacedPaper> codec() { return CODEC; }
+
+    // ── EntityBlock ──────────────────────────────────────────────────────────────
+
+    @Override
+    public @Nullable BlockEntity newBlockEntity(@NotNull BlockPos pos, @NotNull BlockState state) {
+        return new PlacedPaperBlockEntity(pos, state);
     }
+
+    // ── Block interaction ────────────────────────────────────────────────────────
+
+    @Override
+    protected @NotNull ItemInteractionResult useItemOn(
+            @NotNull ItemStack stack, @NotNull BlockState state, @NotNull Level level,
+            @NotNull BlockPos pos, @NotNull Player player, @NotNull InteractionHand hand,
+            @NotNull BlockHitResult hitResult) {
+
+        if (level.isClientSide) {
+            openCanvasFromBlock(level, pos, stack);
+        }
+        return ItemInteractionResult.sidedSuccess(level.isClientSide);
+    }
+
+    @OnlyIn(Dist.CLIENT)
+    private static void openCanvasFromBlock(Level level, BlockPos pos, ItemStack stack) {
+        if (!(level.getBlockEntity(pos) instanceof PlacedPaperBlockEntity be)) return;
+        boolean editable = stack.getItem() instanceof Wand;
+        List<GesturePoint> points = SpellPaperItem.loadPointsFromTag(be.getGestureData());
+        GestureCanvasClient.openCanvas(be.getPaperType(), points, editable, pos);
+    }
+
+    // ── Block state / shape ──────────────────────────────────────────────────────
 
     @Override
     protected void createBlockStateDefinition(StateDefinition.Builder<Block, BlockState> builder) {
@@ -55,97 +93,58 @@ public class PlacedPaper extends Block {
     }
 
     @Override
-    protected VoxelShape getShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) {
+    protected @NotNull VoxelShape getShape(@NotNull BlockState state, @NotNull BlockGetter level,
+                                           @NotNull BlockPos pos, @NotNull CollisionContext context) {
         return switch (state.getValue(FACING)) {
             case NORTH -> NORTH_SHAPE;
             case SOUTH -> SOUTH_SHAPE;
-            case WEST -> WEST_SHAPE;
-            case EAST -> EAST_SHAPE;
-            case UP -> UP_SHAPE;
-            case DOWN -> DOWN_SHAPE;
+            case WEST  -> WEST_SHAPE;
+            case EAST  -> EAST_SHAPE;
+            case UP    -> UP_SHAPE;
+            case DOWN  -> DOWN_SHAPE;
         };
     }
 
-    /**
-     * Placement logic similar to ItemFrame - can be placed on any solid surface
-     */
     @Nullable
     @Override
-    public BlockState getStateForPlacement(BlockPlaceContext context) {
+    public BlockState getStateForPlacement(@NotNull BlockPlaceContext context) {
         Direction direction = context.getClickedFace();
         BlockPos blockpos = context.getClickedPos();
         BlockPos relativePos = blockpos.relative(direction.getOpposite());
         BlockState blockstate = context.getLevel().getBlockState(relativePos);
-
-        // Check if the surface we're placing on is solid (similar to item frame logic)
         if (blockstate.isFaceSturdy(context.getLevel(), relativePos, direction)) {
             return this.defaultBlockState().setValue(FACING, direction);
         }
-
         return null;
     }
 
-    /**
-     * Breaking logic - ensures the paper can survive on the surface it's attached to
-     */
     @Override
-    protected BlockState updateShape(
-            BlockState state,
-            Direction direction,
-            BlockState neighborState,
-            LevelAccessor level,
-            BlockPos pos,
-            BlockPos neighborPos
-    ) {
-        // If the block behind us is removed, break this block (like item frame)
+    protected @NotNull BlockState updateShape(
+            @NotNull BlockState state, @NotNull Direction direction,
+            @NotNull BlockState neighborState, @NotNull LevelAccessor level,
+            @NotNull BlockPos pos, @NotNull BlockPos neighborPos) {
         Direction attachedDirection = state.getValue(FACING);
-        if (direction.getOpposite() == attachedDirection) {
-            if (!this.canSurvive(state, level, pos)) {
-                return Blocks.AIR.defaultBlockState();
-            }
+        if (direction.getOpposite() == attachedDirection && !this.canSurvive(state, level, pos)) {
+            return Blocks.AIR.defaultBlockState();
         }
         return super.updateShape(state, direction, neighborState, level, pos, neighborPos);
     }
 
     @Override
-    protected boolean canSurvive(BlockState state, LevelReader level, BlockPos pos) {
+    protected boolean canSurvive(@NotNull BlockState state, @NotNull LevelReader level, @NotNull BlockPos pos) {
         Direction direction = state.getValue(FACING);
         BlockPos attachedPos = pos.relative(direction.getOpposite());
         BlockState attachedState = level.getBlockState(attachedPos);
-        // Check if the surface we're attached to is still solid
         return attachedState.isFaceSturdy(level, attachedPos, direction);
     }
 
-    /**
-     * onUse method for future implementation - currently does nothing
-     * Returns SUCCESS on client side and CONSUME on server side to prevent further interactions
-     */
     @Override
-    protected ItemInteractionResult useItemOn(
-            ItemStack stack,
-            BlockState state,
-            Level level,
-            BlockPos pos,
-            Player player,
-            InteractionHand hand,
-            BlockHitResult hitResult
-    ) {
-        // Placeholder for future implementation
-        // Return PASS_TO_DEFAULT_BLOCK_INTERACTION to allow default block interaction
-        // or return SUCCESS/CONSUME to handle it here
-        return ItemInteractionResult.PASS_TO_DEFAULT_BLOCK_INTERACTION;
-    }
-
-    /**
-     * Rotation and mirroring support for better placement
-     */
-    @Override
-    protected BlockState rotate(BlockState state, Rotation rotation) {
+    protected @NotNull BlockState rotate(@NotNull BlockState state, @NotNull Rotation rotation) {
         return state.setValue(FACING, rotation.rotate(state.getValue(FACING)));
     }
 
     @Override
-    protected BlockState mirror(BlockState state, Mirror mirror) {
+    protected @NotNull BlockState mirror(@NotNull BlockState state, @NotNull Mirror mirror) {
         return state.rotate(mirror.getRotation(state.getValue(FACING)));
     }
 }

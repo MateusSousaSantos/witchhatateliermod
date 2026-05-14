@@ -1,11 +1,11 @@
 {
   "parent": "minecraft:recipes/root",
   "criteria": {
-    "has_round_paper": {
+    "has_medium_square_paper": {
       "conditions": {
         "items": [
           {
-            "items": "witchhatateliermod:round_paper"
+            "items": "witchhatateliermod:medium_square_paper"
           }
         ]
       },
@@ -21,7 +21,7 @@
   "requirements": [
     [
       "has_the_recipe",
-      "has_round_paper"
+      "has_medium_square_paper"
     ]
   ],
   "rewards": {

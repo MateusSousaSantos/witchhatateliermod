@@ -1,11 +1,13 @@
 package com.crsocial.witchhatatelier.client.gesture;
 
 import com.crsocial.witchhatatelier.WitchHatAtelierMod;
+import com.crsocial.witchhatatelier.items.PaperType;
 import com.crsocial.witchhatatelier.items.SpellPaperItem;
 import com.crsocial.witchhatatelier.network.SaveGesturePayload;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.api.distmarker.OnlyIn;
 import net.neoforged.neoforge.network.PacketDistributor;
@@ -15,11 +17,13 @@ import java.util.List;
 /**
  * Client-side entry point for opening the gesture canvas.
  *
- * <p>Profile resolution lives here so that the profile records themselves
- * ({@link CanvasProfile.RoundPaperProfile}, etc.) stay free of item references.
- * To add a new item type, add a branch in {@link #resolveProfile(ItemStack)} that
- * returns an appropriate {@link CanvasProfile} implementation — no other file needs
- * to change.</p>
+ * <p>Provides two openCanvas variants:</p>
+ * <ul>
+ *   <li>{@link #openCanvas(ItemStack, List, boolean)} / {@link #openCanvas(ItemStack, List, boolean, BlockPos)} —
+ *       derives the {@link CanvasProfile} from the item stack (used for in-hand drawing).</li>
+ *   <li>{@link #openCanvas(PaperType, List, boolean, BlockPos)} —
+ *       derives the profile from an explicit {@link PaperType} (used for placed-paper blocks).</li>
+ * </ul>
  */
 @OnlyIn(Dist.CLIENT)
 public final class GestureCanvasClient {
@@ -28,10 +32,12 @@ public final class GestureCanvasClient {
 
     // ── Public API ───────────────────────────────────────────────────────────────
 
+    /** Opens the canvas for an in-hand item with no block origin. */
     public static void openCanvas(ItemStack stack, List<GesturePoint> preloaded, boolean editable) {
         openCanvas(stack, preloaded, editable, null);
     }
 
+    /** Opens the canvas for an in-hand item, optionally bound to a placed-paper block. */
     public static void openCanvas(ItemStack stack, List<GesturePoint> preloaded,
                                   boolean editable, BlockPos origin) {
         CanvasProfile profile = resolveProfile(stack);
@@ -40,19 +46,23 @@ public final class GestureCanvasClient {
                         points -> sendToServer(points, origin), origin));
     }
 
+    /** Opens the canvas for a placed-paper block, using its stored {@link PaperType}. */
+    public static void openCanvas(PaperType paperType, List<GesturePoint> preloaded,
+                                  boolean editable, BlockPos origin) {
+        CanvasProfile profile = new CanvasProfile.PaperTypeProfile(paperType);
+        Minecraft.getInstance().setScreen(
+                new CanvasScreen(profile, preloaded, editable,
+                        points -> sendToServer(points, origin), origin));
+    }
+
     // ── Profile resolution ───────────────────────────────────────────────────────
 
-    /**
-     * Returns the {@link CanvasProfile} for the given drawable item stack.
-     *
-     * <p>Add a new {@code instanceof} branch here whenever a new drawable item type
-     * is introduced. The profile record itself lives in its own file.</p>
-     */
     private static CanvasProfile resolveProfile(ItemStack stack) {
         if (stack.getItem() instanceof SpellPaperItem paper) {
-            return paper.isRound()
-                    ? new CanvasProfile.RoundPaperProfile()
-                    : new CanvasProfile.SpellPaperProfile();
+            return new CanvasProfile.PaperTypeProfile(paper.getPaperType());
+        }
+        if (stack.is(Items.PAPER)) {
+            return new CanvasProfile.PaperTypeProfile(PaperType.MEDIUM_SQUARE);
         }
         return new CanvasProfile.FallbackProfile();
     }

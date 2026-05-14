@@ -31,7 +31,13 @@ public class ModCreativeModeTabs {
                                     CreativeModeTab.Output output) {
         output.accept(ModItems.WAND);
         output.accept(ModItems.NIB);
-        output.accept(ModItems.ROUND_PAPER);
         output.accept(ModItems.SPELL_BINDER);
+        // Blank papers
+        output.accept(ModItems.SMALL_SQUARE_PAPER);
+        output.accept(ModItems.MEDIUM_SQUARE_PAPER);
+        output.accept(ModItems.LARGE_SQUARE_PAPER);
+        output.accept(ModItems.SMALL_ROUND_PAPER);
+        output.accept(ModItems.MEDIUM_ROUND_PAPER);
+        output.accept(ModItems.LARGE_ROUND_PAPER);
     }
 }

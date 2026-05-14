@@ -18,17 +18,42 @@ public class ModItemModelProvider extends ItemModelProvider {
     protected void registerModels() {
         withExistingParent("nib", "minecraft:item/generated")
                 .texture("layer0", modLoc("item/nib"));
-        withExistingParent("round_paper", "minecraft:item/generated")
-                .texture("layer0", modLoc("item/round_paper"));
-        withExistingParent("spell_paper", "minecraft:item/generated")
-                .texture("layer0", modLoc("item/spell_paper"));
-        withExistingParent("round_spell_paper", "minecraft:item/generated")
-                .texture("layer0", modLoc("item/round_spell_paper"));
         withExistingParent("spell_binder", "minecraft:item/generated")
                 .texture("layer0", modLoc("item/spell_binder"));
-        withExistingParent("used_spell_paper", "minecraft:item/generated")
-                .texture("layer0", modLoc("item/used_spell_paper"));
-        // Wand 2D sub-model (used for GUI / ground / fixed perspectives)
+
+        // ── Blank square papers (share spell_paper texture as placeholder) ────
+        withExistingParent("small_square_paper", "minecraft:item/generated")
+                .texture("layer0", modLoc("item/small_square_paper"));
+        withExistingParent("medium_square_paper", "minecraft:item/generated")
+                .texture("layer0", modLoc("item/medium_square_paper"));
+        withExistingParent("large_square_paper", "minecraft:item/generated")
+                .texture("layer0", modLoc("item/large_square_paper"));
+
+        // ── Blank round papers (share round_paper texture as placeholder) ─────
+        withExistingParent("small_round_paper", "minecraft:item/generated")
+                .texture("layer0", modLoc("item/small_round_paper"));
+        withExistingParent("medium_round_paper", "minecraft:item/generated")
+                .texture("layer0", modLoc("item/medium_round_paper"));
+        withExistingParent("large_round_paper", "minecraft:item/generated")
+                .texture("layer0", modLoc("item/large_round_paper"));
+
+        // ── Inscribed square spell papers ─────────────────────────────────────
+        withExistingParent("small_square_spell_paper", "minecraft:item/generated")
+                .texture("layer0", modLoc("item/small_square_paper"));
+        withExistingParent("medium_square_spell_paper", "minecraft:item/generated")
+                .texture("layer0", modLoc("item/medium_square_paper"));
+        withExistingParent("large_square_spell_paper", "minecraft:item/generated")
+                .texture("layer0", modLoc("item/large_square_paper"));
+
+        // ── Inscribed round spell papers ──────────────────────────────────────
+        withExistingParent("small_round_spell_paper", "minecraft:item/generated")
+                .texture("layer0", modLoc("item/small_round_paper"));
+        withExistingParent("medium_round_spell_paper", "minecraft:item/generated")
+                .texture("layer0", modLoc("item/medium_round_paper"));
+        withExistingParent("large_round_spell_paper", "minecraft:item/generated")
+                .texture("layer0", modLoc("item/large_round_paper"));
+
+        // ── Wand (unchanged) ──────────────────────────────────────────────────
         withExistingParent("wand_2d", "minecraft:item/generated")
                 .guiLight(BlockModel.GuiLight.FRONT)
                 .texture("layer0", modLoc("item/wand"));

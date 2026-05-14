@@ -47,7 +47,7 @@ public class ModRecipeProvider extends RecipeProvider {
                 .define('i', Items.IRON_NUGGET)
                 .define('s', Items.STRING)
                 .define('l', Items.LEATHER)
-                .unlockedBy("has_round_paper", has(ModItems.ROUND_PAPER.get()))
+                .unlockedBy("has_medium_square_paper", has(ModItems.MEDIUM_SQUARE_PAPER.get()))
                 .save(output);
     }
 }

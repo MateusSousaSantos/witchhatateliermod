@@ -24,22 +24,47 @@ import java.util.Map;
 import java.util.function.Consumer;
 
 /**
- * Single, self-contained gesture canvas screen.
+ * Gesture canvas screen with zoom + pan viewport.
  *
- * <p>Responsibilities (all in one place):</p>
+ * <h2>Coordinate spaces</h2>
  * <ul>
- *   <li><b>UI / lifecycle</b> — {@link #init}, {@link #render}, {@link #tick}, {@link #onClose}</li>
- *   <li><b>Input handling</b> — mouse click/drag/release/move with Lazy-Mouse and angle-snap</li>
- *   <li><b>Cursor management</b> — GLFW custom-cursor loading, caching, and cleanup</li>
- *   <li><b>Drawing primitives</b> — background, border, strokes, ink-tip indicator</li>
- *   <li><b>Read / write API</b> — {@link #loadPoints} and {@link #savePoints}</li>
+ *   <li><b>Canvas space</b> — logical grid {@code [0, canvasSize.width] × [0, canvasSize.height]}.
+ *       All stroke data, dead-zone checks, and smoothing operate here. Never changes with zoom/pan.</li>
+ *   <li><b>Screen space</b> — monitor pixels. Derived via {@link #scrX}/{@link #scrY} or
+ *       their inverses {@link #logX}/{@link #logY}.</li>
  * </ul>
  *
- * <p>All stroke data is delegated to a {@link CanvasPointStore}.
- * All visual and behavioural configuration comes from a {@link CanvasProfile}.</p>
+ * <h2>Viewport model</h2>
+ * <ul>
+ *   <li>{@code displayX/Y/W/H} — on-screen rectangle allocated for drawing (set in {@link #init}).</li>
+ *   <li>{@code displayScale} — screen pixels per canvas pixel at zoom 1.0.</li>
+ *   <li>{@code zoom} ≥ 1.0; 1.0 = whole canvas fills display area.</li>
+ *   <li>{@code panX/Y} — canvas-space coordinate at the top-left corner of the viewport.</li>
+ * </ul>
  */
 @OnlyIn(Dist.CLIENT)
 public final class CanvasScreen extends Screen {
+
+    // ════════════════════════════════════════════════════════════════════════════
+    // Constants
+    // ════════════════════════════════════════════════════════════════════════════
+
+    // Display sizing: smaller canvases get a smaller portion of the screen so you
+    // can feel the size difference. Base fraction for a 512px canvas = 0.75;
+    // scales down linearly toward 0.30 for tiny canvases.
+    private static final float DISPLAY_FRACTION_MIN  = 0.30f;
+    private static final float DISPLAY_FRACTION_RANGE = 0.45f; // added on top of MIN at canvas=512px
+    private static final int   DISPLAY_REF_PX        = 512;    // reference canvas size for max fraction
+
+    private static final float ZOOM_MIN  = 1.0f;
+    private static final float ZOOM_MAX  = 16.0f;
+    private static final float ZOOM_STEP = 1.15f;
+
+    /** Minimum screen pixels per canvas pixel before the pixel grid is shown. */
+    private static final int GRID_THRESHOLD_PX = 4;
+
+    private static final float SNAP_MIN_SEGMENT     = 2f;
+    private static final int   SNAP_MIN_CONSISTENCY = 8;
 
     // ════════════════════════════════════════════════════════════════════════════
     // Fields
@@ -52,31 +77,36 @@ public final class CanvasScreen extends Screen {
 
     // ── Stroke data ─────────────────────────────────────────────────────────────
     private final CanvasPointStore pointStore = new CanvasPointStore();
-
-    /** Points to preload once canvas bounds are known (set in {@link #init}). */
     private final List<GesturePoint> preloadedPoints;
 
-    // ── Canvas geometry (set in init/resize) ────────────────────────────────────
-    private int canvasX, canvasY, canvasW, canvasH;
+    // ── Canvas logical dimensions (set in init) ──────────────────────────────────
+    private CanvasSize canvasSize;
 
-    // ── Lazy-Mouse state ─────────────────────────────────────────────────────────
-    /** Smoothed ink position; lags behind the actual cursor. */
+    // ── On-screen drawing rectangle (set in init) ────────────────────────────────
+    private int displayX, displayY, displayW, displayH;
+    /** Screen pixels per canvas pixel at zoom 1.0. */
+    private float displayScale;
+
+    // ── Viewport state ────────────────────────────────────────────────────────────
+    private float zoom = 1.0f;
+    /** Top-left corner of the viewport in canvas coordinates. */
+    private float panX = 0f, panY = 0f;
+    private boolean panning = false;
+    private double lastPanMouseX, lastPanMouseY;
+
+    // ── Lazy-Mouse state (canvas space) ──────────────────────────────────────────
     private float smoothedX, smoothedY;
 
-    // ── Angle-Snap state ─────────────────────────────────────────────────────────
+    // ── Angle-Snap state (canvas space) ──────────────────────────────────────────
     private boolean snapActive      = false;
     private float   snapOriginX     = 0f, snapOriginY = 0f;
     private int     snapConsistency = 0;
     private double  snapAngleDeg    = -1.0;
 
-    private static final float SNAP_MIN_SEGMENT   = 2f;
-    private static final int   SNAP_MIN_CONSISTENCY = 8;
-
     // ── Animation ────────────────────────────────────────────────────────────────
     private int clearAnimTimer = 0;
 
-    // ── GLFW cursor cache ────────────────────────────────────────────────────────
-    /** Screen-lifetime cache: sprite-path → GLFW cursor handle. */
+    // ── GLFW cursor cache ─────────────────────────────────────────────────────────
     private static final Map<String, Long> CURSOR_CACHE = new HashMap<>();
     private static final int CURSOR_SCALE = 3;
     private String activeCursorKey = null;
@@ -103,13 +133,31 @@ public final class CanvasScreen extends Screen {
 
     @Override
     protected void init() {
-        int canvasSize = (int) (Math.min(width, height) * profile.canvasFraction());
-        canvasW = canvasSize;
-        canvasH = canvasSize;
-        canvasX = (width  - canvasW) / 2;
-        canvasY = (height - canvasH) / 2;
+        canvasSize = profile.canvasSize();
 
-        // Restore previously saved drawing, de-normalising [0,1] → pixel space.
+        // Allocate display area: fraction of screen grows with canvas size so that
+        // smaller papers feel smaller and larger papers feel more spacious.
+        int shortDim = Math.min(canvasSize.width(), canvasSize.height());
+        float sizeFrac = Math.min(1f, (float) shortDim / DISPLAY_REF_PX);
+        float budgetFrac = DISPLAY_FRACTION_MIN + sizeFrac * DISPLAY_FRACTION_RANGE;
+        float budgetPx = Math.min(width, height) * budgetFrac;
+
+        float aspect = (float) canvasSize.width() / canvasSize.height();
+        if (aspect >= 1f) {
+            displayW = (int) budgetPx;
+            displayH = (int) (budgetPx / aspect);
+        } else {
+            displayH = (int) budgetPx;
+            displayW = (int) (budgetPx * aspect);
+        }
+        displayX = (width  - displayW) / 2;
+        displayY = (height - displayH) / 2;
+        displayScale = (float) displayW / canvasSize.width();
+
+        zoom = 1.0f;
+        panX = 0f;
+        panY = 0f;
+
         loadPoints(preloadedPoints);
     }
 
@@ -121,7 +169,6 @@ public final class CanvasScreen extends Screen {
 
     @Override
     public void onClose() {
-        // Persist strokes when closing an editable canvas that has content.
         if (!readOnly && !pointStore.isEmpty()) {
             saveHandler.accept(savePoints());
         }
@@ -130,26 +177,36 @@ public final class CanvasScreen extends Screen {
     }
 
     // ════════════════════════════════════════════════════════════════════════════
-    // Read / Write API
+    // Read / Write API  (always canvas space — zoom-independent)
     // ════════════════════════════════════════════════════════════════════════════
 
-    /**
-     * Restores strokes from a saved point list.
-     * Canvas bounds must already be set (call after {@link #init}).
-     *
-     * @param points normalised points (may be {@code null} or empty)
-     */
     public void loadPoints(List<GesturePoint> points) {
-        pointStore.denormalize(points, canvasX, canvasY, canvasW, canvasH);
+        pointStore.denormalize(points, canvasSize.width(), canvasSize.height());
     }
 
-    /**
-     * Converts all current strokes to a normalised [0,1] point list.
-     *
-     * @return flat {@link GesturePoint} list ready for network / NBT serialisation
-     */
     public List<GesturePoint> savePoints() {
-        return pointStore.normalize(canvasX, canvasY, canvasW, canvasH);
+        return pointStore.normalize(canvasSize.width(), canvasSize.height());
+    }
+
+    // ════════════════════════════════════════════════════════════════════════════
+    // Viewport transform helpers
+    // ════════════════════════════════════════════════════════════════════════════
+
+    /** Canvas → screen X. */
+    private float scrX(float cx) { return displayX + (cx - panX) * displayScale * zoom; }
+    /** Canvas → screen Y. */
+    private float scrY(float cy) { return displayY + (cy - panY) * displayScale * zoom; }
+
+    /** Screen → canvas X. */
+    private float logX(double sx) { return (float)((sx - displayX) / (displayScale * zoom) + panX); }
+    /** Screen → canvas Y. */
+    private float logY(double sy) { return (float)((sy - displayY) / (displayScale * zoom) + panY); }
+
+    private void clampPan() {
+        float visW = canvasSize.width()  / zoom;
+        float visH = canvasSize.height() / zoom;
+        panX = Math.clamp(panX, 0f, Math.max(0f, canvasSize.width()  - visW));
+        panY = Math.clamp(panY, 0f, Math.max(0f, canvasSize.height() - visH));
     }
 
     // ════════════════════════════════════════════════════════════════════════════
@@ -161,20 +218,22 @@ public final class CanvasScreen extends Screen {
         renderBackground(gui, mouseX, mouseY, partialTick);
         renderCanvas(gui);
 
-        // Title
+        int titleX = displayX + displayW / 2;
         gui.drawCenteredString(font,
                 Component.translatable(profile.titleKey()),
-                canvasX + canvasW / 2,
-                canvasY - font.lineHeight - 4,
-                0xFFFFFFFF);
+                titleX, displayY - font.lineHeight - 4, 0xFFFFFFFF);
 
-        // Read-only badge
         if (readOnly) {
             gui.drawCenteredString(font,
                     Component.translatable(profile.readOnlyKey()),
-                    canvasX + canvasW / 2,
-                    canvasY + canvasH + 4,
-                    0xFFAAAAAA);
+                    titleX, displayY + displayH + 4, 0xFFAAAAAA);
+        }
+
+        if (zoom > 1.0f) {
+            String label = String.format("%.1f×", zoom);
+            gui.drawString(font, label,
+                    displayX + displayW - 4 - font.width(label),
+                    displayY + 4, 0xAAFFFFFF);
         }
 
         super.render(gui, mouseX, mouseY, partialTick);
@@ -182,7 +241,6 @@ public final class CanvasScreen extends Screen {
 
     @Override
     public void renderBackground(GuiGraphics gui, int mouseX, int mouseY, float partialTick) {
-        // Transparent background — the world stays visible behind the canvas.
         gui.fill(0, 0, width, height, 0x00000000);
     }
 
@@ -196,14 +254,13 @@ public final class CanvasScreen extends Screen {
 
         int bg = readOnly ? profile.canvasBgReadOnlyColor() : profile.canvasBgColor();
         drawCanvasBackground(gui, bg);
+        drawPixelGrid(gui);
         drawBorder(gui);
 
-        // Committed strokes
         for (List<Vector2f> stroke : pointStore.strokes()) {
             drawStroke(gui, stroke, profile.strokeColor());
         }
 
-        // Active stroke + ink-tip indicator
         List<Vector2f> active = pointStore.activeStroke();
         if (!readOnly && active != null && !active.isEmpty()) {
             drawStroke(gui, active, profile.activeStrokeColor());
@@ -218,9 +275,17 @@ public final class CanvasScreen extends Screen {
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        if (button == 2) {
+            panning = true;
+            lastPanMouseX = mouseX;
+            lastPanMouseY = mouseY;
+            return true;
+        }
+
         if (readOnly) return super.mouseClicked(mouseX, mouseY, button);
+
         if (button == 0 && isInsideCanvas(mouseX, mouseY)) {
-            Vector2f start = clampToShape(mouseX, mouseY);
+            Vector2f start = clampToShape(logX(mouseX), logY(mouseY));
             smoothedX = start.x;
             smoothedY = start.y;
             resetSnapState(start.x, start.y);
@@ -232,11 +297,21 @@ public final class CanvasScreen extends Screen {
 
     @Override
     public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
-        if (readOnly) return super.mouseDragged(mouseX, mouseY, button, dragX, dragY);
-        if (button == 0 && pointStore.isDrawing()) {
-            Vector2f raw = clampToShape(mouseX, mouseY);
+        if (button == 2 && panning) {
+            panX -= (float)(mouseX - lastPanMouseX) / (displayScale * zoom);
+            panY -= (float)(mouseY - lastPanMouseY) / (displayScale * zoom);
+            lastPanMouseX = mouseX;
+            lastPanMouseY = mouseY;
+            clampPan();
+            return true;
+        }
 
-            // ── Lazy-Mouse smoothing ────────────────────────────────────────
+        if (readOnly) return super.mouseDragged(mouseX, mouseY, button, dragX, dragY);
+
+        if (button == 0 && pointStore.isDrawing()) {
+            Vector2f raw = clampToShape(logX(mouseX), logY(mouseY));
+
+            // ── Lazy-Mouse smoothing (canvas space) ─────────────────────────
             float factor = profile.strokeSmoothingFactor();
             smoothedX += (raw.x - smoothedX) * factor;
             smoothedY += (raw.y - smoothedY) * factor;
@@ -248,7 +323,7 @@ public final class CanvasScreen extends Screen {
                 pt = applyAngleSnap(active.getLast(), pt);
             }
 
-            // ── Dead Zone ───────────────────────────────────────────────────
+            // ── Dead Zone (canvas pixels) ───────────────────────────────────
             if (active != null && !active.isEmpty()) {
                 Vector2f last = active.getLast();
                 float ddx = pt.x - last.x;
@@ -265,19 +340,35 @@ public final class CanvasScreen extends Screen {
 
     @Override
     public boolean mouseReleased(double mouseX, double mouseY, int button) {
+        if (button == 2) {
+            panning = false;
+            return true;
+        }
         if (button == 0 && pointStore.isDrawing()) {
-            // Snap ink position to exact release point — stroke ends where mouse lifts.
-            Vector2f release = clampToShape(mouseX, mouseY);
+            Vector2f release = clampToShape(logX(mouseX), logY(mouseY));
             smoothedX = release.x;
             smoothedY = release.y;
             pointStore.addPoint(release);
             pointStore.finishStroke();
-
             resetSnapState(release.x, release.y);
             snapActive = false;
             return true;
         }
         return super.mouseReleased(mouseX, mouseY, button);
+    }
+
+    @Override
+    public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
+        if (!isInsideDisplay(mouseX, mouseY)) return super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
+        // Record the canvas point under the cursor before zooming.
+        float cx = logX(mouseX);
+        float cy = logY(mouseY);
+        zoom = Math.clamp(zoom * (scrollY > 0 ? ZOOM_STEP : 1f / ZOOM_STEP), ZOOM_MIN, ZOOM_MAX);
+        // Adjust pan so the canvas point under the cursor stays fixed on screen.
+        panX = cx - (float)(mouseX - displayX) / (displayScale * zoom);
+        panY = cy - (float)(mouseY - displayY) / (displayScale * zoom);
+        clampPan();
+        return true;
     }
 
     @Override
@@ -295,7 +386,7 @@ public final class CanvasScreen extends Screen {
     }
 
     // ════════════════════════════════════════════════════════════════════════════
-    // Angle-Snap
+    // Angle-Snap  (all coords are canvas space)
     // ════════════════════════════════════════════════════════════════════════════
 
     private boolean isAngleSnapEnabled() {
@@ -310,11 +401,6 @@ public final class CanvasScreen extends Screen {
         snapOriginY     = y;
     }
 
-    /**
-     * Consistency-based angle snapper.
-     * Evaluates per-event segment headings; locks to an axis only after
-     * {@link #SNAP_MIN_CONSISTENCY} consecutive segments all point that way.
-     */
     private Vector2f applyAngleSnap(Vector2f prev, Vector2f pt) {
         float dx = pt.x - prev.x;
         float dy = pt.y - prev.y;
@@ -358,12 +444,11 @@ public final class CanvasScreen extends Screen {
         return snapActive ? projectOnSnapAxis(pt) : pt;
     }
 
-    /** Projects {@code pt} onto the active snap axis via dot-product, then clamps. */
     private Vector2f projectOnSnapAxis(Vector2f pt) {
-        double snapRad  = Math.toRadians(snapAngleDeg);
-        float  axisX    = (float) Math.cos(snapRad);
-        float  axisY    = (float) Math.sin(snapRad);
-        float  dot      = (pt.x - snapOriginX) * axisX + (pt.y - snapOriginY) * axisY;
+        double snapRad = Math.toRadians(snapAngleDeg);
+        float  axisX   = (float) Math.cos(snapRad);
+        float  axisY   = (float) Math.sin(snapRad);
+        float  dot     = (pt.x - snapOriginX) * axisX + (pt.y - snapOriginY) * axisY;
         return clampToShape(snapOriginX + dot * axisX, snapOriginY + dot * axisY);
     }
 
@@ -371,71 +456,76 @@ public final class CanvasScreen extends Screen {
     // Coordinate helpers
     // ════════════════════════════════════════════════════════════════════════════
 
-    private boolean isInsideCanvas(double x, double y) {
+    /** Returns {@code true} if the screen-space point is inside the display rectangle. */
+    private boolean isInsideDisplay(double sx, double sy) {
+        return sx >= displayX && sx < displayX + displayW
+            && sy >= displayY && sy < displayY + displayH;
+    }
+
+    /** Returns {@code true} if the screen-space point maps to a valid canvas coordinate (shape-aware). */
+    private boolean isInsideCanvas(double sx, double sy) {
+        if (!isInsideDisplay(sx, sy)) return false;
+        float cx = logX(sx), cy = logY(sy);
         if (profile.inputShape() == CanvasProfile.Shape.CIRCLE) {
-            float cx = canvasX + canvasW / 2.0f;
-            float cy = canvasY + canvasH / 2.0f;
-            float r  = Math.min(canvasW, canvasH) / 2.0f;
-            float dx = (float) x - cx;
-            float dy = (float) y - cy;
-            return dx * dx + dy * dy <= r * r;
+            float dcx = cx - canvasSize.width()  / 2f;
+            float dcy = cy - canvasSize.height() / 2f;
+            float r   = Math.min(canvasSize.width(), canvasSize.height()) / 2f;
+            return dcx * dcx + dcy * dcy <= r * r;
         }
-        return x >= canvasX && x <= canvasX + canvasW
-                && y >= canvasY && y <= canvasY + canvasH;
+        return cx >= 0 && cx <= canvasSize.width() && cy >= 0 && cy <= canvasSize.height();
     }
 
-    private Vector2f clampToShape(double x, double y) {
-        return clampToShape((float) x, (float) y);
-    }
-
+    /** Clamps a canvas-space point to the drawable region (rect or circle). */
     private Vector2f clampToShape(float cx, float cy) {
         if (profile.inputShape() == CanvasProfile.Shape.CIRCLE) {
-            float centerX = canvasX + canvasW / 2.0f;
-            float centerY = canvasY + canvasH / 2.0f;
-            float radius  = Math.min(canvasW, canvasH) / 2.0f;
-            float dx = cx - centerX;
-            float dy = cy - centerY;
+            float centerX = canvasSize.width()  / 2f;
+            float centerY = canvasSize.height() / 2f;
+            float radius  = Math.min(canvasSize.width(), canvasSize.height()) / 2f;
+            float dx = cx - centerX, dy = cy - centerY;
             float lenSq = dx * dx + dy * dy;
             if (lenSq > radius * radius) {
                 if (lenSq == 0f) return new Vector2f(centerX, centerY);
-                float inv = 1.0f / (float) Math.sqrt(lenSq);
-                cx = centerX + dx * inv * radius;
-                cy = centerY + dy * inv * radius;
+                float inv = 1f / (float) Math.sqrt(lenSq);
+                return new Vector2f(centerX + dx * inv * radius, centerY + dy * inv * radius);
             }
             return new Vector2f(cx, cy);
         }
-        cx = (float) Math.clamp((double) cx, canvasX, canvasX + canvasW);
-        cy = (float) Math.clamp((double) cy, canvasY, canvasY + canvasH);
-        return new Vector2f(cx, cy);
+        return new Vector2f(
+                Math.clamp(cx, 0f, (float) canvasSize.width()),
+                Math.clamp(cy, 0f, (float) canvasSize.height()));
     }
 
     // ════════════════════════════════════════════════════════════════════════════
-    // Drawing primitives
+    // Drawing primitives  (take canvas-space inputs; transform to screen internally)
     // ════════════════════════════════════════════════════════════════════════════
 
     private void drawScreenSprite(GuiGraphics gui) {
         ResourceLocation sprite = profile.screenSprite();
         if (sprite == null) return;
         int pad = 12;
-        gui.blit(sprite,
-                canvasX - pad, canvasY - pad, 0, 0,
-                canvasW + pad * 2, canvasH + pad * 2,
+        int sx = (int) scrX(0) - pad;
+        int sy = (int) scrY(0) - pad;
+        int sw = (int)(canvasSize.width()  * displayScale * zoom) + pad * 2;
+        int sh = (int)(canvasSize.height() * displayScale * zoom) + pad * 2;
+        gui.blit(sprite, sx, sy, 0, 0, sw, sh,
                 Math.max(1, profile.screenSpriteWidth()),
                 Math.max(1, profile.screenSpriteHeight()));
     }
 
     private void drawCanvasBackground(GuiGraphics gui, int color) {
         if (profile.inputShape() == CanvasProfile.Shape.CIRCLE) {
-            int cx = canvasX + canvasW / 2;
-            int cy = canvasY + canvasH / 2;
-            int r  = Math.min(canvasW, canvasH) / 2;
+            int cx = (int) scrX(canvasSize.width()  / 2f);
+            int cy = (int) scrY(canvasSize.height() / 2f);
+            int r  = (int)(Math.min(canvasSize.width(), canvasSize.height()) / 2.0f * displayScale * zoom);
             for (int dy = -r; dy <= r; dy++) {
                 int span = (int) Math.sqrt((double) r * r - (double) dy * dy);
                 gui.fill(cx - span, cy + dy, cx + span + 1, cy + dy + 1, color);
             }
             return;
         }
-        gui.fill(canvasX, canvasY, canvasX + canvasW, canvasY + canvasH, color);
+        int sx = (int) scrX(0),                  sy = (int) scrY(0);
+        int ex = (int) scrX(canvasSize.width()),  ey = (int) scrY(canvasSize.height());
+        gui.fill(sx, sy, ex, ey, color);
     }
 
     private void drawBorder(GuiGraphics gui) {
@@ -443,9 +533,9 @@ public final class CanvasScreen extends Screen {
         int color     = profile.canvasBorderColor();
 
         if (profile.inputShape() == CanvasProfile.Shape.CIRCLE) {
-            int cx = canvasX + canvasW / 2;
-            int cy = canvasY + canvasH / 2;
-            int r  = Math.min(canvasW, canvasH) / 2;
+            int cx = (int) scrX(canvasSize.width()  / 2f);
+            int cy = (int) scrY(canvasSize.height() / 2f);
+            int r  = (int)(Math.min(canvasSize.width(), canvasSize.height()) / 2.0f * displayScale * zoom);
             for (int ring = 0; ring < thickness; ring++) {
                 int rr = r - ring;
                 if (rr < 0) break;
@@ -458,46 +548,92 @@ public final class CanvasScreen extends Screen {
             }
             return;
         }
-        int x1 = canvasX, y1 = canvasY, x2 = canvasX + canvasW, y2 = canvasY + canvasH;
-        gui.fill(x1, y1 - thickness, x2, y1,          color);
-        gui.fill(x1, y2,            x2, y2 + thickness, color);
-        gui.fill(x1 - thickness, y1, x1, y2,            color);
-        gui.fill(x2, y1, x2 + thickness, y2,            color);
+        int x1 = (int) scrX(0),                  y1 = (int) scrY(0);
+        int x2 = (int) scrX(canvasSize.width()),  y2 = (int) scrY(canvasSize.height());
+        gui.fill(x1, y1 - thickness, x2, y1,              color);
+        gui.fill(x1, y2,             x2, y2 + thickness,  color);
+        gui.fill(x1 - thickness, y1, x1, y2,              color);
+        gui.fill(x2, y1, x2 + thickness, y2,              color);
     }
 
+    /** Screen pixels occupied by one canvas pixel at the current zoom level. */
+    private int pixelSize() {
+        return Math.max(1, Math.round(displayScale * zoom));
+    }
+
+    /**
+     * Draws a stroke whose points are in canvas space.
+     * Each canvas pixel is rendered as a {@link #pixelSize()} × {@link #pixelSize()}
+     * screen square so the stroke thickness scales consistently with zoom.
+     */
     private void drawStroke(GuiGraphics gui, List<Vector2f> pts, int color) {
+        int px = pixelSize();
         if (pts.size() < 2) {
             if (!pts.isEmpty()) {
                 Vector2f p = pts.getFirst();
-                gui.fill((int) p.x - 1, (int) p.y - 1, (int) p.x + 1, (int) p.y + 1, color);
+                int sx = (int) scrX(p.x), sy = (int) scrY(p.y);
+                gui.fill(sx, sy, sx + px, sy + px, color);
             }
             return;
         }
         for (int i = 1; i < pts.size(); i++) {
             Vector2f a = pts.get(i - 1), b = pts.get(i);
-            drawLine(gui, (int) a.x, (int) a.y, (int) b.x, (int) b.y, color);
+            drawPixelLine(gui, (int) a.x, (int) a.y, (int) b.x, (int) b.y, color, px);
         }
     }
 
-    private void drawInkTipIndicator(GuiGraphics gui, float x, float y, int color) {
-        int ix = (int) x, iy = (int) y, r = 1;
-        for (int dy = -r; dy <= r; dy++) {
-            int span = (int) Math.sqrt((double) r * r - (double) dy * dy);
-            gui.fill(ix - span, iy + dy, ix + span + 1, iy + dy + 1, color);
-        }
+    /** Draws the ink-tip square at the current smoothed canvas position. */
+    private void drawInkTipIndicator(GuiGraphics gui, float cx, float cy, int color) {
+        int px = pixelSize();
+        int ix = (int) scrX(cx), iy = (int) scrY(cy);
+        gui.fill(ix, iy, ix + px, iy + px, color);
     }
 
-    /** Bresenham line rasteriser — 2-pixel-wide alias-free line. */
-    private static void drawLine(GuiGraphics gui, int x0, int y0, int x1, int y1, int color) {
-        int dx  = Math.abs(x1 - x0), dy = -Math.abs(y1 - y0);
-        int sx  = x0 < x1 ? 1 : -1,  sy = y0 < y1 ? 1 : -1;
+    /**
+     * Bresenham line rasteriser in canvas space.
+     * Steps one canvas pixel at a time; each step fills a {@code px × px} screen square.
+     * This keeps stroke thickness equal to exactly one canvas pixel regardless of zoom.
+     */
+    private void drawPixelLine(GuiGraphics gui, int cx0, int cy0, int cx1, int cy1, int color, int px) {
+        int dx  = Math.abs(cx1 - cx0), dy = -Math.abs(cy1 - cy0);
+        int sx  = cx0 < cx1 ? 1 : -1,  sy = cy0 < cy1 ? 1 : -1;
         int err = dx + dy;
         while (true) {
-            gui.fill(x0, y0, x0 + 2, y0 + 2, color);
-            if (x0 == x1 && y0 == y1) break;
+            int screenX = (int) scrX(cx0);
+            int screenY = (int) scrY(cy0);
+            gui.fill(screenX, screenY, screenX + px, screenY + px, color);
+            if (cx0 == cx1 && cy0 == cy1) break;
             int e2 = 2 * err;
-            if (e2 >= dy) { err += dy; x0 += sx; }
-            if (e2 <= dx) { err += dx; y0 += sy; }
+            if (e2 >= dy) { err += dy; cx0 += sx; }
+            if (e2 <= dx) { err += dx; cy0 += sy; }
+        }
+    }
+
+    /**
+     * Draws a faint pixel grid overlay when canvas pixels are large enough to distinguish.
+     * Mimics Aseprite's grid: helps the user see individual canvas pixels when zoomed in.
+     */
+    private void drawPixelGrid(GuiGraphics gui) {
+        int px = (int) Math.round(displayScale * zoom);
+        if (px < GRID_THRESHOLD_PX) return;
+
+        int gridColor = 0x22000000;
+
+        // Visible canvas range (canvas-space ints)
+        int startCX = Math.max(0, (int) panX);
+        int endCX   = Math.min(canvasSize.width(),  (int) Math.ceil(panX + canvasSize.width()  / zoom));
+        int startCY = Math.max(0, (int) panY);
+        int endCY   = Math.min(canvasSize.height(), (int) Math.ceil(panY + canvasSize.height() / zoom));
+
+        for (int cx = startCX; cx <= endCX; cx++) {
+            int sx = (int) scrX(cx);
+            if (sx >= displayX && sx <= displayX + displayW)
+                gui.fill(sx, displayY, sx + 1, displayY + displayH, gridColor);
+        }
+        for (int cy = startCY; cy <= endCY; cy++) {
+            int sy = (int) scrY(cy);
+            if (sy >= displayY && sy <= displayY + displayH)
+                gui.fill(displayX, sy, displayX + displayW, sy + 1, gridColor);
         }
     }
 
@@ -505,10 +641,6 @@ public final class CanvasScreen extends Screen {
     // Cursor management
     // ════════════════════════════════════════════════════════════════════════════
 
-    /**
-     * Predefined programmatic cursor shapes (fallbacks when no PNG sprite exists).
-     * Pass to {@link #createCursorFromPattern}.
-     */
     public enum CursorPattern { CROSSHAIR_WHITE, CROSSHAIR_RED, CROSSHAIR_BLUE, PAINTBRUSH, PENCIL }
 
     private void setSystemCursor(int glfwShape) {
@@ -521,13 +653,6 @@ public final class CanvasScreen extends Screen {
         }
     }
 
-    /**
-     * Sets a cursor from a PNG sprite, caching the GLFW handle for reuse.
-     *
-     * @param spriteLocation texture resource location
-     * @param hotspotX       hotspot X in the unscaled image; use {@code -1} for centre
-     * @param hotspotY       hotspot Y in the unscaled image; use {@code -1} for centre
-     */
     private void setCursorFromSprite(ResourceLocation spriteLocation, int hotspotX, int hotspotY) {
         String key = spriteLocation + "#scale=" + CURSOR_SCALE;
         if (key.equals(activeCursorKey)) return;
@@ -544,10 +669,6 @@ public final class CanvasScreen extends Screen {
         }
     }
 
-    /**
-     * Loads a PNG texture as a GLFW cursor, scaling it by {@link #CURSOR_SCALE}.
-     * Returns {@code 0L} on any failure; uses {@link CursorPattern#CROSSHAIR_WHITE} as fallback.
-     */
     private static long loadTextureAsCursor(ResourceLocation loc, int hotspotX, int hotspotY) {
         try {
             var resource = Minecraft.getInstance().getResourceManager().getResource(loc);
@@ -566,7 +687,6 @@ public final class CanvasScreen extends Screen {
                     int sy = y / sc;
                     for (int x = 0; x < sw; x++) {
                         int px = img.getPixelRGBA(x / sc, sy);
-                        // Minecraft stores ABGR; GLFW expects RGBA.
                         int r = px & 0xFF, g = (px >> 8) & 0xFF,
                             b = (px >> 16) & 0xFF, a = (px >> 24) & 0xFF;
                         buf.putInt((a << 24) | (b << 16) | (g << 8) | r);
@@ -593,13 +713,10 @@ public final class CanvasScreen extends Screen {
         return createCursorFromPattern(CursorPattern.CROSSHAIR_WHITE);
     }
 
-    /** Destroys all cached GLFW cursors. Called from {@link #onClose}. */
     private static void cleanupCursors() {
         CURSOR_CACHE.values().forEach(c -> { if (c != 0L) GLFW.glfwDestroyCursor(c); });
         CURSOR_CACHE.clear();
     }
-
-    // ── Programmatic cursor builders ─────────────────────────────────────────────
 
     public static long createCursorFromPattern(CursorPattern pattern) {
         return switch (pattern) {
@@ -617,9 +734,9 @@ public final class CanvasScreen extends Screen {
         int half = size / 2;
         for (int y = 0; y < size; y++) for (int x = 0; x < size; x++) {
             int dx = Math.abs(x - half), dy = Math.abs(y - half);
-            if      (dx == 0 && dy == 0)                           px.putInt(centerColor);
-            else if ((dx < 2 || dy < 2) && (dx + dy < 10))        px.putInt(lineColor);
-            else                                                    px.putInt(0);
+            if      (dx == 0 && dy == 0)                    px.putInt(centerColor);
+            else if ((dx < 2 || dy < 2) && (dx + dy < 10)) px.putInt(lineColor);
+            else                                             px.putInt(0);
         }
         px.flip();
         GLFWImage img = GLFWImage.create().width(size).height(size).pixels(px);
@@ -633,9 +750,9 @@ public final class CanvasScreen extends Screen {
         ByteBuffer px = MemoryUtil.memAlloc(size * size * 4);
         for (int y = 0; y < size; y++) for (int x = 0; x < size; x++) {
             int edge = Math.min(Math.min(x, y), Math.min(size - x - 1, size - y - 1));
-            if      (edge < 3 && y < 24)                           px.putInt(0xFFFFFFFF);
-            else if (y >= 24 && y < 28 && x >= 14 && x < 18)      px.putInt(0xFF8B4513);
-            else                                                    px.putInt(0);
+            if      (edge < 3 && y < 24)                      px.putInt(0xFFFFFFFF);
+            else if (y >= 24 && y < 28 && x >= 14 && x < 18) px.putInt(0xFF8B4513);
+            else                                               px.putInt(0);
         }
         px.flip();
         GLFWImage img = GLFWImage.create().width(size).height(size).pixels(px);
@@ -660,4 +777,3 @@ public final class CanvasScreen extends Screen {
         return c;
     }
 }
-
