@@ -40,7 +40,7 @@ public class PlacedPaper extends Block implements EntityBlock {
     public static final MapCodec<PlacedPaper> CODEC = simpleCodec(PlacedPaper::new);
     public static final DirectionProperty FACING = DirectionalBlock.FACING;
 
-    protected static final float DEPTH = 0.0325F;
+    public static final float DEPTH = 0.0325F;
     protected static final VoxelShape NORTH_SHAPE = Block.box(0.0, 0.0, 16.0 - DEPTH * 16, 16.0, 16.0, 16.0);
     protected static final VoxelShape SOUTH_SHAPE = Block.box(0.0, 0.0, 0.0, 16.0, 16.0, DEPTH * 16);
     protected static final VoxelShape WEST_SHAPE  = Block.box(16.0 - DEPTH * 16, 0.0, 0.0, 16.0, 16.0, 16.0);
