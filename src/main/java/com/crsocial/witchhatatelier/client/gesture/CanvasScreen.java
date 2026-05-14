@@ -56,9 +56,8 @@ public final class CanvasScreen extends Screen {
     private static final float DISPLAY_FRACTION_RANGE = 0.45f; // added on top of MIN at canvas=512px
     private static final int   DISPLAY_REF_PX        = 512;    // reference canvas size for max fraction
 
-    private static final float ZOOM_MIN  = 1.0f;
-    private static final float ZOOM_MAX  = 16.0f;
-    private static final float ZOOM_STEP = 1.15f;
+    private static final float ZOOM_MIN = 1.0f;
+    private static final float ZOOM_MAX = 8.0f;
 
     /** Minimum screen pixels per canvas pixel before the pixel grid is shown. */
     private static final int GRID_THRESHOLD_PX = 4;
@@ -230,7 +229,7 @@ public final class CanvasScreen extends Screen {
         }
 
         if (zoom > 1.0f) {
-            String label = String.format("%.1f×", zoom);
+            String label = String.format("%d×", (int) zoom);
             gui.drawString(font, label,
                     displayX + displayW - 4 - font.width(label),
                     displayY + 4, 0xAAFFFFFF);
@@ -257,15 +256,16 @@ public final class CanvasScreen extends Screen {
         drawPixelGrid(gui);
         drawBorder(gui);
 
+        int sw = profile.strokeWidth();
         for (List<Vector2f> stroke : pointStore.strokes()) {
-            drawStroke(gui, stroke, profile.strokeColor());
+            drawStroke(gui, stroke, profile.strokeColor(), sw);
         }
 
         List<Vector2f> active = pointStore.activeStroke();
         if (!readOnly && active != null && !active.isEmpty()) {
-            drawStroke(gui, active, profile.activeStrokeColor());
+            drawStroke(gui, active, profile.activeStrokeColor(), sw);
             int inkTipColor = snapActive ? 0xFFFFFFFF : profile.activeStrokeColor();
-            drawInkTipIndicator(gui, smoothedX, smoothedY, inkTipColor);
+            drawInkTipIndicator(gui, smoothedX, smoothedY, inkTipColor, sw);
         }
     }
 
@@ -359,11 +359,11 @@ public final class CanvasScreen extends Screen {
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
-        if (!isInsideDisplay(mouseX, mouseY)) return super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
+        if (isInsideDisplay(mouseX, mouseY)) return super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
         // Record the canvas point under the cursor before zooming.
         float cx = logX(mouseX);
         float cy = logY(mouseY);
-        zoom = Math.clamp(zoom * (scrollY > 0 ? ZOOM_STEP : 1f / ZOOM_STEP), ZOOM_MIN, ZOOM_MAX);
+        zoom = Math.clamp(zoom + (scrollY > 0 ? 1f : -1f), ZOOM_MIN, ZOOM_MAX);
         // Adjust pan so the canvas point under the cursor stays fixed on screen.
         panX = cx - (float)(mouseX - displayX) / (displayScale * zoom);
         panY = cy - (float)(mouseY - displayY) / (displayScale * zoom);
@@ -458,13 +458,13 @@ public final class CanvasScreen extends Screen {
 
     /** Returns {@code true} if the screen-space point is inside the display rectangle. */
     private boolean isInsideDisplay(double sx, double sy) {
-        return sx >= displayX && sx < displayX + displayW
-            && sy >= displayY && sy < displayY + displayH;
+        return !(sx >= displayX) || !(sx < displayX + displayW)
+                || !(sy >= displayY) || !(sy < displayY + displayH);
     }
 
     /** Returns {@code true} if the screen-space point maps to a valid canvas coordinate (shape-aware). */
     private boolean isInsideCanvas(double sx, double sy) {
-        if (!isInsideDisplay(sx, sy)) return false;
+        if (isInsideDisplay(sx, sy)) return false;
         float cx = logX(sx), cy = logY(sy);
         if (profile.inputShape() == CanvasProfile.Shape.CIRCLE) {
             float dcx = cx - canvasSize.width()  / 2f;
@@ -556,52 +556,47 @@ public final class CanvasScreen extends Screen {
         gui.fill(x2, y1, x2 + thickness, y2,              color);
     }
 
-    /** Screen pixels occupied by one canvas pixel at the current zoom level. */
-    private int pixelSize() {
-        return Math.max(1, Math.round(displayScale * zoom));
-    }
-
-    /**
-     * Draws a stroke whose points are in canvas space.
-     * Each canvas pixel is rendered as a {@link #pixelSize()} × {@link #pixelSize()}
-     * screen square so the stroke thickness scales consistently with zoom.
-     */
-    private void drawStroke(GuiGraphics gui, List<Vector2f> pts, int color) {
-        int px = pixelSize();
+    private void drawStroke(GuiGraphics gui, List<Vector2f> pts, int color, int strokeWidth) {
         if (pts.size() < 2) {
             if (!pts.isEmpty()) {
                 Vector2f p = pts.getFirst();
-                int sx = (int) scrX(p.x), sy = (int) scrY(p.y);
-                gui.fill(sx, sy, sx + px, sy + px, color);
+                int px = Math.max(1, Math.round(strokeWidth * displayScale * zoom));
+                int sx0 = displayX + (int) Math.round((p.x - panX) * displayScale * zoom);
+                int sy0 = displayY + (int) Math.round((p.y - panY) * displayScale * zoom);
+                gui.fill(sx0, sy0, sx0 + px, sy0 + px, color);
             }
             return;
         }
         for (int i = 1; i < pts.size(); i++) {
             Vector2f a = pts.get(i - 1), b = pts.get(i);
-            drawPixelLine(gui, (int) a.x, (int) a.y, (int) b.x, (int) b.y, color, px);
+            drawPixelLine(gui, (int) a.x, (int) a.y, (int) b.x, (int) b.y, color, strokeWidth);
         }
     }
 
     /** Draws the ink-tip square at the current smoothed canvas position. */
-    private void drawInkTipIndicator(GuiGraphics gui, float cx, float cy, int color) {
-        int px = pixelSize();
-        int ix = (int) scrX(cx), iy = (int) scrY(cy);
-        gui.fill(ix, iy, ix + px, iy + px, color);
+    private void drawInkTipIndicator(GuiGraphics gui, float cx, float cy, int color, int strokeWidth) {
+        int px = Math.max(1, Math.round(strokeWidth * displayScale * zoom));
+        int sx0 = displayX + (int) Math.round((cx - panX) * displayScale * zoom);
+        int sy0 = displayY + (int) Math.round((cy - panY) * displayScale * zoom);
+        gui.fill(sx0, sy0, sx0 + px, sy0 + px, color);
     }
 
     /**
      * Bresenham line rasteriser in canvas space.
-     * Steps one canvas pixel at a time; each step fills a {@code px × px} screen square.
-     * This keeps stroke thickness equal to exactly one canvas pixel regardless of zoom.
+     * Each Bresenham step fills a {@code px × px} screen square where
+     * {@code px = max(1, round(strokeWidth × scale))} — this prevents gaps at low zoom
+     * where a single canvas pixel would otherwise round to zero screen pixels.
      */
-    private void drawPixelLine(GuiGraphics gui, int cx0, int cy0, int cx1, int cy1, int color, int px) {
+    private void drawPixelLine(GuiGraphics gui, int cx0, int cy0, int cx1, int cy1, int color, int strokeWidth) {
         int dx  = Math.abs(cx1 - cx0), dy = -Math.abs(cy1 - cy0);
         int sx  = cx0 < cx1 ? 1 : -1,  sy = cy0 < cy1 ? 1 : -1;
         int err = dx + dy;
+        float scale = displayScale * zoom;
+        int px = Math.max(1, Math.round(strokeWidth * scale));
         while (true) {
-            int screenX = (int) scrX(cx0);
-            int screenY = (int) scrY(cy0);
-            gui.fill(screenX, screenY, screenX + px, screenY + px, color);
+            int sx0 = displayX + (int) Math.round((cx0 - panX) * scale);
+            int sy0 = displayY + (int) Math.round((cy0 - panY) * scale);
+            gui.fill(sx0, sy0, sx0 + px, sy0 + px, color);
             if (cx0 == cx1 && cy0 == cy1) break;
             int e2 = 2 * err;
             if (e2 >= dy) { err += dy; cx0 += sx; }

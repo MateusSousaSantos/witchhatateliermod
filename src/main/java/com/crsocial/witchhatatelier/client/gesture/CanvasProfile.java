@@ -80,6 +80,13 @@ public interface CanvasProfile {
     boolean angleSnapEnabled();
 
     /**
+     * Stroke width in canvas pixels. Rendered as {@code max(1, round(strokeWidth × scale))}
+     * screen pixels so strokes never disappear at low zoom.
+     * Default: {@code 2}.
+     */
+    default int strokeWidth() { return 2; }
+
+    /**
      * Background sprite drawn behind the canvas, or {@code null} for none.
      * Typically, the parchment / paper texture.
      */

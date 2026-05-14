@@ -6,18 +6,23 @@
   "creativetab.witchhatatelier.tab": "Witch Hat Atelier",
   "item.witchhatateliermod.wand": "Wand",
   "item.witchhatateliermod.nib": "Nib",
-  "item.witchhatateliermod.small_square_paper": "small Paper",
-  "item.witchhatateliermod.medium_square_paper": "Medium Paper",
-  "item.witchhatateliermod.large_square_paper": "Large Paper",
-  "item.witchhatateliermod.small_square_spell_paper": "small Spell Paper",
-  "item.witchhatateliermod.medium_square_spell_paper": "Medium Spell Paper",
-  "item.witchhatateliermod.large_square_spell_paper": "Large Spell Paper",
-  "item.witchhatateliermod.small_round_paper": "small Paper",
-  "item.witchhatateliermod.medium_round_paper": "Medium Paper",
-  "item.witchhatateliermod.large_round_paper": "Large Paper",
-  "item.witchhatateliermod.small_round_spell_paper": "small Spell Paper",
-  "item.witchhatateliermod.medium_round_spell_paper": "Medium Spell Paper",
-  "item.witchhatateliermod.large_round_spell_paper": "Large Spell Paper",
+
+  "item.witchhatateliermod.small_square_paper": "Small Square Paper",
+  "item.witchhatateliermod.medium_square_paper": "Medium Square Paper",
+  "item.witchhatateliermod.large_square_paper": "Large Square Paper",
+
+  "item.witchhatateliermod.small_square_spell_paper": "Small Square Spell Paper",
+  "item.witchhatateliermod.medium_square_spell_paper": "Medium Square Spell Paper",
+  "item.witchhatateliermod.large_square_spell_paper": "Large Square Spell Paper",
+
+  "item.witchhatateliermod.small_round_paper": "Small Round Paper",
+  "item.witchhatateliermod.medium_round_paper": "Medium Round Paper",
+  "item.witchhatateliermod.large_round_paper": "Large Round Paper",
+
+  "item.witchhatateliermod.small_round_spell_paper": "Small Round Spell Paper",
+  "item.witchhatateliermod.medium_round_spell_paper": "Medium Round Spell Paper",
+  "item.witchhatateliermod.large_round_spell_paper": "Large Round Spell Paper",
+
   "item.witchhatateliermod.spell_binder": "Spell Binder",
 
   "block.witchhatateliermod.round_paper_block": "Round Paper Block",
@@ -30,5 +35,24 @@
 
   "screen.witchhatatelier.gesture_canvas": "Sigil Canvas",
   "screen.witchhatatelier.gesture_canvas.read_only": "✦ View only — equip a Wand to edit ✦",
-  "screen.witchhatatelier.gesture_canvas.paper": "Paper Canvas"
+  "screen.witchhatatelier.gesture_canvas.small_square": "Small Paper Canvas",
+  "screen.witchhatatelier.gesture_canvas.medium_square": "Paper Canvas",
+  "screen.witchhatatelier.gesture_canvas.large_square": "Large Paper Canvas",
+  "screen.witchhatatelier.gesture_canvas.small_round": "Small Paper Canvas",
+  "screen.witchhatatelier.gesture_canvas.medium_round": "Paper Canvas",
+  "screen.witchhatatelier.gesture_canvas.large_round": "Large Paper Canvas",
+
+
+  "screen.witchhatatelier.gesture_canvas.button.save": "Save",
+  "screen.witchhatatelier.gesture_canvas.button.cancel": "Cancel",
+  "screen.witchhatatelier.gesture_canvas.button.clear": "Clear",
+  "screen.witchhatatelier.gesture_canvas.button.reset": "Reset",
+
+  "screen.witchhatatelier.gesture_canvas.label.smoothing": "Stroke smoothing",
+  "screen.witchhatatelier.gesture_canvas.label.dead_zone": "Point dead zone",
+  "screen.witchhatatelier.gesture_canvas.label.angle_snap": "Angle snap threshold",
+  "screen.witchhatatelier.gesture_canvas.label.size": "Canvas size",
+
+  "screen.witchhatatelier.gesture_canvas.tooltip.wand_required": "Equip a Wand to edit this paper.",
+  "screen.witchhatatelier.gesture_canvas.tooltip.read_only": "View only"
 }
