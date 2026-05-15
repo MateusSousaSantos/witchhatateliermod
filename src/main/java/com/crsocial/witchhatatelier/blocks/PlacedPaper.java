@@ -3,14 +3,20 @@ package com.crsocial.witchhatatelier.blocks;
 import com.mojang.serialization.MapCodec;
 import com.crsocial.witchhatatelier.client.gesture.GestureCanvasClient;
 import com.crsocial.witchhatatelier.client.gesture.GesturePoint;
+import com.crsocial.witchhatatelier.items.ModItems;
+import com.crsocial.witchhatatelier.items.PaperType;
 import com.crsocial.witchhatatelier.items.SpellPaperItem;
 import com.crsocial.witchhatatelier.items.Wand;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.Tag;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.ItemInteractionResult;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.component.CustomData;
 import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Level;
@@ -26,6 +32,8 @@ import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.level.block.state.properties.DirectionProperty;
+import net.minecraft.world.level.storage.loot.LootParams;
+import net.minecraft.world.level.storage.loot.parameters.LootContextParams;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.phys.shapes.VoxelShape;
@@ -63,6 +71,27 @@ public class PlacedPaper extends Block implements EntityBlock {
         return new PlacedPaperBlockEntity(pos, state);
     }
 
+    // ── Drops ────────────────────────────────────────────────────────────────────
+
+    @Override
+    public List<ItemStack> getDrops(@NotNull BlockState state, LootParams.@NotNull Builder params) {
+        BlockEntity rawBe = params.getOptionalParameter(LootContextParams.BLOCK_ENTITY);
+        if (!(rawBe instanceof PlacedPaperBlockEntity be)) return List.of();
+
+        PaperType type = be.getPaperType();
+        CompoundTag gestureData = be.getGestureData();
+
+        boolean hasDrawing = !gestureData.isEmpty()
+                && !gestureData.getList("points", Tag.TAG_COMPOUND).isEmpty();
+
+        if (hasDrawing) {
+            ItemStack result = new ItemStack(ModItems.inscribedFor(type).get());
+            result.set(DataComponents.CUSTOM_DATA, CustomData.of(gestureData));
+            return List.of(result);
+        }
+        return List.of(new ItemStack(ModItems.blankFor(type).get()));
+    }
+
     // ── Block interaction ────────────────────────────────────────────────────────
 
     @Override
@@ -78,7 +107,7 @@ public class PlacedPaper extends Block implements EntityBlock {
     }
 
     @OnlyIn(Dist.CLIENT)
-    private static void openCanvasFromBlock(Level level, BlockPos pos, ItemStack stack) {
+    protected static void openCanvasFromBlock(Level level, BlockPos pos, ItemStack stack) {
         if (!(level.getBlockEntity(pos) instanceof PlacedPaperBlockEntity be)) return;
         boolean editable = stack.getItem() instanceof Wand;
         List<GesturePoint> points = SpellPaperItem.loadPointsFromTag(be.getGestureData());

@@ -38,7 +38,7 @@ public class ModBlocks {
             () -> new PlacedPaper(paperProps()));
 
     public static final DeferredBlock<PlacedPaper> PLACED_LARGE_SQUARE_PAPER = BLOCKS.register("placed_large_square_paper",
-            () -> new PlacedPaper(paperProps()));
+            () -> new PlacedLargePaper(paperProps()));
 
     public static final DeferredBlock<PlacedPaper> PLACED_SMALL_ROUND_PAPER = BLOCKS.register("placed_small_round_paper",
             () -> new PlacedPaper(paperProps()));
@@ -47,7 +47,7 @@ public class ModBlocks {
             () -> new PlacedPaper(paperProps()));
 
     public static final DeferredBlock<PlacedPaper> PLACED_LARGE_ROUND_PAPER = BLOCKS.register("placed_large_round_paper",
-            () -> new PlacedPaper(paperProps()));
+            () -> new PlacedLargePaper(paperProps()));
 
     // ── PaperType → block lookup ─────────────────────────────────────────────────
 

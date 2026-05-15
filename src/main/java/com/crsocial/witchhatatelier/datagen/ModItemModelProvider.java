@@ -39,19 +39,19 @@ public class ModItemModelProvider extends ItemModelProvider {
 
         // ── Inscribed square spell papers ─────────────────────────────────────
         withExistingParent("small_square_spell_paper", "minecraft:item/generated")
-                .texture("layer0", modLoc("item/small_square_paper"));
+                .texture("layer0", modLoc("item/small_square_spell_paper"));
         withExistingParent("medium_square_spell_paper", "minecraft:item/generated")
-                .texture("layer0", modLoc("item/medium_square_paper"));
+                .texture("layer0", modLoc("item/medium_square_spell_paper"));
         withExistingParent("large_square_spell_paper", "minecraft:item/generated")
-                .texture("layer0", modLoc("item/large_square_paper"));
+                .texture("layer0", modLoc("item/large_square_spell_paper"));
 
         // ── Inscribed round spell papers ──────────────────────────────────────
         withExistingParent("small_round_spell_paper", "minecraft:item/generated")
-                .texture("layer0", modLoc("item/small_round_paper"));
+                .texture("layer0", modLoc("item/small_round_spell_paper"));
         withExistingParent("medium_round_spell_paper", "minecraft:item/generated")
-                .texture("layer0", modLoc("item/medium_round_paper"));
+                .texture("layer0", modLoc("item/medium_round_spell_paper"));
         withExistingParent("large_round_spell_paper", "minecraft:item/generated")
-                .texture("layer0", modLoc("item/large_round_paper"));
+                .texture("layer0", modLoc("item/large_round_spell_paper"));
 
         // ── Wand (unchanged) ──────────────────────────────────────────────────
         withExistingParent("wand_2d", "minecraft:item/generated")

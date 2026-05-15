@@ -80,13 +80,14 @@ public class PlacedPaperBlockEntityRenderer implements BlockEntityRenderer<Place
 
         // gridSize = canvasSize.width() / 2  (per-profile resolution)
         int   gridSize = paperType.getCanvasSize().width() / 2;
-        float cellUV   = (1f - 2f * MARGIN) / gridSize;
+        float margin   = marginFor(paperType);
+        float cellUV   = (1f - 2f * margin) / gridSize;
         float dotHalf  = cellUV * 0.5f;
         boolean isRound = paperType.isRound();
         boolean isLarge = paperType.isLarge();
 
         float circleR2 = 0f;
-        if (isRound) { float r = 0.5f - MARGIN; circleR2 = r * r; }
+        if (isRound) { float r = 0.5f - margin; circleR2 = r * r; }
 
         // ── Group points by strokeID (preserves draw order) ──────────────────────
         Map<Integer, List<float[]>> strokes = new LinkedHashMap<>();
@@ -100,12 +101,12 @@ public class PlacedPaperBlockEntityRenderer implements BlockEntityRenderer<Place
         boolean[][] grid = new boolean[gridSize][gridSize];
         for (List<float[]> stroke : strokes.values()) {
             for (int i = 0; i < stroke.size(); i++) {
-                int cx = uvToCell(stroke.get(i)[0], cellUV, gridSize);
-                int cy = uvToCell(stroke.get(i)[1], cellUV, gridSize);
+                int cx = uvToCell(stroke.get(i)[0], gridSize);
+                int cy = uvToCell(stroke.get(i)[1], gridSize);
                 markCell(grid, cx, cy, gridSize);
                 if (i > 0) {
-                    int px = uvToCell(stroke.get(i - 1)[0], cellUV, gridSize);
-                    int py = uvToCell(stroke.get(i - 1)[1], cellUV, gridSize);
+                    int px = uvToCell(stroke.get(i - 1)[0], gridSize);
+                    int py = uvToCell(stroke.get(i - 1)[1], gridSize);
                     bresenham(grid, px, py, cx, cy, gridSize);
                 }
             }
@@ -123,8 +124,8 @@ public class PlacedPaperBlockEntityRenderer implements BlockEntityRenderer<Place
             for (int cx = 0; cx < gridSize; cx++) {
                 if (!grid[cy][cx]) continue;
 
-                float cu = MARGIN + (cx + 0.5f) * cellUV;
-                float cv = MARGIN + (cy + 0.5f) * cellUV;
+                float cu = margin + (cx + 0.5f) * cellUV;
+                float cv = margin + (cy + 0.5f) * cellUV;
 
                 if (isRound) {
                     float du = cu - 0.5f, dv = cv - 0.5f;
@@ -152,8 +153,16 @@ public class PlacedPaperBlockEntityRenderer implements BlockEntityRenderer<Place
 
     // ── Private helpers ───────────────────────────────────────────────────────────
 
-    private static int uvToCell(float uv, float cellUV, int gridSize) {
-        return Math.clamp((int) ((uv - MARGIN) / cellUV), 0, gridSize - 1);
+    // Small papers have a proportionally larger visible border in their texture,
+    // so they need a bigger margin to keep ink inside the paper outline.
+    private static float marginFor(PaperType paperType) {
+        return paperType.getCanvasSize().width() <= 128 ? 0.20f : MARGIN;
+    }
+
+    // Scales the full canvas UV [0,1] onto [0, gridSize) so the whole drawing fits
+    // inside the margin-inset area on the block face instead of being clipped at the edges.
+    private static int uvToCell(float uv, int gridSize) {
+        return Math.clamp((int) (uv * gridSize), 0, gridSize - 1);
     }
 
     private static void markCell(boolean[][] grid, int cx, int cy, int size) {
