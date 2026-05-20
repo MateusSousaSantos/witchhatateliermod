@@ -1,11 +1,20 @@
 package com.crsocial.witchhatatelier.network;
 
+import com.crsocial.witchhatatelier.Config;
 import com.crsocial.witchhatatelier.WitchHatAtelierMod;
 import com.crsocial.witchhatatelier.blocks.PlacedPaperBlockEntity;
 import com.crsocial.witchhatatelier.client.gesture.GesturePoint;
 import com.crsocial.witchhatatelier.items.ModItems;
 import com.crsocial.witchhatatelier.items.PaperType;
 import com.crsocial.witchhatatelier.items.SpellPaperItem;
+import com.crsocial.witchhatatelier.spell.cluster.SigilCluster;
+import com.crsocial.witchhatatelier.spell.cluster.SigilClusterer;
+import com.crsocial.witchhatatelier.spell.recognition.PDollarPlusRecognizer;
+import com.crsocial.witchhatatelier.spell.recognition.Point;
+import com.crsocial.witchhatatelier.spell.recognition.PointCloud;
+import com.crsocial.witchhatatelier.spell.recognition.PointCloudPreprocessor;
+import com.crsocial.witchhatatelier.spell.recognition.RecognitionResult;
+import com.crsocial.witchhatatelier.spell.recognition.TemplateRegistry;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.nbt.CompoundTag;
@@ -18,6 +27,11 @@ import net.minecraft.world.item.component.CustomData;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 import org.jetbrains.annotations.NotNull;
+
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 
 /**
  * Server-side handler for {@link SaveGesturePayload}.
@@ -109,6 +123,58 @@ public final class SaveGestureHandler {
                         player.getScoreboardName());
             }
         });
+
+        // Recognition runs alongside (and after) any NBT writes. It only logs — no state mutation.
+        context.enqueueWork(() -> runSpellPipeline(payload, context.player()));
+    }
+
+    // ── Spell pipeline (cluster → preprocess → recognize) ───────────────────────
+
+    private static void runSpellPipeline(SaveGesturePayload payload, Player player) {
+        if (payload.points().isEmpty()) return;
+
+        Map<Integer, List<Point>> byStroke = new LinkedHashMap<>();
+        for (GesturePoint gp : payload.points()) {
+            byStroke.computeIfAbsent(gp.strokeID(), k -> new ArrayList<>())
+                    .add(new Point(gp.x(), gp.y(), gp.strokeID()));
+        }
+
+        List<Integer> ringIds = payload.activationRingStrokeIds();
+        List<List<Point>> contentStrokes = new ArrayList<>();
+        for (var e : byStroke.entrySet()) {
+            if (ringIds.contains(e.getKey())) continue;
+            contentStrokes.add(e.getValue());
+        }
+        if (contentStrokes.isEmpty()) {
+            WitchHatAtelierMod.LOGGER.info(
+                    "[SpellPipeline] No content strokes (ring={} of {} stroke(s)) — nothing to recognize.",
+                    ringIds.size(), byStroke.size());
+            return;
+        }
+
+        float microR = Config.MICRO_MERGE_RADIUS.get().floatValue();
+        float macroR = Config.MACRO_MERGE_RADIUS.get().floatValue();
+        int resampleN = Config.RESAMPLE_N.get();
+        float minScore = Config.RECOGNITION_MIN_SCORE.get().floatValue();
+
+        List<SigilCluster> clusters = SigilClusterer.cluster(contentStrokes, microR, macroR);
+        PDollarPlusRecognizer recognizer = new PDollarPlusRecognizer(TemplateRegistry.get(), minScore);
+
+        String who = player != null ? player.getScoreboardName() : "<unknown>";
+        WitchHatAtelierMod.LOGGER.info(
+                "[SpellPipeline] player='{}' ring={} content_strokes={} → {} sigil cluster(s); templates={}.",
+                who, ringIds, contentStrokes.size(), clusters.size(), TemplateRegistry.get().size());
+
+        for (int i = 0; i < clusters.size(); i++) {
+            PointCloud raw = clusters.get(i).toPointCloud("candidate_" + i);
+            PointCloudPreprocessor.Processed processed = PointCloudPreprocessor.process(raw, resampleN);
+            RecognitionResult r = recognizer.match(processed.cloud(), processed.indicativeAngle());
+            WitchHatAtelierMod.LOGGER.info(
+                    "[SpellPipeline] sigil[{}] → {} (score={}, angle={}rad).",
+                    i, r.spellName(),
+                    String.format(java.util.Locale.ROOT, "%.3f", r.confidenceScore()),
+                    String.format(java.util.Locale.ROOT, "%.3f", r.indicativeAngle()));
+        }
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────────

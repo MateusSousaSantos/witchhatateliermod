@@ -17,12 +17,20 @@ import java.util.List;
  * Client → Server packet sent when the player closes the gesture canvas.
  *
  * <p>Carries a flat, <em>normalized</em> ({@code [0,1]×[0,1]}) point cloud with
- * stroke IDs and the player's world position at the time of drawing.</p>
+ * stroke IDs, the player's world position at the time of drawing, and — when
+ * the canvas detected an activation ring — the stroke IDs that form that ring.</p>
  *
- * <p>Server-side handling (inventory manipulation, NBT building, item creation)
+ * <p>Server-side handling (inventory manipulation, NBT building, recognition)
  * lives in {@link SaveGestureHandler}.</p>
+ *
+ * @param activationRingStrokeIds stroke IDs forming the activation ring; empty list
+ *                                if no closure was detected (held-paper save, open
+ *                                drawing, or the player closed the canvas manually).
  */
-public record SaveGesturePayload(List<GesturePoint> points, Vec3 playerPos, BlockPos blockOrigin)
+public record SaveGesturePayload(List<GesturePoint> points,
+                                 Vec3 playerPos,
+                                 BlockPos blockOrigin,
+                                 List<Integer> activationRingStrokeIds)
         implements CustomPacketPayload {
 
     public static final Type<SaveGesturePayload> TYPE = new Type<>(
@@ -51,6 +59,8 @@ public record SaveGesturePayload(List<GesturePoint> points, Vec3 playerPos, Bloc
         } else {
             buf.writeBoolean(false);
         }
+        buf.writeInt(payload.activationRingStrokeIds().size());
+        for (int id : payload.activationRingStrokeIds()) buf.writeInt(id);
     }
 
     private static SaveGesturePayload decode(RegistryFriendlyByteBuf buf) {
@@ -68,7 +78,10 @@ public record SaveGesturePayload(List<GesturePoint> points, Vec3 playerPos, Bloc
             int z = buf.readInt();
             origin = new BlockPos(x, y, z);
         }
-        return new SaveGesturePayload(points, playerPos, origin);
+        int ringCount = buf.readInt();
+        List<Integer> ringIds = new ArrayList<>(ringCount);
+        for (int i = 0; i < ringCount; i++) ringIds.add(buf.readInt());
+        return new SaveGesturePayload(points, playerPos, origin, ringIds);
     }
 
     @Override

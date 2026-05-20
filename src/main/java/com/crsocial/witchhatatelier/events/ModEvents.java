@@ -3,6 +3,7 @@ package com.crsocial.witchhatatelier.events;
 import com.crsocial.witchhatatelier.WitchHatAtelierMod;
 import com.crsocial.witchhatatelier.client.gesture.GestureCanvasClient;
 import com.crsocial.witchhatatelier.items.Wand;
+import com.crsocial.witchhatatelier.spell.recognition.SpellTemplateLoader;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -10,6 +11,7 @@ import net.neoforged.api.distmarker.Dist;
 import net.neoforged.api.distmarker.OnlyIn;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.neoforge.event.AddReloadListenerEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent;
 
 import java.util.List;
@@ -59,6 +61,15 @@ public class ModEvents {
     private static void openCanvas(ItemStack stack, boolean editable) {
         // Vanilla paper has no gesture data yet — open with an empty point cloud.
         GestureCanvasClient.openCanvas(stack, List.of(), editable);
+    }
+
+    /**
+     * Registers the gesture-template datapack loader. Fires once at server start and again
+     * on every {@code /reload}, so authors can iterate on templates without restarting.
+     */
+    @SubscribeEvent
+    public static void onAddReloadListeners(AddReloadListenerEvent event) {
+        event.addListener(new SpellTemplateLoader());
     }
 }
 

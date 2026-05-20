@@ -43,7 +43,7 @@ public final class GestureCanvasClient {
         CanvasProfile profile = resolveProfile(stack);
         Minecraft.getInstance().setScreen(
                 new CanvasScreen(profile, preloaded, editable,
-                        points -> sendToServer(points, origin), origin));
+                        (points, ringIds) -> sendToServer(points, origin, ringIds), origin));
     }
 
     /** Opens the canvas for a placed-paper block, using its stored {@link PaperType}. */
@@ -52,7 +52,7 @@ public final class GestureCanvasClient {
         CanvasProfile profile = new CanvasProfile.PaperTypeProfile(paperType);
         Minecraft.getInstance().setScreen(
                 new CanvasScreen(profile, preloaded, editable,
-                        points -> sendToServer(points, origin), origin));
+                        (points, ringIds) -> sendToServer(points, origin, ringIds), origin));
     }
 
     // ── Profile resolution ───────────────────────────────────────────────────────
@@ -69,11 +69,14 @@ public final class GestureCanvasClient {
 
     // ── Network ──────────────────────────────────────────────────────────────────
 
-    private static void sendToServer(List<GesturePoint> pointCloud, BlockPos origin) {
+    private static void sendToServer(List<GesturePoint> pointCloud, BlockPos origin,
+                                     List<Integer> activationRingStrokeIds) {
         var mc = Minecraft.getInstance();
         if (mc.player == null) return;
         WitchHatAtelierMod.LOGGER.info(
-                "[GestureCanvas] Closing — {} point(s). Sending to server.", pointCloud.size());
-        PacketDistributor.sendToServer(new SaveGesturePayload(pointCloud, mc.player.position(), origin));
+                "[GestureCanvas] Closing — {} point(s), ring strokes={}. Sending to server.",
+                pointCloud.size(), activationRingStrokeIds);
+        PacketDistributor.sendToServer(new SaveGesturePayload(
+                pointCloud, mc.player.position(), origin, activationRingStrokeIds));
     }
 }

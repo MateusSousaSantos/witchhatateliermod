@@ -2,6 +2,7 @@ package com.crsocial.witchhatatelier.client.gesture;
 
 import com.mojang.blaze3d.platform.NativeImage;
 import com.crsocial.witchhatatelier.Config;
+import com.crsocial.witchhatatelier.spell.trigger.TriggerEvaluator;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
@@ -21,7 +22,8 @@ import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.function.Consumer;
+import java.util.Optional;
+import java.util.function.BiConsumer;
 
 /**
  * Gesture canvas screen with zoom + pan viewport.
@@ -72,7 +74,11 @@ public final class CanvasScreen extends Screen {
     // ── Profile & mode ──────────────────────────────────────────────────────────
     private final CanvasProfile profile;
     private final boolean readOnly;
-    private final Consumer<List<GesturePoint>> saveHandler;
+    private final BiConsumer<List<GesturePoint>, List<Integer>> saveHandler;
+
+    /** True after the trigger phase fires an activation ring. Input is rejected but save still runs. */
+    private boolean inputLocked = false;
+    private List<Integer> activationRingStrokeIds = List.of();
 
     // ── Stroke data ─────────────────────────────────────────────────────────────
     private final CanvasPointStore pointStore = new CanvasPointStore();
@@ -117,7 +123,7 @@ public final class CanvasScreen extends Screen {
     public CanvasScreen(CanvasProfile profile,
                         List<GesturePoint> preloadedPoints,
                         boolean editable,
-                        Consumer<List<GesturePoint>> saveHandler,
+                        BiConsumer<List<GesturePoint>, List<Integer>> saveHandler,
                         @SuppressWarnings("unused") BlockPos sourceBlock) {
         super(Component.translatable(profile.titleKey()));
         this.profile         = profile;
@@ -169,7 +175,7 @@ public final class CanvasScreen extends Screen {
     @Override
     public void onClose() {
         if (!readOnly && !pointStore.isEmpty()) {
-            saveHandler.accept(savePoints());
+            saveHandler.accept(savePoints(), activationRingStrokeIds);
         }
         cleanupCursors();
         super.onClose();
@@ -282,7 +288,7 @@ public final class CanvasScreen extends Screen {
             return true;
         }
 
-        if (readOnly) return super.mouseClicked(mouseX, mouseY, button);
+        if (readOnly || inputLocked) return super.mouseClicked(mouseX, mouseY, button);
 
         if (button == 0 && isInsideCanvas(mouseX, mouseY)) {
             Vector2f start = clampToShape(logX(mouseX), logY(mouseY));
@@ -306,7 +312,7 @@ public final class CanvasScreen extends Screen {
             return true;
         }
 
-        if (readOnly) return super.mouseDragged(mouseX, mouseY, button, dragX, dragY);
+        if (readOnly || inputLocked) return super.mouseDragged(mouseX, mouseY, button, dragX, dragY);
 
         if (button == 0 && pointStore.isDrawing()) {
             Vector2f raw = clampToShape(logX(mouseX), logY(mouseY));
@@ -352,6 +358,19 @@ public final class CanvasScreen extends Screen {
             pointStore.finishStroke();
             resetSnapState(release.x, release.y);
             snapActive = false;
+
+            // ── Trigger phase: closure + encapsulation gate ─────────────────
+            if (!readOnly && !inputLocked) {
+                Optional<TriggerEvaluator.TriggerResult> trig = TriggerEvaluator.evaluate(
+                        pointStore.strokes(),
+                        Config.SNAP_EPSILON_PIXELS.get().floatValue(),
+                        Config.CLOSURE_EPSILON_PIXELS.get().floatValue());
+                if (trig.isPresent()) {
+                    activationRingStrokeIds = List.copyOf(trig.get().ringStrokeIds());
+                    inputLocked = true;       // execution lock: canvas rejects further input
+                    this.onClose();           // commit + save via existing save path
+                }
+            }
             return true;
         }
         return super.mouseReleased(mouseX, mouseY, button);
@@ -373,7 +392,7 @@ public final class CanvasScreen extends Screen {
 
     @Override
     public void mouseMoved(double mouseX, double mouseY) {
-        if (isInsideCanvas(mouseX, mouseY) && !readOnly) {
+        if (isInsideCanvas(mouseX, mouseY) && !readOnly && !inputLocked) {
             ResourceLocation customCursor = profile.cursorSprite();
             if (customCursor != null) {
                 setCursorFromSprite(customCursor, profile.cursorHotspotX(), profile.cursorHotspotY());

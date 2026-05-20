@@ -1,0 +1,26 @@
+{
+  "spell_name": "fireball",
+  "_comment": "PLACEHOLDER — a rough triangular flame. Replace with player-recorded variants once tooling exists.",
+  "variants": [
+    {
+      "name": "clean_triangle",
+      "points": [
+        { "x": 0.50, "y": 0.10, "stroke_id": 0 },
+        { "x": 0.43, "y": 0.24, "stroke_id": 0 },
+        { "x": 0.36, "y": 0.38, "stroke_id": 0 },
+        { "x": 0.28, "y": 0.52, "stroke_id": 0 },
+        { "x": 0.22, "y": 0.66, "stroke_id": 0 },
+        { "x": 0.20, "y": 0.80, "stroke_id": 0 },
+        { "x": 0.35, "y": 0.80, "stroke_id": 0 },
+        { "x": 0.50, "y": 0.80, "stroke_id": 0 },
+        { "x": 0.65, "y": 0.80, "stroke_id": 0 },
+        { "x": 0.80, "y": 0.80, "stroke_id": 0 },
+        { "x": 0.74, "y": 0.66, "stroke_id": 0 },
+        { "x": 0.68, "y": 0.52, "stroke_id": 0 },
+        { "x": 0.60, "y": 0.38, "stroke_id": 0 },
+        { "x": 0.54, "y": 0.24, "stroke_id": 0 },
+        { "x": 0.50, "y": 0.10, "stroke_id": 0 }
+      ]
+    }
+  ]
+}

@@ -37,6 +37,45 @@ public class Config {
                     "Range: 1 – 44. Default: 8.")
             .defineInRange("angleSnapThresholdDegrees", 8.0, 1.0, 44.0);
 
+    // ── Trigger phase (client-side) ─────────────────────────────────────────────
+
+    public static final ModConfigSpec.DoubleValue SNAP_EPSILON_PIXELS = BUILDER
+            .comment("Endpoint stitching radius (canvas pixels). Strokes whose head or tail land",
+                    "within this distance of another stroke's endpoint are merged into a chain.",
+                    "Range: 1 – 30. Default: 8.")
+            .defineInRange("snapEpsilonPixels", 8.0, 1.0, 30.0);
+    public static final ModConfigSpec.DoubleValue CLOSURE_EPSILON_PIXELS = BUILDER
+            .comment("Closure radius (canvas pixels). Distance between the ultimate head and tail",
+                    "of a stroke chain that counts as 'closed' and may trigger an activation ring.",
+                    "Range: 1 – 30. Default: 10.")
+            .defineInRange("closureEpsilonPixels", 10.0, 1.0, 30.0);
+
+    // ── Sigil clustering (server-side; normalized [0,1] space) ──────────────────
+
+    public static final ModConfigSpec.DoubleValue MICRO_MERGE_RADIUS = BUILDER
+            .comment("Micro-merge radius in normalized [0,1] space. Strokes whose raw points come",
+                    "within this distance of each other are merged immediately before clustering.",
+                    "Range: 0.001 – 0.05. Default: 0.01 (≈ 5 px on a 512 canvas).")
+            .defineInRange("microMergeRadius", 0.01, 0.001, 0.05);
+    public static final ModConfigSpec.DoubleValue MACRO_MERGE_RADIUS = BUILDER
+            .comment("Macro-merge radius in normalized [0,1] space. Clusters whose convex hulls",
+                    "come within this distance of each other are merged into one sigil.",
+                    "Range: 0.01 – 0.30. Default: 0.10.")
+            .defineInRange("macroMergeRadius", 0.10, 0.01, 0.30);
+
+    // ── Recognition ($P+) ──────────────────────────────────────────────────────
+
+    public static final ModConfigSpec.IntValue RESAMPLE_N = BUILDER
+            .comment("Number of equidistant points the $P+ recognizer resamples each sigil to.",
+                    "Lower = faster, less accurate; higher = slower, more accurate.",
+                    "Range: 16 – 128. Default: 32.")
+            .defineInRange("resampleN", 32, 16, 128);
+    public static final ModConfigSpec.DoubleValue RECOGNITION_MIN_SCORE = BUILDER
+            .comment("Minimum confidence score for a recognized spell.",
+                    "Below this, the result is reported as 'unknown'.",
+                    "Range: 0.0 – 1.0. Default: 0.65.")
+            .defineInRange("recognitionMinScore", 0.65, 0.0, 1.0);
+
     // Must be declared AFTER all values so the builder has them all registered before building.
     static final ModConfigSpec SPEC = BUILDER.build();
 }
