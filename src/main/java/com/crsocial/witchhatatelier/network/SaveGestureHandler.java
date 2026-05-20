@@ -15,15 +15,22 @@ import com.crsocial.witchhatatelier.spell.recognition.PointCloud;
 import com.crsocial.witchhatatelier.spell.recognition.PointCloudPreprocessor;
 import com.crsocial.witchhatatelier.spell.recognition.RecognitionResult;
 import com.crsocial.witchhatatelier.spell.recognition.TemplateRegistry;
+import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.component.DataComponents;
+import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
+import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.component.CustomData;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 import org.jetbrains.annotations.NotNull;
@@ -126,6 +133,40 @@ public final class SaveGestureHandler {
 
         // Recognition runs alongside (and after) any NBT writes. It only logs — no state mutation.
         context.enqueueWork(() -> runSpellPipeline(payload, context.player()));
+
+        // Activation feedback: broadcast a sound + particle burst to everyone nearby
+        // whenever the canvas detected a closing ring. Runs on the server thread so all
+        // tracking clients see/hear the same effect.
+        context.enqueueWork(() -> playActivationEffects(payload, context.player()));
+    }
+
+    // ── Activation effects (server-side broadcast) ──────────────────────────────
+
+    private static void playActivationEffects(SaveGesturePayload payload, Player player) {
+        if (payload.activationRingStrokeIds().isEmpty()) return;
+        if (player == null) return;
+        Level level = player.level();
+        if (!(level instanceof ServerLevel serverLevel)) return;
+
+        BlockPos origin = payload.blockOrigin();
+        double x, y, z;
+        if (origin != null) {
+            x = origin.getX() + 0.5;
+            y = origin.getY() + 0.5;
+            z = origin.getZ() + 0.5;
+        } else {
+            x = player.getX();
+            y = player.getY() + player.getBbHeight() * 0.5;
+            z = player.getZ();
+        }
+
+        serverLevel.playSound(null, x, y, z,
+                SoundEvents.ENCHANTMENT_TABLE_USE, SoundSource.PLAYERS, 1.0f, 1.0f);
+        serverLevel.sendParticles(ParticleTypes.SCRAPE,
+                x, y, z, 40, 0.4, 0.4, 0.4, 0.6);
+
+        serverLevel.sendParticles(ParticleTypes.ELECTRIC_SPARK,
+                x, y, z, 20, 0.8, 0.2, 0.8, 0.3);
     }
 
     // ── Spell pipeline (cluster → preprocess → recognize) ───────────────────────
@@ -174,6 +215,48 @@ public final class SaveGestureHandler {
                     i, r.spellName(),
                     String.format(java.util.Locale.ROOT, "%.3f", r.confidenceScore()),
                     String.format(java.util.Locale.ROOT, "%.3f", r.indicativeAngle()));
+
+            // Diagnostic: log top-3 ranked scores so the user can see why a particular
+            // template won (or why the match was rejected as ambiguous / below threshold).
+            List<PDollarPlusRecognizer.Scored> ranked =
+                    recognizer.matchVerbose(processed.cloud(), TemplateRegistry.get().all());
+            int topK = Math.min(3, ranked.size());
+            for (int k = 0; k < topK; k++) {
+                PDollarPlusRecognizer.Scored s = ranked.get(k);
+                WitchHatAtelierMod.LOGGER.info(
+                        "[SpellPipeline]   #{} {}:{} score={}",
+                        k + 1, s.spellName(), s.variantName(),
+                        String.format(java.util.Locale.ROOT, "%.3f", s.score()));
+            }
+
+            if (player != null) {
+                boolean recognized = !RecognitionResult.UNKNOWN.equals(r.spellName());
+                int pct = Math.round(r.confidenceScore() * 100f);
+                Component msg = Component.empty()
+                        .append(Component.literal("[Sigil " + (i + 1) + "] ")
+                                .withStyle(ChatFormatting.DARK_PURPLE))
+                        .append(Component.literal(recognized ? r.spellName() : "unrecognized")
+                                .withStyle(recognized ? ChatFormatting.GOLD : ChatFormatting.GRAY))
+                        .append(Component.literal(" (" + pct + "%)")
+                                .withStyle(ChatFormatting.DARK_GRAY));
+                player.sendSystemMessage(msg);
+
+                // Top-3 ranks line so the player can see runner-ups without checking the log.
+                Component ranksHeader = Component.literal("  ranks: ")
+                        .withStyle(ChatFormatting.DARK_GRAY);
+                net.minecraft.network.chat.MutableComponent ranksBody =
+                        Component.empty().copy();
+                for (int k = 0; k < topK; k++) {
+                    PDollarPlusRecognizer.Scored s = ranked.get(k);
+                    int sPct = Math.round(s.score() * 100f);
+                    ChatFormatting style = (k == 0 && recognized)
+                            ? ChatFormatting.GOLD : ChatFormatting.GRAY;
+                    ranksBody.append(Component.literal(
+                                    s.spellName() + "(" + sPct + "%) ")
+                            .withStyle(style));
+                }
+                player.sendSystemMessage(ranksHeader.copy().append(ranksBody));
+            }
         }
     }
 

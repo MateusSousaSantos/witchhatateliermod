@@ -39,6 +39,13 @@ public class Config {
 
     // ── Trigger phase (client-side) ─────────────────────────────────────────────
 
+    public static final ModConfigSpec.DoubleValue MIN_RING_AREA_FRACTION = BUILDER
+            .comment("Minimum ring bounding-box area as a fraction of the canvas area.",
+                    "Rings whose bbox is smaller than this threshold are rejected.",
+                    "Scales naturally with canvas size: a 128px canvas requires a smaller",
+                    "absolute ring than a 768px canvas at the same fraction.",
+                    "Range: 0.01 – 0.25. Default: 0.04 (4% of canvas area).")
+            .defineInRange("minRingAreaFraction", 0.04, 0.01, 0.25);
     public static final ModConfigSpec.DoubleValue SNAP_EPSILON_PIXELS = BUILDER
             .comment("Endpoint stitching radius (canvas pixels). Strokes whose head or tail land",
                     "within this distance of another stroke's endpoint are merged into a chain.",
@@ -61,20 +68,27 @@ public class Config {
             .comment("Macro-merge radius in normalized [0,1] space. Clusters whose convex hulls",
                     "come within this distance of each other are merged into one sigil.",
                     "Range: 0.01 – 0.30. Default: 0.10.")
-            .defineInRange("macroMergeRadius", 0.10, 0.01, 0.30);
+            .defineInRange("macroMergeRadius", 0.04, 0.01, 0.30);
 
     // ── Recognition ($P+) ──────────────────────────────────────────────────────
 
     public static final ModConfigSpec.IntValue RESAMPLE_N = BUILDER
             .comment("Number of equidistant points the $P+ recognizer resamples each sigil to.",
                     "Lower = faster, less accurate; higher = slower, more accurate.",
-                    "Range: 16 – 128. Default: 32.")
-            .defineInRange("resampleN", 32, 16, 128);
+                    "Range: 16 – 128. Default: 64.")
+            .defineInRange("resampleN", 64, 16, 128);
     public static final ModConfigSpec.DoubleValue RECOGNITION_MIN_SCORE = BUILDER
             .comment("Minimum confidence score for a recognized spell.",
                     "Below this, the result is reported as 'unknown'.",
-                    "Range: 0.0 – 1.0. Default: 0.65.")
-            .defineInRange("recognitionMinScore", 0.65, 0.0, 1.0);
+                    "Range: 0.0 – 1.0. Default: 0.75.")
+            .defineInRange("recognitionMinScore", 0.75, 0.0, 1.0);
+    public static final ModConfigSpec.DoubleValue RECOGNITION_AMBIGUITY_MARGIN = BUILDER
+            .comment("Minimum score gap between the best template and the runner-up.",
+                    "If the winner beats the second-best by less than this margin,",
+                    "the result is reported as 'unknown' rather than risking a confident",
+                    "misclassification on two visually similar sigils.",
+                    "Range: 0.00 – 0.30. Default: 0.08.")
+            .defineInRange("recognitionAmbiguityMargin", 0.01, 0.0, 0.30);
 
     // Must be declared AFTER all values so the builder has them all registered before building.
     static final ModConfigSpec SPEC = BUILDER.build();

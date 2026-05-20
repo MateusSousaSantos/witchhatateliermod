@@ -1,5 +1,13 @@
 package com.crsocial.witchhatatelier.spell.trigger;
 
+import com.crsocial.witchhatatelier.Config;
+import com.crsocial.witchhatatelier.spell.recognition.PDollarPlusRecognizer;
+import com.crsocial.witchhatatelier.spell.recognition.Point;
+import com.crsocial.witchhatatelier.spell.recognition.PointCloud;
+import com.crsocial.witchhatatelier.spell.recognition.PointCloudPreprocessor;
+import com.crsocial.witchhatatelier.spell.recognition.RecognitionResult;
+import com.crsocial.witchhatatelier.spell.recognition.Template;
+import com.crsocial.witchhatatelier.spell.recognition.TemplateRegistry;
 import org.joml.Vector2f;
 
 import java.util.ArrayList;
@@ -31,9 +39,18 @@ public final class TriggerEvaluator {
 
     private TriggerEvaluator() {}
 
+    /**
+     * @param strokes      all committed canvas strokes in canvas-space pixels
+     * @param snapEpsilon  endpoint-stitching radius (canvas pixels)
+     * @param closureEpsilon closure gap radius (canvas pixels)
+     * @param canvasW      canvas width in canvas-space pixels (used for min-ring scaling)
+     * @param canvasH      canvas height in canvas-space pixels (used for min-ring scaling)
+     */
     public static Optional<TriggerResult> evaluate(List<List<Vector2f>> strokes,
                                                    float snapEpsilon,
-                                                   float closureEpsilon) {
+                                                   float closureEpsilon,
+                                                   float canvasW,
+                                                   float canvasH) {
         int n = strokes.size();
         if (n == 0) return Optional.empty();
 
@@ -72,16 +89,51 @@ public final class TriggerEvaluator {
         }
 
         // ── Evaluate every chain for closure + encapsulation ────────────────────
+        float minArea = Config.MIN_RING_AREA_FRACTION.get().floatValue() * canvasW * canvasH;
+
         for (List<Integer> chain : chains.values()) {
             if (!isClosed(strokes, chain, degree, closureEpsilon)) continue;
 
             float[] bbox = boundingBox(strokes, chain);
+
+            // ── Gate 1: minimum ring size (scales with canvas) ──────────────────
+            float ringArea = (bbox[2] - bbox[0]) * (bbox[3] - bbox[1]);
+            if (ringArea < minArea) continue;
+
+            // ── Gate 2: encapsulation ────────────────────────────────────────────
             List<Integer> enclosed = findEnclosed(strokes, chain, bbox);
-            if (!enclosed.isEmpty()) {
-                return Optional.of(new TriggerResult(chain, enclosed));
+            if (enclosed.isEmpty()) continue;
+
+            // ── Gate 3: ring-shape template validation (optional) ────────────────
+            List<Template> ringTemplates = TemplateRegistry.get().allRing();
+            if (!ringTemplates.isEmpty() && !matchesRingTemplate(strokes, chain, ringTemplates)) {
+                continue;
             }
+
+            return Optional.of(new TriggerResult(chain, enclosed));
         }
         return Optional.empty();
+    }
+
+    // ── Ring template validation ─────────────────────────────────────────────────
+
+    private static boolean matchesRingTemplate(List<List<Vector2f>> strokes,
+                                               List<Integer> chain,
+                                               List<Template> ringTemplates) {
+        List<Point> pts = new ArrayList<>();
+        int sid = 0;
+        for (int idx : chain) {
+            for (Vector2f p : strokes.get(idx)) pts.add(new Point(p.x, p.y, sid));
+            sid++;
+        }
+        PointCloudPreprocessor.Processed proc =
+                PointCloudPreprocessor.process(new PointCloud("ring_candidate", pts),
+                        Config.RESAMPLE_N.get());
+        PDollarPlusRecognizer recognizer =
+                new PDollarPlusRecognizer(TemplateRegistry.get(),
+                        Config.RECOGNITION_MIN_SCORE.get().floatValue());
+        RecognitionResult r = recognizer.match(proc.cloud(), proc.indicativeAngle(), ringTemplates);
+        return !RecognitionResult.UNKNOWN.equals(r.spellName());
     }
 
     // ── Closure check ────────────────────────────────────────────────────────────

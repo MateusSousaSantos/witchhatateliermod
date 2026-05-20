@@ -58,6 +58,11 @@ public final class CanvasPointStore {
     public boolean isDrawing()                { return activeStroke != null; }
     public boolean isEmpty()                  { return strokes.isEmpty(); }
 
+    public void clear() {
+        strokes.clear();
+        activeStroke = null;
+    }
+
     // ── Serialisation helpers ────────────────────────────────────────────────────
 
     /**

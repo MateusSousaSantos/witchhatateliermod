@@ -78,5 +78,10 @@ public final class GestureCanvasClient {
                 pointCloud.size(), activationRingStrokeIds);
         PacketDistributor.sendToServer(new SaveGesturePayload(
                 pointCloud, mc.player.position(), origin, activationRingStrokeIds));
+
+        // Capture the same pipeline state on the client for the F9 debug viewer.
+        // In single-player the TemplateRegistry singleton is shared with the server,
+        // so this mirrors what the server saw.
+        LastRecognitionDebug.capture(pointCloud, activationRingStrokeIds);
     }
 }

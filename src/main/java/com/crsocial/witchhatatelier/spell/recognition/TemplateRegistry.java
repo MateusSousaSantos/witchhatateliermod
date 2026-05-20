@@ -28,10 +28,17 @@ public final class TemplateRegistry {
         templates.add(t);
     }
 
+    /** Returns only content (non-ring) templates, used for spell recognition. */
     public synchronized List<Template> all() {
-        return Collections.unmodifiableList(new ArrayList<>(templates));
+        return templates.stream().filter(t -> !t.isRing()).toList();
     }
 
+    /** Returns only ring-validator templates (those with {@code isRing=true}). */
+    public synchronized List<Template> allRing() {
+        return templates.stream().filter(Template::isRing).toList();
+    }
+
+    /** Total count of all registered templates (content + ring). */
     public synchronized int size() {
         return templates.size();
     }

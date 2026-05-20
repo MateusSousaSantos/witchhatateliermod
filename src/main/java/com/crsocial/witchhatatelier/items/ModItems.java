@@ -35,17 +35,11 @@ public class ModItems {
     public static final DeferredItem<Item> MEDIUM_SQUARE_PAPER = ITEMS.register("medium_square_paper",
             () -> new SpellPaperItem(new Item.Properties().stacksTo(16), PaperType.MEDIUM_SQUARE, true));
 
-    public static final DeferredItem<Item> LARGE_SQUARE_PAPER = ITEMS.register("large_square_paper",
-            () -> new SpellPaperItem(new Item.Properties().stacksTo(16), PaperType.LARGE_SQUARE, true));
-
     public static final DeferredItem<Item> SMALL_ROUND_PAPER = ITEMS.register("small_round_paper",
             () -> new SpellPaperItem(new Item.Properties().stacksTo(16), PaperType.SMALL_ROUND, true));
 
     public static final DeferredItem<Item> MEDIUM_ROUND_PAPER = ITEMS.register("medium_round_paper",
             () -> new SpellPaperItem(new Item.Properties().stacksTo(16), PaperType.MEDIUM_ROUND, true));
-
-    public static final DeferredItem<Item> LARGE_ROUND_PAPER = ITEMS.register("large_round_paper",
-            () -> new SpellPaperItem(new Item.Properties().stacksTo(16), PaperType.LARGE_ROUND, true));
 
     // ── Inscribed spell papers (non-stackable, carry gesture NBT) ────────────────
 
@@ -55,17 +49,11 @@ public class ModItems {
     public static final DeferredItem<Item> MEDIUM_SQUARE_SPELL_PAPER = ITEMS.register("medium_square_spell_paper",
             () -> new SpellPaperItem(new Item.Properties().stacksTo(1), PaperType.MEDIUM_SQUARE, false));
 
-    public static final DeferredItem<Item> LARGE_SQUARE_SPELL_PAPER = ITEMS.register("large_square_spell_paper",
-            () -> new SpellPaperItem(new Item.Properties().stacksTo(1), PaperType.LARGE_SQUARE, false));
-
     public static final DeferredItem<Item> SMALL_ROUND_SPELL_PAPER = ITEMS.register("small_round_spell_paper",
             () -> new SpellPaperItem(new Item.Properties().stacksTo(1), PaperType.SMALL_ROUND, false));
 
     public static final DeferredItem<Item> MEDIUM_ROUND_SPELL_PAPER = ITEMS.register("medium_round_spell_paper",
             () -> new SpellPaperItem(new Item.Properties().stacksTo(1), PaperType.MEDIUM_ROUND, false));
-
-    public static final DeferredItem<Item> LARGE_ROUND_SPELL_PAPER = ITEMS.register("large_round_spell_paper",
-            () -> new SpellPaperItem(new Item.Properties().stacksTo(1), PaperType.LARGE_ROUND, false));
 
     // ── PaperType → item lookup maps ─────────────────────────────────────────────
 
@@ -75,17 +63,13 @@ public class ModItems {
     static {
         BLANK_MAP.put(PaperType.SMALL_SQUARE,  SMALL_SQUARE_PAPER);
         BLANK_MAP.put(PaperType.MEDIUM_SQUARE, MEDIUM_SQUARE_PAPER);
-        BLANK_MAP.put(PaperType.LARGE_SQUARE,  LARGE_SQUARE_PAPER);
         BLANK_MAP.put(PaperType.SMALL_ROUND,   SMALL_ROUND_PAPER);
         BLANK_MAP.put(PaperType.MEDIUM_ROUND,  MEDIUM_ROUND_PAPER);
-        BLANK_MAP.put(PaperType.LARGE_ROUND,   LARGE_ROUND_PAPER);
 
         INSCRIBED_MAP.put(PaperType.SMALL_SQUARE,  SMALL_SQUARE_SPELL_PAPER);
         INSCRIBED_MAP.put(PaperType.MEDIUM_SQUARE, MEDIUM_SQUARE_SPELL_PAPER);
-        INSCRIBED_MAP.put(PaperType.LARGE_SQUARE,  LARGE_SQUARE_SPELL_PAPER);
         INSCRIBED_MAP.put(PaperType.SMALL_ROUND,   SMALL_ROUND_SPELL_PAPER);
         INSCRIBED_MAP.put(PaperType.MEDIUM_ROUND,  MEDIUM_ROUND_SPELL_PAPER);
-        INSCRIBED_MAP.put(PaperType.LARGE_ROUND,   LARGE_ROUND_SPELL_PAPER);
     }
 
     /** Returns the blank paper {@link DeferredItem} for the given {@link PaperType}. */

@@ -170,4 +170,27 @@ public interface CanvasProfile {
         @Override public int        screenSpriteWidth()  { return 16; }
         @Override public int        screenSpriteHeight() { return 16; }
     }
+
+    /**
+     * Profile for the debug template recorder screen.
+     * Dark background with green strokes — clearly signals "dev tool" vs normal paper.
+     * No smoothing and no angle-snap so recorded points reflect exact cursor positions.
+     */
+    record DebugProfile() implements CanvasProfile {
+        @Override public String     titleKey()             { return "screen.witchhatatelier.debug_template"; }
+        @Override public String     readOnlyKey()          { return "screen.witchhatatelier.debug_template.read_only"; }
+        @Override public CanvasSize canvasSize()           { return new CanvasSize(256, 256); }
+        @Override public Shape      inputShape()           { return Shape.RECTANGLE; }
+        @Override public int        canvasBgColor()        { return 0xFF1A1A2E; }
+        @Override public int        canvasBgReadOnlyColor(){ return 0xFF0F0F1A; }
+        @Override public int        canvasBorderColor()    { return 0xFF00FF88; }
+        @Override public int        borderThickness()      { return 2; }
+        @Override public int        strokeColor()          { return 0xFF00FF88; }
+        @Override public int        activeStrokeColor()    { return 0xFF88FFCC; }
+        @Override public float      strokeSmoothingFactor(){ return 1f; }
+        @Override public boolean    angleSnapEnabled()     { return false; }
+        @Override public @Nullable ResourceLocation screenSprite() { return null; }
+        @Override public int        screenSpriteWidth()   { return 16; }
+        @Override public int        screenSpriteHeight()  { return 16; }
+    }
 }

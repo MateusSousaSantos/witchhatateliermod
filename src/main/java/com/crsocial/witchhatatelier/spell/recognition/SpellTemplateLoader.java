@@ -61,6 +61,7 @@ public final class SpellTemplateLoader extends SimpleJsonResourceReloadListener 
             try {
                 JsonObject root = entry.getValue().getAsJsonObject();
                 String spellName = root.get("spell_name").getAsString();
+                boolean isRing = root.has("is_ring") && root.get("is_ring").getAsBoolean();
                 JsonArray variants = root.getAsJsonArray("variants");
                 if (variants == null) continue;
 
@@ -79,7 +80,7 @@ public final class SpellTemplateLoader extends SimpleJsonResourceReloadListener 
                             PointCloudPreprocessor.process(rawCloud, resampleN);
                     registry.register(new Template(
                             spellName, variantName, rawCloud,
-                            processed.cloud(), resampleN, processed.indicativeAngle()));
+                            processed.cloud(), resampleN, processed.indicativeAngle(), isRing));
                     variantCount++;
                 }
                 spellCount++;

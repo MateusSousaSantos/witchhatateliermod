@@ -15,8 +15,14 @@ import java.util.Map;
  *   <li>Equidistant resampling to {@code N} points (per-stroke).</li>
  *   <li>Scale to a reference unit square.</li>
  *   <li>Translate so the centroid sits at {@code (0, 0)}.</li>
- *   <li>Compute the indicative angle from centroid to the first point.</li>
+ *   <li>Compute the principal-axis indicative angle and rotate to canonical orientation.</li>
+ *   <li>Compute the per-point normalized turning angle (the $P+ third channel).</li>
  * </ol>
+ *
+ * <p>The turning-angle step must come <i>after</i> resampling (it depends on
+ * neighbor spacing) but is invariant under rotation, translation, and uniform
+ * scaling — so its position in the pipeline relative to those steps is a matter
+ * of convenience, not correctness.</p>
  */
 public final class PointCloudPreprocessor {
 
@@ -176,20 +182,115 @@ public final class PointCloudPreprocessor {
 
     // ── 4. Indicative angle ──────────────────────────────────────────────────────
 
+    /**
+     * Principal-axis angle of the (already centered) cloud, computed via 2×2
+     * covariance eigendecomposition. Uses every point, so it is stable under
+     * stroke-order changes and resampling noise — unlike a centroid→first-point
+     * angle, which collapses for symmetric or multi-stroke shapes.
+     *
+     * <p>The principal axis is a <i>line</i>, so this returns an angle in
+     * (-π/2, π/2]; the residual 180° ambiguity is resolved by the recognizer
+     * trying both flips at match time.</p>
+     */
     public static float indicativeAngle(PointCloud in) {
-        if (in.points().isEmpty()) return 0f;
-        Point first = in.points().get(0);
-        return (float) Math.atan2(first.y(), first.x());
+        if (in.points().size() < 2) return 0f;
+        double sxx = 0, syy = 0, sxy = 0;
+        for (Point p : in.points()) {
+            sxx += p.x() * p.x();
+            syy += p.y() * p.y();
+            sxy += p.x() * p.y();
+        }
+        // Closed-form principal-axis angle of the 2D covariance matrix
+        // [[sxx, sxy], [sxy, syy]] for the larger eigenvalue:
+        //   θ = ½ · atan2(2·sxy, sxx − syy)
+        return 0.5f * (float) Math.atan2(2.0 * sxy, sxx - syy);
+    }
+
+    // ── 5. Rotation alignment ────────────────────────────────────────────────────
+
+    /**
+     * Rotates every point about the origin by {@code radians}.
+     * Used to bring a centered cloud to a canonical orientation (indicative point on
+     * the positive X-axis) so that $P+ matching becomes rotation-invariant, and
+     * called again by the recognizer for the 180° flip retry.
+     *
+     * <p>Preserves {@link Point#turningAngle()} unchanged — interior turning
+     * angles are rotation-invariant.</p>
+     */
+    public static PointCloud rotateBy(PointCloud in, float radians) {
+        if (in.points().isEmpty()) return in;
+        float cos = (float) Math.cos(radians);
+        float sin = (float) Math.sin(radians);
+        List<Point> out = new ArrayList<>(in.points().size());
+        for (Point p : in.points()) {
+            float nx = p.x() * cos - p.y() * sin;
+            float ny = p.x() * sin + p.y() * cos;
+            out.add(new Point(nx, ny, p.strokeID(), p.turningAngle()));
+        }
+        return new PointCloud(in.name(), out);
+    }
+
+    // ── 6. Normalized turning angles ($P+ third channel) ─────────────────────────
+
+    /**
+     * Computes the normalized interior turning angle at each interior point and
+     * stores it on the point as {@link Point#turningAngle()}. Endpoints — both
+     * stroke endpoints and the start/end of the cloud — keep {@code angle = 0}.
+     *
+     * <p>For interior point {@code p_i} between {@code p_{i-1}} and {@code p_{i+1}}
+     * within the <i>same stroke</i>:</p>
+     * <pre>
+     *   cos θ = ((p_{i+1} − p_i) · (p_i − p_{i-1})) / (|p_{i+1} − p_i| · |p_i − p_{i-1}|)
+     *   α     = acos(clamp(cos θ, -1, +1)) / π        ∈ [0, 1]
+     * </pre>
+     *
+     * <p>Discontinuities between strokes are skipped — angle computation only
+     * runs over consecutive points sharing the same {@code strokeID}.</p>
+     */
+    public static PointCloud computeTurningAngles(PointCloud in) {
+        List<Point> pts = in.points();
+        if (pts.size() < 3) return in;
+        List<Point> out = new ArrayList<>(pts.size());
+        for (int i = 0; i < pts.size(); i++) {
+            Point p = pts.get(i);
+            // Endpoints of the cloud, or of a stroke, keep angle = 0.
+            if (i == 0 || i == pts.size() - 1
+                    || pts.get(i - 1).strokeID() != p.strokeID()
+                    || pts.get(i + 1).strokeID() != p.strokeID()) {
+                out.add(p.withTurningAngle(0f));
+                continue;
+            }
+            Point prev = pts.get(i - 1);
+            Point next = pts.get(i + 1);
+            float ax = p.x() - prev.x();
+            float ay = p.y() - prev.y();
+            float bx = next.x() - p.x();
+            float by = next.y() - p.y();
+            float dn = (float) (Math.sqrt(ax * ax + ay * ay) * Math.sqrt(bx * bx + by * by));
+            float angle;
+            if (dn <= 1e-12f) {
+                angle = 0f;
+            } else {
+                float cos = (ax * bx + ay * by) / dn;
+                if (cos < -1f) cos = -1f;
+                else if (cos > 1f) cos = 1f;
+                angle = (float) (Math.acos(cos) / Math.PI);
+            }
+            out.add(p.withTurningAngle(angle));
+        }
+        return new PointCloud(in.name(), out);
     }
 
     // ── Pipeline ─────────────────────────────────────────────────────────────────
 
     public static Processed process(PointCloud raw, int n) {
         PointCloud resampled = resample(raw, n);
-        PointCloud scaled = scaleToReferenceSquare(resampled);
-        PointCloud centered = translateToOrigin(scaled);
-        float angle = indicativeAngle(centered);
-        return new Processed(centered, angle);
+        PointCloud scaled    = scaleToReferenceSquare(resampled);
+        PointCloud centered  = translateToOrigin(scaled);
+        float angle          = indicativeAngle(centered);
+        PointCloud rotated   = rotateBy(centered, -angle);
+        PointCloud withAngles = computeTurningAngles(rotated);
+        return new Processed(withAngles, angle);
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────────

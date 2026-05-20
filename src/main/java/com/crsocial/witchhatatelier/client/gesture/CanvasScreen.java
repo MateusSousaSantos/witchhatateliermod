@@ -45,7 +45,7 @@ import java.util.function.BiConsumer;
  * </ul>
  */
 @OnlyIn(Dist.CLIENT)
-public final class CanvasScreen extends Screen {
+public class CanvasScreen extends Screen {
 
     // ════════════════════════════════════════════════════════════════════════════
     // Constants
@@ -88,7 +88,7 @@ public final class CanvasScreen extends Screen {
     private CanvasSize canvasSize;
 
     // ── On-screen drawing rectangle (set in init) ────────────────────────────────
-    private int displayX, displayY, displayW, displayH;
+    protected int displayX, displayY, displayW, displayH;
     /** Screen pixels per canvas pixel at zoom 1.0. */
     private float displayScale;
 
@@ -355,17 +355,23 @@ public final class CanvasScreen extends Screen {
             smoothedX = release.x;
             smoothedY = release.y;
             pointStore.addPoint(release);
-            pointStore.finishStroke();
+            List<Vector2f> committed = pointStore.finishStroke();
             resetSnapState(release.x, release.y);
             snapActive = false;
 
             // ── Trigger phase: closure + encapsulation gate ─────────────────
-            if (!readOnly && !inputLocked) {
+            // Only activate if the stroke the player JUST released is part of the
+            // detected ring chain — otherwise a paper that already contained a
+            // closed ring would fire on every unrelated stroke.
+            if (!readOnly && !inputLocked && isTriggerPhaseEnabled() && committed != null) {
+                int justReleasedStrokeId = pointStore.strokes().size() - 1;
                 Optional<TriggerEvaluator.TriggerResult> trig = TriggerEvaluator.evaluate(
                         pointStore.strokes(),
                         Config.SNAP_EPSILON_PIXELS.get().floatValue(),
-                        Config.CLOSURE_EPSILON_PIXELS.get().floatValue());
-                if (trig.isPresent()) {
+                        Config.CLOSURE_EPSILON_PIXELS.get().floatValue(),
+                        canvasSize.width(),
+                        canvasSize.height());
+                if (trig.isPresent() && trig.get().ringStrokeIds().contains(justReleasedStrokeId)) {
                     activationRingStrokeIds = List.copyOf(trig.get().ringStrokeIds());
                     inputLocked = true;       // execution lock: canvas rejects further input
                     this.onClose();           // commit + save via existing save path
@@ -403,6 +409,16 @@ public final class CanvasScreen extends Screen {
             setSystemCursor(GLFW.GLFW_ARROW_CURSOR);
         }
     }
+
+    // ════════════════════════════════════════════════════════════════════════════
+    // Subclass hooks
+    // ════════════════════════════════════════════════════════════════════════════
+
+    /** Override to {@code false} to suppress spell-trigger detection (e.g. debug screens). */
+    protected boolean isTriggerPhaseEnabled() { return true; }
+
+    /** Clears all committed strokes and any in-progress stroke. */
+    public void clearStrokes() { pointStore.clear(); }
 
     // ════════════════════════════════════════════════════════════════════════════
     // Angle-Snap  (all coords are canvas space)

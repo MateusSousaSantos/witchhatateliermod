@@ -26,9 +26,7 @@ public class ModBlockEntities {
                                     ModBlocks.PLACED_ROUND_PAPER.get(),
                                     ModBlocks.PLACED_SMALL_SQUARE_PAPER.get(),
                                     ModBlocks.PLACED_MEDIUM_SQUARE_PAPER.get(),
-                                    ModBlocks.PLACED_LARGE_SQUARE_PAPER.get(),
                                     ModBlocks.PLACED_SMALL_ROUND_PAPER.get(),
-                                    ModBlocks.PLACED_MEDIUM_ROUND_PAPER.get(),
-                                    ModBlocks.PLACED_LARGE_ROUND_PAPER.get())
+                                    ModBlocks.PLACED_MEDIUM_ROUND_PAPER.get())
                             .build(null));
 }
