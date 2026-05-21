@@ -108,6 +108,31 @@ public class Config {
                     "1.0 = symmetric (legacy behavior). 2.0 = recommended starting point.",
                     "Range: 0.0 – 10.0. Default: 2.0.")
             .defineInRange("coverageWeight", 4.0, 0.0, 10.0);
+    public static final ModConfigSpec.DoubleValue COVERAGE_TOUCH_THRESHOLD = BUILDER
+            .comment("Maximum point distance (in $P+'s normalized 3-channel space) within",
+                    "which an input point counts as 'covering' a template point. Template",
+                    "points whose nearest input lies beyond this threshold are treated as",
+                    "uncovered and contribute to Phase B (coverage failure) of the chamfer.",
+                    "Without a gate, Phase A's NN lookup marks template points as 'touched'",
+                    "even when the input is far away, vacuously satisfying coverage. The",
+                    "gate is closer to $P+'s coverage spirit.",
+                    "Lower values demand tighter coverage; higher values are permissive.",
+                    "Range: 0.01 – 0.30. Default: 0.05.")
+            .defineInRange("coverageTouchThreshold", 0.10, 0.01, 0.30);
+    public static final ModConfigSpec.DoubleValue ARC_LENGTH_RATIO_MIN = BUILDER
+            .comment("Minimum allowed ratio of candidate arc length to template arc length.",
+                    "A simple shape drawn against a complex template is rejected when their",
+                    "total path lengths differ too much, regardless of stroke count.",
+                    "This is drawing-style-agnostic: a triangle in one stroke vs three strokes",
+                    "has the same arc length, so both pass. But a trapezoid vs a multi-arm star",
+                    "will fail because the star traces far more path relative to its bounding box.",
+                    "Range: 0.1 – 1.0. Default: 0.4.")
+            .defineInRange("arcLengthRatioMin", 0.4, 0.1, 1.0);
+    public static final ModConfigSpec.DoubleValue ARC_LENGTH_RATIO_MAX = BUILDER
+            .comment("Maximum allowed ratio of candidate arc length to template arc length.",
+                    "Rejects candidates that trace far more path than the template expects.",
+                    "Range: 1.0 – 10.0. Default: 2.5.")
+            .defineInRange("arcLengthRatioMax", 2.5, 1.0, 10.0);
 
     // Must be declared AFTER all values so the builder has them all registered before building.
     static final ModConfigSpec SPEC = BUILDER.build();

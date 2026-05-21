@@ -86,11 +86,10 @@ public final class PDollarPlusRecognizer {
     /**
      * Matches against all content templates in the registry.
      *
-     * @param candidate fully-preprocessed candidate cloud
-     * @param candidateAngle indicative angle of the candidate (radians)
+     * @param candidate fully-preprocessed candidate (cloud + angle + arc length)
      */
-    public RecognitionResult match(PointCloud candidate, float candidateAngle) {
-        return match(candidate, candidateAngle, registry.all());
+    public RecognitionResult match(PointCloudPreprocessor.Processed candidate) {
+        return match(candidate, registry.all());
     }
 
     /**
@@ -98,22 +97,40 @@ public final class PDollarPlusRecognizer {
      * for ring-shape validation (passes only ring templates) and by any caller
      * that needs to match against a custom subset.
      */
-    public RecognitionResult match(PointCloud candidate, float candidateAngle,
+    public RecognitionResult match(PointCloudPreprocessor.Processed candidate,
                                    List<Template> templates) {
-        if (templates.isEmpty() || candidate.points().isEmpty()) {
+        PointCloud cloud = candidate.cloud();
+        float candidateAngle = candidate.indicativeAngle();
+        float candidateArcLength = candidate.normalizedArcLength();
+
+        if (templates.isEmpty() || cloud.points().isEmpty()) {
             return RecognitionResult.unknown(0f, candidateAngle);
         }
 
         // Pre-flip the candidate once — PCA gives an axis (line) not a vector,
         // so the canonical-rotated cloud could be 180° off from any template.
-        PointCloud flipped = PointCloudPreprocessor.rotateBy(candidate, (float) Math.PI);
+        PointCloud flipped = PointCloudPreprocessor.rotateBy(cloud, (float) Math.PI);
+
+        float arcMin = Config.ARC_LENGTH_RATIO_MIN.get().floatValue();
+        float arcMax = Config.ARC_LENGTH_RATIO_MAX.get().floatValue();
 
         // Pass 1: per-spell best score, plus the overall best template.
         Map<String, Float> bestPerSpell = new HashMap<>();
         Template best = null;
         float bestScore = 0f;
         for (Template t : templates) {
-            float score = scoreWithFlip(candidate, flipped, t.processedCloud());
+            // Arc-length ratio gate: reject structurally incompatible shapes before
+            // running the expensive chamfer. A trapezoid vs a multi-arm star has very
+            // different total path lengths in the same normalized space — this catches
+            // that mismatch without penalizing different stroke counts (a triangle
+            // drawn in 1 stroke vs 3 strokes has identical arc length).
+            float tLen = t.normalizedArcLength();
+            if (tLen > 0f) {
+                float ratio = candidateArcLength / tLen;
+                if (ratio < arcMin || ratio > arcMax) continue;
+            }
+
+            float score = scoreWithFlip(cloud, flipped, t.processedCloud());
             Float prev = bestPerSpell.get(t.spellName());
             if (prev == null || score > prev) bestPerSpell.put(t.spellName(), score);
             if (score > bestScore) {
@@ -145,17 +162,28 @@ public final class PDollarPlusRecognizer {
     }
 
     /**
-     * Returns every template ranked by score (best first). For diagnostics —
-     * lets callers log all candidate scores to understand why a specific
-     * template won (or why a match was rejected as ambiguous).
+     * Returns every template ranked by score (best first), applying the same
+     * arc-length ratio gate as {@link #match}. For diagnostics — lets callers
+     * log all candidate scores to understand why a specific template won (or
+     * why a match was rejected as ambiguous or filtered by arc length).
      */
-    public List<Scored> matchVerbose(PointCloud candidate, List<Template> templates) {
-        PointCloud flipped = candidate.points().isEmpty()
-                ? candidate
-                : PointCloudPreprocessor.rotateBy(candidate, (float) Math.PI);
+    public List<Scored> matchVerbose(PointCloudPreprocessor.Processed candidate,
+                                     List<Template> templates) {
+        PointCloud cloud = candidate.cloud();
+        float candidateArcLength = candidate.normalizedArcLength();
+        PointCloud flipped = cloud.points().isEmpty()
+                ? cloud
+                : PointCloudPreprocessor.rotateBy(cloud, (float) Math.PI);
+        float arcMin = Config.ARC_LENGTH_RATIO_MIN.get().floatValue();
+        float arcMax = Config.ARC_LENGTH_RATIO_MAX.get().floatValue();
         List<Scored> out = new ArrayList<>(templates.size());
         for (Template t : templates) {
-            float score = scoreWithFlip(candidate, flipped, t.processedCloud());
+            float tLen = t.normalizedArcLength();
+            if (tLen > 0f) {
+                float ratio = candidateArcLength / tLen;
+                if (ratio < arcMin || ratio > arcMax) continue;
+            }
+            float score = scoreWithFlip(cloud, flipped, t.processedCloud());
             out.add(new Scored(t.spellName(), t.variantName(), score));
         }
         out.sort((x, y) -> Float.compare(y.score(), x.score()));
@@ -190,11 +218,13 @@ public final class PDollarPlusRecognizer {
      *   <li><b>Phase A</b> — for every point in {@code input}, accumulate the
      *       distance to its nearest neighbor in {@code template} (multiple
      *       {@code i} may map to the same {@code j}). Mark each chosen
-     *       {@code j} as touched. This is the "drawing noise" channel.</li>
+     *       {@code j} as touched <i>only if</i> the NN distance is within
+     *       {@link Config#COVERAGE_TOUCH_THRESHOLD}. This is the "drawing
+     *       noise" channel.</li>
      *   <li><b>Phase B</b> — for every point in {@code template} that no Phase A
-     *       lookup mapped to, accumulate the distance to its nearest neighbor
-     *       in {@code input}. This is the "coverage failure" channel: how far
-     *       the input is from the template regions it didn't reach.</li>
+     *       lookup actually covered, accumulate the distance to its nearest
+     *       neighbor in {@code input}. This is the "coverage failure" channel:
+     *       how far the input is from the template regions it didn't reach.</li>
      * </ol>
      *
      * <p>The two phases are averaged <i>independently</i>, then combined as
@@ -204,6 +234,23 @@ public final class PDollarPlusRecognizer {
      * cheap terms and lets a simple drawing get a high score against a complex
      * template. Keeping the averages separate exposes the coverage signal.</p>
      *
+     * <p><b>Touch gate.</b> Without a distance threshold, every input point's NN
+     * lookup marks <i>some</i> template point as "touched" — even if the input
+     * landed far away. With dense input clouds the touched set can vacuously
+     * cover the whole template, leaving Phase B with no terms and giving a free
+     * pass to drawings that visually miss large template regions. Gating on
+     * {@link Config#COVERAGE_TOUCH_THRESHOLD} requires an input point to
+     * actually land near a template point for it to count as covered, which is
+     * closer to $P+'s coverage spirit.</p>
+     *
+     * <p><b>Empty Phase B fallback.</b> If every template point ends up touched
+     * (Phase B has no terms), the legacy default of {@code 0} treats vacuous
+     * coverage as perfect coverage. Even with the touch gate this case
+     * occasionally fires for genuinely well-aligned inputs, but {@code 0} still
+     * over-rewards it. We default the missing Phase B term to the template's
+     * own mean nearest-neighbor spacing — a mild, template-relative penalty
+     * that prevents the "all touched" case from inflating the score.</p>
+     *
      * <p>The result is in {@code [0, √3]} assuming preprocessing bounded all
      * three channels to {@code [0, 1]}.</p>
      */
@@ -212,6 +259,7 @@ public final class PDollarPlusRecognizer {
         int n2 = template.size();
         if (n1 == 0 || n2 == 0) return REFERENCE_SIZE;
         boolean[] touched = new boolean[n2];
+        float touchThreshold = Config.COVERAGE_TOUCH_THRESHOLD.get().floatValue();
         double phaseATotal = 0.0;
         int phaseATerms = 0;
         double phaseBTotal = 0.0;
@@ -229,7 +277,9 @@ public final class PDollarPlusRecognizer {
                 }
             }
             if (bestJ < 0) continue;
-            touched[bestJ] = true;
+            // Only count as "covered" when the input actually landed close enough;
+            // a far-away NN is not coverage in any meaningful sense.
+            if (bestD < touchThreshold) touched[bestJ] = true;
             phaseATotal += bestD;
             phaseATerms++;
         }
@@ -248,12 +298,40 @@ public final class PDollarPlusRecognizer {
             phaseBTerms++;
         }
 
-        // Phase A defaults to REFERENCE_SIZE (a bad match) if input was empty post-loop;
-        // Phase B defaults to 0 (no untouched template points = perfect coverage).
         float phaseAAvg = phaseATerms > 0 ? (float) (phaseATotal / phaseATerms) : REFERENCE_SIZE;
-        float phaseBAvg = phaseBTerms > 0 ? (float) (phaseBTotal / phaseBTerms) : 0f;
+        // Empty Phase B → use the template's intrinsic mean NN spacing as a mild
+        // penalty instead of 0, so "all touched" can't vacuously score perfect.
+        float phaseBAvg = phaseBTerms > 0
+                ? (float) (phaseBTotal / phaseBTerms)
+                : meanNearestNeighborDistance(template);
         float w = Config.COVERAGE_WEIGHT.get().floatValue();
         return (phaseAAvg + w * phaseBAvg) / (1f + w);
+    }
+
+    /**
+     * Mean nearest-neighbor distance of a point cloud — the template's intrinsic
+     * point spacing. Used as a fallback for an empty Phase B (every template
+     * point touched) so the "all covered" branch doesn't get a free zero. Only
+     * called in that fallback case, so the O(n²) cost is rare.
+     */
+    private static float meanNearestNeighborDistance(List<Point> cloud) {
+        int n = cloud.size();
+        if (n < 2) return REFERENCE_SIZE;
+        double total = 0.0;
+        int terms = 0;
+        for (int i = 0; i < n; i++) {
+            Point pi = cloud.get(i);
+            float bestD = Float.MAX_VALUE;
+            for (int j = 0; j < n; j++) {
+                if (i == j) continue;
+                float d = pointDistance(pi, cloud.get(j));
+                if (d < bestD) bestD = d;
+            }
+            if (bestD == Float.MAX_VALUE) continue;
+            total += bestD;
+            terms++;
+        }
+        return terms > 0 ? (float) (total / terms) : REFERENCE_SIZE;
     }
 
     /**

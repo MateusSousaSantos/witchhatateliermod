@@ -132,7 +132,7 @@ public final class TriggerEvaluator {
         PDollarPlusRecognizer recognizer =
                 new PDollarPlusRecognizer(TemplateRegistry.get(),
                         Config.RECOGNITION_MIN_SCORE.get().floatValue());
-        RecognitionResult r = recognizer.match(proc.cloud(), proc.indicativeAngle(), ringTemplates);
+        RecognitionResult r = recognizer.match(proc, ringTemplates);
         return !RecognitionResult.UNKNOWN.equals(r.spellName());
     }
 

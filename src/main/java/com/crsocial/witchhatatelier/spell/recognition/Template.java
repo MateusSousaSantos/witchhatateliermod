@@ -12,5 +12,6 @@ public record Template(String spellName,
                        PointCloud processedCloud,
                        int resampleN,
                        float indicativeAngle,
-                       boolean isRing) {
+                       boolean isRing,
+                       float normalizedArcLength) {
 }

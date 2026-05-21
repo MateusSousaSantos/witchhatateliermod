@@ -26,8 +26,8 @@ import java.util.Map;
  */
 public final class PointCloudPreprocessor {
 
-    /** Output of {@link #process}: the normalized cloud plus its rotational signature. */
-    public record Processed(PointCloud cloud, float indicativeAngle) {}
+    /** Output of {@link #process}: the normalized cloud plus its rotational and geometric signatures. */
+    public record Processed(PointCloud cloud, float indicativeAngle, float normalizedArcLength) {}
 
     private PointCloudPreprocessor() {}
 
@@ -288,14 +288,37 @@ public final class PointCloudPreprocessor {
 
     // ── Pipeline ─────────────────────────────────────────────────────────────────
 
+    /**
+     * Total arc length of {@code cloud} in the normalized [0,1] coordinate space,
+     * summing 2-D segment distances between consecutive points that share the same
+     * {@code strokeID}. Cross-stroke gaps are not counted.
+     *
+     * <p>This is drawing-style-agnostic: a triangle drawn in one continuous stroke
+     * has the same arc length as the same triangle drawn stroke-by-stroke, because
+     * arc length measures total path length, not pen-lift count.</p>
+     */
+    public static float totalArcLength(PointCloud cloud) {
+        List<Point> pts = cloud.points();
+        double total = 0.0;
+        for (int i = 1; i < pts.size(); i++) {
+            Point a = pts.get(i - 1);
+            Point b = pts.get(i);
+            if (a.strokeID() == b.strokeID()) {
+                total += SegmentMath.distance(a, b);
+            }
+        }
+        return (float) total;
+    }
+
     public static Processed process(PointCloud raw, int n) {
-        PointCloud resampled = resample(raw, n);
-        PointCloud scaled    = scaleToReferenceSquare(resampled);
-        PointCloud centered  = translateToOrigin(scaled);
-        float angle          = indicativeAngle(centered);
-        PointCloud rotated   = rotateBy(centered, -angle);
+        PointCloud resampled  = resample(raw, n);
+        PointCloud scaled     = scaleToReferenceSquare(resampled);
+        float arcLength       = totalArcLength(scaled);
+        PointCloud centered   = translateToOrigin(scaled);
+        float angle           = indicativeAngle(centered);
+        PointCloud rotated    = rotateBy(centered, -angle);
         PointCloud withAngles = computeTurningAngles(rotated);
-        return new Processed(withAngles, angle);
+        return new Processed(withAngles, angle, arcLength);
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────────

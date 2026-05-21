@@ -134,7 +134,7 @@ public final class DebugTemplateScreen extends CanvasScreen {
             PDollarPlusRecognizer recognizer = new PDollarPlusRecognizer(
                     TemplateRegistry.get(),
                     Config.RECOGNITION_MIN_SCORE.get().floatValue());
-            RecognitionResult result = recognizer.match(proc.cloud(), proc.indicativeAngle());
+            RecognitionResult result = recognizer.match(proc);
 
             if (RecognitionResult.UNKNOWN.equals(result.spellName())) {
                 recognitionText = String.format("No match (best: %.0f%%)",

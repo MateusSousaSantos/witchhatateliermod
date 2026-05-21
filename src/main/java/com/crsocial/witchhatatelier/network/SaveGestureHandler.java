@@ -209,7 +209,7 @@ public final class SaveGestureHandler {
         for (int i = 0; i < clusters.size(); i++) {
             PointCloud raw = clusters.get(i).toPointCloud("candidate_" + i);
             PointCloudPreprocessor.Processed processed = PointCloudPreprocessor.process(raw, resampleN);
-            RecognitionResult r = recognizer.match(processed.cloud(), processed.indicativeAngle());
+            RecognitionResult r = recognizer.match(processed);
             WitchHatAtelierMod.LOGGER.info(
                     "[SpellPipeline] sigil[{}] → {} (score={}, angle={}rad).",
                     i, r.spellName(),
@@ -219,7 +219,7 @@ public final class SaveGestureHandler {
             // Diagnostic: log top-3 ranked scores so the user can see why a particular
             // template won (or why the match was rejected as ambiguous / below threshold).
             List<PDollarPlusRecognizer.Scored> ranked =
-                    recognizer.matchVerbose(processed.cloud(), TemplateRegistry.get().all());
+                    recognizer.matchVerbose(processed, TemplateRegistry.get().all());
             int topK = Math.min(3, ranked.size());
             for (int k = 0; k < topK; k++) {
                 PDollarPlusRecognizer.Scored s = ranked.get(k);
@@ -240,22 +240,6 @@ public final class SaveGestureHandler {
                         .append(Component.literal(" (" + pct + "%)")
                                 .withStyle(ChatFormatting.DARK_GRAY));
                 player.sendSystemMessage(msg);
-
-                // Top-3 ranks line so the player can see runner-ups without checking the log.
-                Component ranksHeader = Component.literal("  ranks: ")
-                        .withStyle(ChatFormatting.DARK_GRAY);
-                net.minecraft.network.chat.MutableComponent ranksBody =
-                        Component.empty().copy();
-                for (int k = 0; k < topK; k++) {
-                    PDollarPlusRecognizer.Scored s = ranked.get(k);
-                    int sPct = Math.round(s.score() * 100f);
-                    ChatFormatting style = (k == 0 && recognized)
-                            ? ChatFormatting.GOLD : ChatFormatting.GRAY;
-                    ranksBody.append(Component.literal(
-                                    s.spellName() + "(" + sPct + "%) ")
-                            .withStyle(style));
-                }
-                player.sendSystemMessage(ranksHeader.copy().append(ranksBody));
             }
         }
     }

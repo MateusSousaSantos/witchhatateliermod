@@ -93,9 +93,9 @@ public final class LastRecognitionDebug {
 
                 PointCloud raw = cluster.toPointCloud("candidate_" + i);
                 PointCloudPreprocessor.Processed processed = PointCloudPreprocessor.process(raw, resampleN);
-                RecognitionResult result = recognizer.match(processed.cloud(), processed.indicativeAngle());
+                RecognitionResult result = recognizer.match(processed);
                 List<PDollarPlusRecognizer.Scored> ranked =
-                        recognizer.matchVerbose(processed.cloud(), TemplateRegistry.get().all());
+                        recognizer.matchVerbose(processed, TemplateRegistry.get().all());
 
                 clusterSnaps.add(new ClusterSnapshot(
                         i, originalIds, raw, processed.cloud(),

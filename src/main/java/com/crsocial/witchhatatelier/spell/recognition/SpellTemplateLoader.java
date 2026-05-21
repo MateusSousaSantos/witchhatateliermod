@@ -81,7 +81,8 @@ public final class SpellTemplateLoader extends SimpleJsonResourceReloadListener 
                             PointCloudPreprocessor.process(rawCloud, resampleN);
                     registry.register(new Template(
                             spellName, variantName, rawCloud,
-                            processed.cloud(), resampleN, processed.indicativeAngle(), isRing));
+                            processed.cloud(), resampleN, processed.indicativeAngle(), isRing,
+                            processed.normalizedArcLength()));
                     variantCount++;
                 }
                 spellCount++;
