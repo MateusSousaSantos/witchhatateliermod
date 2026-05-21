@@ -596,8 +596,8 @@ public class CanvasScreen extends Screen {
             if (!pts.isEmpty()) {
                 Vector2f p = pts.getFirst();
                 int px = Math.max(1, Math.round(strokeWidth * displayScale * zoom));
-                int sx0 = displayX + (int) Math.round((p.x - panX) * displayScale * zoom);
-                int sy0 = displayY + (int) Math.round((p.y - panY) * displayScale * zoom);
+                int sx0 = displayX + Math.round((p.x - panX) * displayScale * zoom);
+                int sy0 = displayY + Math.round((p.y - panY) * displayScale * zoom);
                 gui.fill(sx0, sy0, sx0 + px, sy0 + px, color);
             }
             return;
@@ -611,8 +611,8 @@ public class CanvasScreen extends Screen {
     /** Draws the ink-tip square at the current smoothed canvas position. */
     private void drawInkTipIndicator(GuiGraphics gui, float cx, float cy, int color, int strokeWidth) {
         int px = Math.max(1, Math.round(strokeWidth * displayScale * zoom));
-        int sx0 = displayX + (int) Math.round((cx - panX) * displayScale * zoom);
-        int sy0 = displayY + (int) Math.round((cy - panY) * displayScale * zoom);
+        int sx0 = displayX + Math.round((cx - panX) * displayScale * zoom);
+        int sy0 = displayY + Math.round((cy - panY) * displayScale * zoom);
         gui.fill(sx0, sy0, sx0 + px, sy0 + px, color);
     }
 
@@ -629,8 +629,8 @@ public class CanvasScreen extends Screen {
         float scale = displayScale * zoom;
         int px = Math.max(1, Math.round(strokeWidth * scale));
         while (true) {
-            int sx0 = displayX + (int) Math.round((cx0 - panX) * scale);
-            int sy0 = displayY + (int) Math.round((cy0 - panY) * scale);
+            int sx0 = displayX + Math.round((cx0 - panX) * scale);
+            int sy0 = displayY + Math.round((cy0 - panY) * scale);
             gui.fill(sx0, sy0, sx0 + px, sy0 + px, color);
             if (cx0 == cx1 && cy0 == cy1) break;
             int e2 = 2 * err;
@@ -644,7 +644,7 @@ public class CanvasScreen extends Screen {
      * Mimics Aseprite's grid: helps the user see individual canvas pixels when zoomed in.
      */
     private void drawPixelGrid(GuiGraphics gui) {
-        int px = (int) Math.round(displayScale * zoom);
+        int px = Math.round(displayScale * zoom);
         if (px < GRID_THRESHOLD_PX) return;
 
         int gridColor = 0x22000000;

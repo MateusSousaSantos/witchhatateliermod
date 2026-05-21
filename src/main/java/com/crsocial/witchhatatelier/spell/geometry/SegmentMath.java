@@ -66,8 +66,7 @@ public final class SegmentMath {
         if (d1 == 0 && onSegment(c, d, a)) return true;
         if (d2 == 0 && onSegment(c, d, b)) return true;
         if (d3 == 0 && onSegment(a, b, c)) return true;
-        if (d4 == 0 && onSegment(a, b, d)) return true;
-        return false;
+        return d4 == 0 && onSegment(a, b, d);
     }
 
     /** Shortest distance between two closed segments. */
@@ -113,7 +112,7 @@ public final class SegmentMath {
             }
         }
         // One inside the other
-        return polygonContains(a, b.get(0)) || polygonContains(b, a.get(0));
+        return polygonContains(a, b.getFirst()) || polygonContains(b, a.getFirst());
     }
 
     /**

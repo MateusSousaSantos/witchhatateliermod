@@ -191,18 +191,7 @@ public final class DebugTemplateScreen extends CanvasScreen {
             }
 
             String variantName = "variant_" + (existingCount + 1);
-            JsonObject variant = new JsonObject();
-            variant.addProperty("name", variantName);
-
-            JsonArray pointsArr = new JsonArray();
-            for (GesturePoint p : pts) {
-                JsonObject pObj = new JsonObject();
-                pObj.addProperty("x", Math.round(p.x() * 1000f) / 1000f);
-                pObj.addProperty("y", Math.round(p.y() * 1000f) / 1000f);
-                pObj.addProperty("stroke_id", p.strokeID());
-                pointsArr.add(pObj);
-            }
-            variant.add("points", pointsArr);
+            JsonObject variant = getJsonObject(variantName, pts);
             variants.add(variant);
 
             String json = new GsonBuilder().setPrettyPrinting().create().toJson(root);
@@ -215,6 +204,22 @@ public final class DebugTemplateScreen extends CanvasScreen {
         } catch (IOException e) {
             setStatus("Error: " + e.getMessage(), 0xFFFF5555);
         }
+    }
+
+    private static @NotNull JsonObject getJsonObject(String variantName, List<GesturePoint> pts) {
+        JsonObject variant = new JsonObject();
+        variant.addProperty("name", variantName);
+
+        JsonArray pointsArr = new JsonArray();
+        for (GesturePoint p : pts) {
+            JsonObject pObj = new JsonObject();
+            pObj.addProperty("x", Math.round(p.x() * 1000f) / 1000f);
+            pObj.addProperty("y", Math.round(p.y() * 1000f) / 1000f);
+            pObj.addProperty("stroke_id", p.strokeID());
+            pointsArr.add(pObj);
+        }
+        variant.add("points", pointsArr);
+        return variant;
     }
 
     private void setStatus(String message, int color) {

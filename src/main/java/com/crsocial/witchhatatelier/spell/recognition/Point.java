@@ -16,10 +16,6 @@ public record Point(float x, float y, int strokeID, float turningAngle) {
         this(x, y, strokeID, 0f);
     }
 
-    public Point withStrokeID(int newStrokeID) {
-        return new Point(x, y, newStrokeID, turningAngle);
-    }
-
     public Point withTurningAngle(float newAngle) {
         return new Point(x, y, strokeID, newAngle);
     }

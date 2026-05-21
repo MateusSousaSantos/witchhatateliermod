@@ -28,7 +28,7 @@ import java.util.Map;
 @OnlyIn(Dist.CLIENT)
 public final class RecognitionDebugScreen extends Screen {
 
-    private static final int CLUSTER_COLORS[] = {
+    private static final int[] CLUSTER_COLORS = {
             0xFFFFCC33, 0xFF33CCFF, 0xFFFF66CC, 0xFF66FF99,
             0xFFCC66FF, 0xFFFFAA66, 0xFF66FFCC, 0xFFFF6666
     };
@@ -70,7 +70,7 @@ public final class RecognitionDebugScreen extends Screen {
                 final int rank = k;
                 addRenderableWidget(Button.builder(
                         Component.literal(label),
-                        b -> { selectedRank.put(clusterIdx, rank); }
+                        b -> selectedRank.put(clusterIdx, rank)
                 ).bounds(btnX, btnY, w, 16).build());
                 btnX += w + 4;
             }
@@ -103,7 +103,7 @@ public final class RecognitionDebugScreen extends Screen {
                 snap.totalStrokes(),
                 snap.clusters().size(),
                 snap.ringStrokeIds().size(),
-                snap.clusters().isEmpty() ? 0 : snap.clusters().get(0).processedCloud().points().size());
+                snap.clusters().isEmpty() ? 0 : snap.clusters().getFirst().processedCloud().points().size());
         gui.drawString(font, stats, 10, 18, 0xFFCCCCCC);
 
         // ── Drawing overview (clusters color-coded) ─────────────────────
@@ -138,15 +138,15 @@ public final class RecognitionDebugScreen extends Screen {
         int rowHeight = 110;
         for (int i = 0; i < snap.clusters().size(); i++) {
             LastRecognitionDebug.ClusterSnapshot cs = snap.clusters().get(i);
-            int rowY = contentTop + i * rowHeight - scrollY;
-            if (rowY + rowHeight < 0 || rowY > height) continue;
+            int overlayY = contentTop + i * rowHeight - scrollY;
+            if (overlayY + rowHeight < 0 || overlayY > height) continue;
 
             // Header
             String clusterHeader = String.format(Locale.ROOT,
                     "── Cluster %d ── strokes %s — angle=%.2frad",
                     i + 1, cs.originalStrokeIds(), cs.indicativeAngle());
             int clusterColor = CLUSTER_COLORS[i % CLUSTER_COLORS.length];
-            gui.drawString(font, clusterHeader, 10, rowY, clusterColor);
+            gui.drawString(font, clusterHeader, 10, overlayY, clusterColor);
 
             // Result line
             String resultLine;
@@ -160,12 +160,11 @@ public final class RecognitionDebugScreen extends Screen {
                         "Result: %s (%.3f)", cs.result().spellName(), cs.result().confidenceScore());
                 resultColor = 0xFF88FF88;
             }
-            gui.drawString(font, resultLine, 10, rowY + 36, resultColor);
+            gui.drawString(font, resultLine, 10, overlayY + 36, resultColor);
 
             // Overlay panel
             int overlaySize = 60;
             int overlayX = width - overlaySize - 12;
-            int overlayY = rowY;
             drawPanel(gui, overlayX, overlayY, overlaySize, overlaySize);
 
             int rank = selectedRank.getOrDefault(i, 0);

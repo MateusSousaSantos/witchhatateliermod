@@ -1,0 +1,29 @@
+{
+  "spell_name": "activation_ring",
+  "is_ring": true,
+  "_comment": "Ring-shape validator templates. is_ring=true means these are used only in ring gate checks, never matched as spell sigils.",
+  "variants": [
+    {
+      "name": "circle",
+      "points": [
+        {"x": 0.900, "y": 0.500, "stroke_id": 0},
+        {"x": 0.870, "y": 0.653, "stroke_id": 0},
+        {"x": 0.783, "y": 0.783, "stroke_id": 0},
+        {"x": 0.653, "y": 0.870, "stroke_id": 0},
+        {"x": 0.500, "y": 0.900, "stroke_id": 0},
+        {"x": 0.347, "y": 0.870, "stroke_id": 0},
+        {"x": 0.217, "y": 0.783, "stroke_id": 0},
+        {"x": 0.130, "y": 0.653, "stroke_id": 0},
+        {"x": 0.100, "y": 0.500, "stroke_id": 0},
+        {"x": 0.130, "y": 0.347, "stroke_id": 0},
+        {"x": 0.217, "y": 0.217, "stroke_id": 0},
+        {"x": 0.347, "y": 0.130, "stroke_id": 0},
+        {"x": 0.500, "y": 0.100, "stroke_id": 0},
+        {"x": 0.653, "y": 0.130, "stroke_id": 0},
+        {"x": 0.783, "y": 0.217, "stroke_id": 0},
+        {"x": 0.870, "y": 0.347, "stroke_id": 0},
+        {"x": 0.900, "y": 0.500, "stroke_id": 0}
+      ]
+    }
+  ]
+}

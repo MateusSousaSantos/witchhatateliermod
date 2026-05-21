@@ -1,7 +1,6 @@
 package com.crsocial.witchhatatelier.spell.recognition;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 
 /**

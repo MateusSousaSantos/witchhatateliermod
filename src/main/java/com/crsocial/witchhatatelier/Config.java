@@ -83,12 +83,31 @@ public class Config {
                     "Range: 0.0 – 1.0. Default: 0.75.")
             .defineInRange("recognitionMinScore", 0.75, 0.0, 1.0);
     public static final ModConfigSpec.DoubleValue RECOGNITION_AMBIGUITY_MARGIN = BUILDER
-            .comment("Minimum score gap between the best template and the runner-up.",
-                    "If the winner beats the second-best by less than this margin,",
-                    "the result is reported as 'unknown' rather than risking a confident",
-                    "misclassification on two visually similar sigils.",
-                    "Range: 0.00 – 0.30. Default: 0.08.")
-            .defineInRange("recognitionAmbiguityMargin", 0.01, 0.0, 0.30);
+            .comment("Minimum score gap between the best template and the runner-up of a",
+                    "DIFFERENT spell. If the winner beats the second-best by less than this",
+                    "margin, the result is reported as 'unknown' rather than risking a",
+                    "confident misclassification. Variants of the same spell never trigger",
+                    "this gate against each other.",
+                    "Lower values are permissive; higher values demand a clear winner.",
+                    "Range: 0.00 – 0.30. Default: 0.10.")
+            .defineInRange("recognitionAmbiguityMargin", 0.10, 0.0, 0.30);
+    public static final ModConfigSpec.DoubleValue SCORE_CURVE_EXPONENT = BUILDER
+            .comment("Exponent applied to the linear chamfer-derived score before thresholding.",
+                    "1.0 = linear (legacy behavior). 2.0 = quadratic — pushes mid scores down",
+                    "(0.80 → 0.64) while top scores barely move (0.95 → 0.90), giving a much",
+                    "cleaner separation between correct sigils and partial matches.",
+                    "Pairs with RECOGNITION_MIN_SCORE; you may need to lower the threshold",
+                    "when raising the exponent because the curve compresses the entire range.",
+                    "Range: 1.0 – 4.0. Default: 2.0.")
+            .defineInRange("scoreCurveExponent", 2.0, 1.0, 4.0);
+    public static final ModConfigSpec.DoubleValue COVERAGE_WEIGHT = BUILDER
+            .comment("Asymmetric chamfer weight: how heavily template-not-covered-by-input",
+                    "distances count versus input-to-template distances. Higher = more",
+                    "sensitive to drawings that fail to cover the template (e.g., a simple",
+                    "T-shape against a complex multi-stroke template).",
+                    "1.0 = symmetric (legacy behavior). 2.0 = recommended starting point.",
+                    "Range: 0.0 – 10.0. Default: 2.0.")
+            .defineInRange("coverageWeight", 4.0, 0.0, 10.0);
 
     // Must be declared AFTER all values so the builder has them all registered before building.
     static final ModConfigSpec SPEC = BUILDER.build();

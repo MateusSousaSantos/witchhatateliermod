@@ -3,6 +3,7 @@ package com.crsocial.witchhatatelier.spell.geometry;
 import com.crsocial.witchhatatelier.spell.recognition.Point;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 
@@ -24,7 +25,7 @@ public final class ConvexHull {
         if (pts.size() < 3) return new ArrayList<>(pts);
 
         List<Point> sorted = new ArrayList<>(pts);
-        sorted.sort(Comparator.<Point>comparingDouble(Point::x).thenComparingDouble(Point::y));
+        sorted.sort(Comparator.comparingDouble(Point::x).thenComparingDouble(Point::y));
 
         int n = sorted.size();
         Point[] hull = new Point[2 * n];
@@ -44,7 +45,7 @@ public final class ConvexHull {
         }
 
         List<Point> out = new ArrayList<>(k - 1);
-        for (int i = 0; i < k - 1; i++) out.add(hull[i]);
+        out.addAll(Arrays.asList(hull).subList(0, k - 1));
         return out;
     }
 

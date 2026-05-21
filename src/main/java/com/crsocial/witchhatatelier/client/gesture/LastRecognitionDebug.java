@@ -11,6 +11,7 @@ import com.crsocial.witchhatatelier.spell.recognition.RecognitionResult;
 import com.crsocial.witchhatatelier.spell.recognition.TemplateRegistry;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.api.distmarker.OnlyIn;
+import org.jetbrains.annotations.NotNull;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -88,17 +89,7 @@ public final class LastRecognitionDebug {
                 SigilCluster cluster = clusters.get(i);
 
                 // Recover original stroke IDs by matching stroke contents back to contentStrokes
-                List<Integer> originalIds = new ArrayList<>();
-                for (List<Point> stroke : cluster.strokes()) {
-                    int matchedIdx = -1;
-                    for (int j = 0; j < contentStrokes.size(); j++) {
-                        if (contentStrokes.get(j) == stroke || contentStrokes.get(j).equals(stroke)) {
-                            matchedIdx = j;
-                            break;
-                        }
-                    }
-                    if (matchedIdx >= 0) originalIds.add(contentStrokeIds.get(matchedIdx));
-                }
+                List<Integer> originalIds = getIntegers(cluster, contentStrokes, contentStrokeIds);
 
                 PointCloud raw = cluster.toPointCloud("candidate_" + i);
                 PointCloudPreprocessor.Processed processed = PointCloudPreprocessor.process(raw, resampleN);
@@ -118,5 +109,20 @@ public final class LastRecognitionDebug {
                 ringIds,
                 List.copyOf(clusterSnaps),
                 totalStrokes);
+    }
+
+    private static @NotNull List<Integer> getIntegers(SigilCluster cluster, List<List<Point>> contentStrokes, List<Integer> contentStrokeIds) {
+        List<Integer> originalIds = new ArrayList<>();
+        for (List<Point> stroke : cluster.strokes()) {
+            int matchedIdx = -1;
+            for (int j = 0; j < contentStrokes.size(); j++) {
+                if (contentStrokes.get(j) == stroke || contentStrokes.get(j).equals(stroke)) {
+                    matchedIdx = j;
+                    break;
+                }
+            }
+            if (matchedIdx >= 0) originalIds.add(contentStrokeIds.get(matchedIdx));
+        }
+        return originalIds;
     }
 }

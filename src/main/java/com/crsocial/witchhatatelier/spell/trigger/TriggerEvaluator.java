@@ -65,13 +65,13 @@ public final class TriggerEvaluator {
         for (int i = 0; i < n; i++) {
             List<Vector2f> si = strokes.get(i);
             if (si.isEmpty()) continue;
-            Vector2f hi = si.get(0);
-            Vector2f ti = si.get(si.size() - 1);
+            Vector2f hi = si.getFirst();
+            Vector2f ti = si.getLast();
             for (int j = i + 1; j < n; j++) {
                 List<Vector2f> sj = strokes.get(j);
                 if (sj.isEmpty()) continue;
-                Vector2f hj = sj.get(0);
-                Vector2f tj = sj.get(sj.size() - 1);
+                Vector2f hj = sj.getFirst();
+                Vector2f tj = sj.getLast();
 
                 boolean connected = false;
                 if (within(hi, hj, snapEpsilon)) { degree[2*i]++;   degree[2*j]++;   connected = true; }
@@ -147,8 +147,8 @@ public final class TriggerEvaluator {
         for (int idx : chain) {
             List<Vector2f> s = strokes.get(idx);
             if (s.isEmpty()) continue;
-            if (degree[2*idx]     == 0) free.add(s.get(0));
-            if (degree[2*idx + 1] == 0) free.add(s.get(s.size() - 1));
+            if (degree[2*idx]     == 0) free.add(s.getFirst());
+            if (degree[2*idx + 1] == 0) free.add(s.getLast());
             if (free.size() > 2) return false; // T-junction / branching — not a clean loop
         }
         if (free.isEmpty()) return true; // every endpoint stitched — fully closed cycle

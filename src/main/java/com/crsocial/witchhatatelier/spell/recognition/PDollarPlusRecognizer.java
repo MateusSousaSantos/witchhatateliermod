@@ -38,13 +38,30 @@ import java.util.Map;
  *           of the same spell never trigger this gate against each other.</li>
  *     </ul>
  *   </li>
+ *   <li><b>Asymmetric Phase A / Phase B chamfer</b>. The reference averages
+ *       both phases together over the total term count, which dilutes Phase B
+ *       (template points the input failed to reach) with Phase A (drawing
+ *       noise on points the input did reach). We average each phase separately
+ *       and combine with a {@link Config#COVERAGE_WEIGHT} bias toward Phase B.
+ *       This targets the "draw a simple subset of a complex template, still
+ *       score high" failure without depending on stroke count. Because the
+ *       chamfer is now intentionally directional (input → template), we no
+ *       longer take {@code min(cd(a,b), cd(b,a))} — that symmetrization
+ *       silently undid the directional bias.</li>
+ *   <li><b>Non-linear score curve</b>. The linear {@code 1 − d/√3} confidence
+ *       compresses real differences into a narrow high band, so partial matches
+ *       (e.g., 0.80) sit visually next to correct ones (e.g., 0.95). Raising the
+ *       result to {@link Config#SCORE_CURVE_EXPONENT} (default 2.0) spreads the
+ *       high range apart — 0.95 → 0.90 (barely moves), 0.80 → 0.64 (clearly
+ *       below threshold). Preserves rank ordering so the ambiguity gate is
+ *       unaffected.</li>
  * </ol>
  *
  * <p>Internally, {@link #cloudDistance} is the two-phase chamfer-style measure
- * from the reference (every point in {@code pts1} contributes its NN distance
- * to {@code pts2}; every {@code pts2} point not touched in phase A then
- * contributes its NN back to {@code pts1}). Symmetry is recovered the same way
- * the reference does it: {@code min(cloudDistance(a, b), cloudDistance(b, a))}.</p>
+ * from the reference (every point in {@code input} contributes its NN distance
+ * to {@code template}; every {@code template} point not touched in phase A then
+ * contributes its NN back to {@code input}), but the two phases are kept
+ * separate and combined via {@link Config#COVERAGE_WEIGHT}.</p>
  */
 public final class PDollarPlusRecognizer {
 
@@ -149,58 +166,63 @@ public final class PDollarPlusRecognizer {
      * Best of two scores: candidate vs template, and candidate flipped 180° vs template.
      * Resolves the line-vs-vector ambiguity left by PCA-based canonical rotation.
      *
-     * <p>Each flip evaluates the symmetric distance
-     * {@code min(cloudDistance(cand, tmpl), cloudDistance(tmpl, cand))} — matching
-     * the reference $P+ Recognize loop — and the final score uses the better
-     * (smaller) distance across the two flips.</p>
+     * <p>Each flip evaluates the directional {@link #cloudDistance} (input →
+     * template) and the final score uses the better (smaller) distance across
+     * the two flips. The chamfer itself is intentionally asymmetric so we don't
+     * mirror-symmetrize {@code min(cd(cand, tmpl), cd(tmpl, cand))} the way the
+     * reference does — that would silently undo the Phase B coverage weighting.</p>
      */
     private static float scoreWithFlip(PointCloud candidate, PointCloud flipped, PointCloud template) {
-        float d0 = symmetricCloudDistance(candidate.points(), template.points());
-        float d1 = symmetricCloudDistance(flipped.points(), template.points());
+        float d0 = cloudDistance(candidate.points(), template.points());
+        float d1 = cloudDistance(flipped.points(), template.points());
         float d  = Math.min(d0, d1);
-        return Math.max(0f, 1f - d / REFERENCE_SIZE);
+        float linear = Math.max(0f, 1f - d / REFERENCE_SIZE);
+        double exp = Config.SCORE_CURVE_EXPONENT.get();
+        return (exp == 1.0) ? linear : (float) Math.pow(linear, exp);
     }
 
-    // ── Chamfer-style symmetric cloud distance ($P+ spec) ──────────────────────
+    // ── Asymmetric chamfer-style cloud distance ────────────────────────────────
 
     /**
-     * {@code min(cloudDistance(a, b), cloudDistance(b, a))} — same symmetrization
-     * the reference {@code Recognize} loop uses.
-     */
-    private static float symmetricCloudDistance(List<Point> a, List<Point> b) {
-        if (a.isEmpty() || b.isEmpty()) return REFERENCE_SIZE;
-        return Math.min(cloudDistance(a, b), cloudDistance(b, a));
-    }
-
-    /**
-     * Two-phase chamfer-style cloud distance from $P+:
+     * Two-phase chamfer-style cloud distance, intentionally directional
+     * ({@code input → template}):
      * <ol>
-     *   <li><b>Phase A</b> — for every point in {@code pts1}, accumulate the
-     *       distance to its nearest neighbor in {@code pts2} (multiple {@code i}
-     *       may map to the same {@code j}). Mark each chosen {@code j} as touched.</li>
-     *   <li><b>Phase B</b> — for every point in {@code pts2} that no Phase A
+     *   <li><b>Phase A</b> — for every point in {@code input}, accumulate the
+     *       distance to its nearest neighbor in {@code template} (multiple
+     *       {@code i} may map to the same {@code j}). Mark each chosen
+     *       {@code j} as touched. This is the "drawing noise" channel.</li>
+     *   <li><b>Phase B</b> — for every point in {@code template} that no Phase A
      *       lookup mapped to, accumulate the distance to its nearest neighbor
-     *       in {@code pts1}.</li>
+     *       in {@code input}. This is the "coverage failure" channel: how far
+     *       the input is from the template regions it didn't reach.</li>
      * </ol>
      *
-     * <p>The accumulated total is divided by the number of distance terms
-     * actually summed, giving an average per-pair distance in {@code [0, √3]}
-     * (assuming preprocessing has bounded all three channels to {@code [0, 1]}).</p>
+     * <p>The two phases are averaged <i>independently</i>, then combined as
+     * {@code (phaseAAvg + w · phaseBAvg) / (1 + w)} where {@code w} is
+     * {@link Config#COVERAGE_WEIGHT}. The reference $P+ averages both phases
+     * over the total term count, which dilutes Phase B with Phase A's many
+     * cheap terms and lets a simple drawing get a high score against a complex
+     * template. Keeping the averages separate exposes the coverage signal.</p>
+     *
+     * <p>The result is in {@code [0, √3]} assuming preprocessing bounded all
+     * three channels to {@code [0, 1]}.</p>
      */
-    private static float cloudDistance(List<Point> pts1, List<Point> pts2) {
-        int n1 = pts1.size();
-        int n2 = pts2.size();
+    private static float cloudDistance(List<Point> input, List<Point> template) {
+        int n1 = input.size();
+        int n2 = template.size();
+        if (n1 == 0 || n2 == 0) return REFERENCE_SIZE;
         boolean[] touched = new boolean[n2];
-        double total = 0.0;
-        int terms = 0;
+        double phaseATotal = 0.0;
+        int phaseATerms = 0;
+        double phaseBTotal = 0.0;
+        int phaseBTerms = 0;
 
-        // Phase A — every pts1 point contributes its NN distance to pts2.
-        for (int i = 0; i < n1; i++) {
-            Point pa = pts1.get(i);
+        // Phase A — every input point contributes its NN distance to template.
+        for (Point pa : input) {
             int bestJ = -1;
             float bestD = Float.MAX_VALUE;
             for (int j = 0; j < n2; j++) {
-                float d = pointDistance(pa, pts2.get(j));
+                float d = pointDistance(pa, template.get(j));
                 if (d < bestD) {
                     bestD = d;
                     bestJ = j;
@@ -208,26 +230,30 @@ public final class PDollarPlusRecognizer {
             }
             if (bestJ < 0) continue;
             touched[bestJ] = true;
-            total += bestD;
-            terms++;
+            phaseATotal += bestD;
+            phaseATerms++;
         }
 
-        // Phase B — every untouched pts2 point contributes its NN distance to pts1.
+        // Phase B — every untouched template point contributes its NN distance to input.
         for (int j = 0; j < n2; j++) {
             if (touched[j]) continue;
-            Point pb = pts2.get(j);
+            Point pb = template.get(j);
             float bestD = Float.MAX_VALUE;
             for (int i = 0; i < n1; i++) {
-                float d = pointDistance(pts1.get(i), pb);
+                float d = pointDistance(input.get(i), pb);
                 if (d < bestD) bestD = d;
             }
             if (bestD == Float.MAX_VALUE) continue;
-            total += bestD;
-            terms++;
+            phaseBTotal += bestD;
+            phaseBTerms++;
         }
 
-        if (terms == 0) return REFERENCE_SIZE;
-        return (float) (total / terms);
+        // Phase A defaults to REFERENCE_SIZE (a bad match) if input was empty post-loop;
+        // Phase B defaults to 0 (no untouched template points = perfect coverage).
+        float phaseAAvg = phaseATerms > 0 ? (float) (phaseATotal / phaseATerms) : REFERENCE_SIZE;
+        float phaseBAvg = phaseBTerms > 0 ? (float) (phaseBTotal / phaseBTerms) : 0f;
+        float w = Config.COVERAGE_WEIGHT.get().floatValue();
+        return (phaseAAvg + w * phaseBAvg) / (1f + w);
     }
 
     /**

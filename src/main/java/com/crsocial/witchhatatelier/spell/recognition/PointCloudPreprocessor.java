@@ -59,7 +59,7 @@ public final class PointCloudPreprocessor {
         if (totalLength == 0.0) {
             // Degenerate: every stroke is a single repeated point. Emit one point per stroke.
             for (var e : byStroke.entrySet()) {
-                Point p = e.getValue().get(0);
+                Point p = e.getValue().getFirst();
                 out.add(new Point(p.x(), p.y(), e.getKey()));
             }
             return new PointCloud(in.name(), out);
@@ -91,21 +91,21 @@ public final class PointCloudPreprocessor {
 
     private static List<Point> resampleStroke(List<Point> stroke, int n, int strokeID) {
         if (stroke.size() == 1 || n == 1) {
-            Point p = stroke.get(0);
+            Point p = stroke.getFirst();
             return List.of(new Point(p.x(), p.y(), strokeID));
         }
         double total = pathLength(stroke);
         if (total == 0.0) {
             // All points identical — emit n copies.
             List<Point> dup = new ArrayList<>(n);
-            Point p = stroke.get(0);
+            Point p = stroke.getFirst();
             for (int i = 0; i < n; i++) dup.add(new Point(p.x(), p.y(), strokeID));
             return dup;
         }
 
         double interval = total / (n - 1);
         List<Point> out = new ArrayList<>(n);
-        Point first = stroke.get(0);
+        Point first = stroke.getFirst();
         out.add(new Point(first.x(), first.y(), strokeID));
 
         double accumulated = 0.0;
@@ -130,7 +130,7 @@ public final class PointCloudPreprocessor {
         }
         // Pad to exactly n with the last input point (handles floating-point drift).
         while (out.size() < n) {
-            Point last = stroke.get(stroke.size() - 1);
+            Point last = stroke.getLast();
             out.add(new Point(last.x(), last.y(), strokeID));
         }
         return out;
@@ -189,7 +189,7 @@ public final class PointCloudPreprocessor {
      * angle, which collapses for symmetric or multi-stroke shapes.
      *
      * <p>The principal axis is a <i>line</i>, so this returns an angle in
-     * (-π/2, π/2]; the residual 180° ambiguity is resolved by the recognizer
+     * (-π/2, π/2); the residual 180° ambiguity is resolved by the recognizer
      * trying both flips at match time.</p>
      */
     public static float indicativeAngle(PointCloud in) {
@@ -260,25 +260,30 @@ public final class PointCloudPreprocessor {
                 out.add(p.withTurningAngle(0f));
                 continue;
             }
-            Point prev = pts.get(i - 1);
-            Point next = pts.get(i + 1);
-            float ax = p.x() - prev.x();
-            float ay = p.y() - prev.y();
-            float bx = next.x() - p.x();
-            float by = next.y() - p.y();
-            float dn = (float) (Math.sqrt(ax * ax + ay * ay) * Math.sqrt(bx * bx + by * by));
-            float angle;
-            if (dn <= 1e-12f) {
-                angle = 0f;
-            } else {
-                float cos = (ax * bx + ay * by) / dn;
-                if (cos < -1f) cos = -1f;
-                else if (cos > 1f) cos = 1f;
-                angle = (float) (Math.acos(cos) / Math.PI);
-            }
+            float angle = getAngle(pts, i, p);
             out.add(p.withTurningAngle(angle));
         }
         return new PointCloud(in.name(), out);
+    }
+
+    private static float getAngle(List<Point> pts, int i, Point p) {
+        Point prev = pts.get(i - 1);
+        Point next = pts.get(i + 1);
+        float ax = p.x() - prev.x();
+        float ay = p.y() - prev.y();
+        float bx = next.x() - p.x();
+        float by = next.y() - p.y();
+        float dn = (float) (Math.sqrt(ax * ax + ay * ay) * Math.sqrt(bx * bx + by * by));
+        float angle;
+        if (dn <= 1e-12f) {
+            angle = 0f;
+        } else {
+            float cos = (ax * bx + ay * by) / dn;
+            if (cos < -1f) cos = -1f;
+            else if (cos > 1f) cos = 1f;
+            angle = (float) (Math.acos(cos) / Math.PI);
+        }
+        return angle;
     }
 
     // ── Pipeline ─────────────────────────────────────────────────────────────────

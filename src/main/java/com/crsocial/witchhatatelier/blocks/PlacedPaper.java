@@ -62,7 +62,7 @@ public class PlacedPaper extends Block implements EntityBlock {
     }
 
     @Override
-    protected MapCodec<? extends PlacedPaper> codec() { return CODEC; }
+    protected @NotNull MapCodec<? extends PlacedPaper> codec() { return CODEC; }
 
     // ── EntityBlock ──────────────────────────────────────────────────────────────
 
@@ -74,7 +74,7 @@ public class PlacedPaper extends Block implements EntityBlock {
     // ── Drops ────────────────────────────────────────────────────────────────────
 
     @Override
-    public List<ItemStack> getDrops(@NotNull BlockState state, LootParams.@NotNull Builder params) {
+    public @NotNull List<ItemStack> getDrops(@NotNull BlockState state, LootParams.@NotNull Builder params) {
         BlockEntity rawBe = params.getOptionalParameter(LootContextParams.BLOCK_ENTITY);
         if (!(rawBe instanceof PlacedPaperBlockEntity be)) return List.of();
 
@@ -174,6 +174,7 @@ public class PlacedPaper extends Block implements EntityBlock {
 
     @Override
     protected @NotNull BlockState mirror(@NotNull BlockState state, @NotNull Mirror mirror) {
-        return state.rotate(mirror.getRotation(state.getValue(FACING)));
+        Direction facing = state.getValue(FACING);
+        return state.setValue(FACING, mirror.getRotation(facing).rotate(facing));
     }
 }
