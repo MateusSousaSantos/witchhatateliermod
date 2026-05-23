@@ -2,6 +2,7 @@ package com.crsocial.witchhatatelier.client.renderer;
 
 import com.crsocial.witchhatatelier.blocks.PlacedPaper;
 import com.crsocial.witchhatatelier.blocks.PlacedPaperBlockEntity;
+import com.crsocial.witchhatatelier.client.gesture.CanvasSize;
 import com.crsocial.witchhatatelier.items.PaperType;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
@@ -46,8 +47,11 @@ public class PlacedPaperBlockEntityRenderer implements BlockEntityRenderer<Place
     private static final float INK_B = 0.09f;
     private static final float INK_A = 0.86f;
 
-    /** Inset margin so strokes stay inside the visible paper edge (UV space). */
-    private static final float MARGIN = 0.1f;
+    /** Inset margin for the smallest configured canvas size (UV space). */
+    private static final float MIN_CANVAS_MARGIN = 0.25f;
+
+    /** Inset margin for the largest configured canvas size (UV space). */
+    private static final float MAX_CANVAS_MARGIN = 0.1f;
 
     /**
      * Block-local distance from the attachment wall to the paper's visible face.
@@ -62,6 +66,7 @@ public class PlacedPaperBlockEntityRenderer implements BlockEntityRenderer<Place
 
     // ── Constructor ───────────────────────────────────────────────────────────────
 
+    @SuppressWarnings("unused")
     public PlacedPaperBlockEntityRenderer(BlockEntityRendererProvider.Context ctx) {}
 
     // ── Render ────────────────────────────────────────────────────────────────────
@@ -83,7 +88,7 @@ public class PlacedPaperBlockEntityRenderer implements BlockEntityRenderer<Place
 
         // gridSize = canvasSize.width() / 2  (per-profile resolution)
         int   gridSize = paperType.getCanvasSize().width() / log2(paperType.getCanvasSize().width());
-        float margin   = marginFor(paperType);
+        float margin   = marginFor(paperType.getCanvasSize());
         float cellUV   = (1f - 2f * margin) / gridSize;
         float dotHalf  = cellUV * 0.5f;
         boolean isRound = paperType.isRound();
@@ -158,8 +163,24 @@ public class PlacedPaperBlockEntityRenderer implements BlockEntityRenderer<Place
 
     // Small papers have a proportionally larger visible border in their texture,
     // so they need a bigger margin to keep ink inside the paper outline.
-    private static float marginFor(PaperType paperType) {
-        return paperType.getCanvasSize().width() <= 128 ? 0.20f : MARGIN;
+    // Interpolate from 0.25 on the smallest configured canvas to 0.10 on the largest.
+    private static float marginFor(CanvasSize size) {
+        float canvasEdge = Math.max(size.width(), size.height());
+        float minCanvasEdge = Float.MAX_VALUE;
+        float maxCanvasEdge = Float.MIN_VALUE;
+
+        for (PaperType paperType : PaperType.values()) {
+            float edge = Math.max(paperType.getCanvasSize().width(), paperType.getCanvasSize().height());
+            minCanvasEdge = Math.min(minCanvasEdge, edge);
+            maxCanvasEdge = Math.max(maxCanvasEdge, edge);
+        }
+
+        if (maxCanvasEdge <= minCanvasEdge) {
+            return MIN_CANVAS_MARGIN;
+        }
+
+        float t = Math.clamp((canvasEdge - minCanvasEdge) / (maxCanvasEdge - minCanvasEdge), 0f, 1f);
+        return MIN_CANVAS_MARGIN + (MAX_CANVAS_MARGIN - MIN_CANVAS_MARGIN) * t;
     }
 
     // Scales the full canvas UV [0,1] onto [0, gridSize) so the whole drawing fits
