@@ -259,7 +259,7 @@ public class CanvasScreen extends Screen {
 
         int bg = readOnly ? profile.canvasBgReadOnlyColor() : profile.canvasBgColor();
         drawCanvasBackground(gui, bg);
-        drawPixelGrid(gui);
+        //drawPixelGrid(gui);
         drawBorder(gui);
 
         int sw = profile.strokeWidth();
@@ -563,8 +563,13 @@ public class CanvasScreen extends Screen {
         gui.fill(sx, sy, ex, ey, color);
     }
 
+    /** Border thickness in screen pixels, derived from the profile's logical canvas-pixel thickness. */
+    private int borderThicknessPx() {
+        return Math.max(1, Math.round(profile.borderThickness() * displayScale));
+    }
+
     private void drawBorder(GuiGraphics gui) {
-        int thickness = Math.max(1, profile.borderThickness());
+        int thickness = borderThicknessPx();
         int color     = profile.canvasBorderColor();
 
         if (profile.inputShape() == CanvasProfile.Shape.CIRCLE) {
@@ -640,27 +645,30 @@ public class CanvasScreen extends Screen {
     }
 
     /**
-     * Draws a faint pixel grid overlay when canvas pixels are large enough to distinguish.
-     * Mimics Aseprite's grid: helps the user see individual canvas pixels when zoomed in.
+     * Draws a faint raster grid overlay when rendered ink pixels are large enough to distinguish.
+     * The grid step matches the stroke raster cell size so visible ink pixels line up with the overlay.
      */
     private void drawPixelGrid(GuiGraphics gui) {
-        int px = Math.round(displayScale * zoom);
+        int rasterStep = Math.max(1, profile.strokeWidth());
+        int px = Math.round(displayScale * zoom * rasterStep);
         if (px < GRID_THRESHOLD_PX) return;
 
         int gridColor = 0x22000000;
 
-        // Visible canvas range (canvas-space ints)
-        int startCX = Math.max(0, (int) panX);
-        int endCX   = Math.min(canvasSize.width(),  (int) Math.ceil(panX + canvasSize.width()  / zoom));
-        int startCY = Math.max(0, (int) panY);
-        int endCY   = Math.min(canvasSize.height(), (int) Math.ceil(panY + canvasSize.height() / zoom));
+        // Visible raster-cell boundaries in canvas space.
+        int startCX = Math.max(0, (int) Math.floor(panX / rasterStep) * rasterStep);
+        int endCX   = Math.min(canvasSize.width(),
+                (int) Math.ceil((panX + canvasSize.width() / zoom) / rasterStep) * rasterStep);
+        int startCY = Math.max(0, (int) Math.floor(panY / rasterStep) * rasterStep);
+        int endCY   = Math.min(canvasSize.height(),
+                (int) Math.ceil((panY + canvasSize.height() / zoom) / rasterStep) * rasterStep);
 
-        for (int cx = startCX; cx <= endCX; cx++) {
+        for (int cx = startCX; cx <= endCX; cx += rasterStep) {
             int sx = (int) scrX(cx);
             if (sx >= displayX && sx <= displayX + displayW)
                 gui.fill(sx, displayY, sx + 1, displayY + displayH, gridColor);
         }
-        for (int cy = startCY; cy <= endCY; cy++) {
+        for (int cy = startCY; cy <= endCY; cy += rasterStep) {
             int sy = (int) scrY(cy);
             if (sy >= displayY && sy <= displayY + displayH)
                 gui.fill(displayX, sy, displayX + displayW, sy + 1, gridColor);

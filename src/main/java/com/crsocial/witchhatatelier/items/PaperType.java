@@ -14,12 +14,10 @@ import java.util.Optional;
  */
 public enum PaperType {
 
-    SMALL_SQUARE ("small_square",  false, new CanvasSize(128, 128)),
-    MEDIUM_SQUARE("medium_square", false, new CanvasSize(256, 256)),
-    LARGE_SQUARE ("large_square",  false, new CanvasSize(768, 768)),
-    SMALL_ROUND  ("small_round",   true,  new CanvasSize(128, 128)),
-    MEDIUM_ROUND ("medium_round",  true,  new CanvasSize(256, 256)),
-    LARGE_ROUND  ("large_round",   true,  new CanvasSize(768, 768));
+    SMALL_SQUARE ("small_square",  false, new CanvasSize(512, 512)),
+    MEDIUM_SQUARE("medium_square", false, new CanvasSize(1024, 1024)),
+    SMALL_ROUND  ("small_round",   true,  new CanvasSize(512, 512)),
+    MEDIUM_ROUND ("medium_round",  true,  new CanvasSize(1024, 1024));
 
     private final String id;
     private final boolean round;
@@ -41,7 +39,7 @@ public enum PaperType {
     public CanvasSize getCanvasSize() { return canvasSize; }
 
     /** {@code true} for LARGE_SQUARE and LARGE_ROUND (occupy a 2×2 floor area when placed). */
-    public boolean isLarge() { return this == LARGE_SQUARE || this == LARGE_ROUND; }
+    public boolean isLarge() { return false; }
 
     /** Looks up a PaperType by its {@link #getId()} string. */
     public static Optional<PaperType> fromId(String id) {

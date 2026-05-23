@@ -57,7 +57,7 @@ public interface CanvasProfile {
     /** ARGB colour of the canvas border ring/rect. */
     int canvasBorderColor();
 
-    /** Thickness (pixels) of the canvas border. */
+    /** Thickness of the canvas border in logical canvas pixels; scaled to screen pixels at render time. */
     int borderThickness();
 
     /** ARGB colour of completed strokes. */
@@ -136,7 +136,7 @@ public interface CanvasProfile {
         @Override public int        canvasBgColor()       { return 0xFFFCFCF2; }
         @Override public int        canvasBgReadOnlyColor(){ return 0xFFF3F3FF; }
         @Override public int        canvasBorderColor()   { return 0xFFE9EAEB; }
-        @Override public int        borderThickness()     { return 5; }
+        @Override public int        borderThickness()     { return 20; }
         @Override public int        strokeColor()         { return 0xFF000000; }
         @Override public int        activeStrokeColor()   { return 0xFFCF31C2; }
         @Override public float      strokeSmoothingFactor(){ return 1f; }

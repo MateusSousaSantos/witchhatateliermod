@@ -15,6 +15,7 @@ import net.minecraft.nbt.Tag;
 import net.minecraft.world.level.block.state.BlockState;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.api.distmarker.OnlyIn;
+import org.jetbrains.annotations.NotNull;
 import org.joml.Matrix4f;
 
 import java.util.ArrayList;
@@ -64,10 +65,12 @@ public class PlacedPaperBlockEntityRenderer implements BlockEntityRenderer<Place
     public PlacedPaperBlockEntityRenderer(BlockEntityRendererProvider.Context ctx) {}
 
     // ── Render ────────────────────────────────────────────────────────────────────
-
+    public static int log2(int N) {
+        return (int) (Math.log(N) / Math.log(2));
+    }
     @Override
-    public void render(PlacedPaperBlockEntity be, float partialTick, PoseStack poseStack,
-                       MultiBufferSource bufferSource, int packedLight, int packedOverlay) {
+    public void render(PlacedPaperBlockEntity be, float partialTick, @NotNull PoseStack poseStack,
+                       @NotNull MultiBufferSource bufferSource, int packedLight, int packedOverlay) {
         if (be.getLevel() == null) return;
 
         CompoundTag data = be.getGestureData();
@@ -79,7 +82,7 @@ public class PlacedPaperBlockEntityRenderer implements BlockEntityRenderer<Place
         PaperType paperType = be.getPaperType();
 
         // gridSize = canvasSize.width() / 2  (per-profile resolution)
-        int   gridSize = paperType.getCanvasSize().width() / 2;
+        int   gridSize = paperType.getCanvasSize().width() / log2(paperType.getCanvasSize().width());
         float margin   = marginFor(paperType);
         float cellUV   = (1f - 2f * margin) / gridSize;
         float dotHalf  = cellUV * 0.5f;
