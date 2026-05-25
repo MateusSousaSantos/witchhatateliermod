@@ -9,6 +9,10 @@ import com.crsocial.witchhatatelier.items.PaperType;
 import com.crsocial.witchhatatelier.items.SpellPaperItem;
 import com.crsocial.witchhatatelier.spell.cluster.SigilCluster;
 import com.crsocial.witchhatatelier.spell.cluster.SigilClusterer;
+import com.crsocial.witchhatatelier.spell.compiler.CastingContext;
+import com.crsocial.witchhatatelier.spell.compiler.SpellGraph;
+import com.crsocial.witchhatatelier.spell.compiler.SpellGraphBuilder;
+import com.crsocial.witchhatatelier.spell.trigger.TriggerEvaluator;
 import com.crsocial.witchhatatelier.spell.recognition.PDollarPlusRecognizer;
 import com.crsocial.witchhatatelier.spell.recognition.Point;
 import com.crsocial.witchhatatelier.spell.recognition.PointCloud;
@@ -34,11 +38,13 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 import org.jetbrains.annotations.NotNull;
+import org.joml.Vector3f;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * Server-side handler for {@link SaveGesturePayload}.
@@ -206,10 +212,12 @@ public final class SaveGestureHandler {
                 "[SpellPipeline] player='{}' ring={} content_strokes={} → {} sigil cluster(s); templates={}.",
                 who, ringIds, contentStrokes.size(), clusters.size(), TemplateRegistry.get().size());
 
+        List<RecognitionResult> recognitions = new ArrayList<>(clusters.size());
         for (int i = 0; i < clusters.size(); i++) {
             PointCloud raw = clusters.get(i).toPointCloud("candidate_" + i);
             PointCloudPreprocessor.Processed processed = PointCloudPreprocessor.process(raw, resampleN);
             RecognitionResult r = recognizer.match(processed);
+            recognitions.add(r);
             WitchHatAtelierMod.LOGGER.info(
                     "[SpellPipeline] sigil[{}] → {} (score={}, angle={}rad).",
                     i, r.spellName(),
@@ -242,6 +250,52 @@ public final class SaveGestureHandler {
                 player.sendSystemMessage(msg);
             }
         }
+
+        // ── Compile the spell graph (Phase 1) ───────────────────────────────────
+        // A non-empty ring stroke set is the signal to attempt compilation.
+        if (!ringIds.isEmpty()) {
+            List<List<Point>> ringStrokes = new ArrayList<>();
+            List<Integer> contentIds = new ArrayList<>();
+            for (var e : byStroke.entrySet()) {
+                if (ringIds.contains(e.getKey())) {
+                    ringStrokes.add(e.getValue());
+                } else {
+                    contentIds.add(e.getKey());
+                }
+            }
+            TriggerEvaluator.TriggerResult trigger =
+                    new TriggerEvaluator.TriggerResult(ringIds, contentIds);
+            CastingContext ctx = buildCastingContext(payload, player);
+
+            Optional<SpellGraph> graph =
+                    SpellGraphBuilder.build(trigger, ringStrokes, clusters, recognitions, ctx);
+            graph.ifPresent(spellGraph -> WitchHatAtelierMod.LOGGER.info(
+                    "[Compiler] Compiled spell graph for player='{}':\n{}",
+                    who, spellGraph.toDebugString()));
+            // Rejections are logged inside SpellGraphBuilder.
+        }
+    }
+
+    private static CastingContext buildCastingContext(SaveGesturePayload payload, Player player) {
+        BlockPos origin = payload.blockOrigin();
+        CastingContext.MediumKind medium = origin != null
+                ? CastingContext.MediumKind.PLACED_PAPER
+                : CastingContext.MediumKind.PAPER_ITEM;
+
+        Vector3f originWorld;
+        if (origin != null) {
+            originWorld = new Vector3f(origin.getX() + 0.5f, origin.getY() + 0.5f, origin.getZ() + 0.5f);
+        } else if (player != null) {
+            originWorld = new Vector3f((float) player.getX(),
+                    (float) (player.getY() + player.getBbHeight() * 0.5),
+                    (float) player.getZ());
+        } else {
+            originWorld = new Vector3f();
+        }
+
+        // Surface-normal resolution (placed-paper facing) is Phase 3; default to up.
+        Vector3f surfaceNormal = new Vector3f(0f, 1f, 0f);
+        return CastingContext.of(medium, originWorld, surfaceNormal);
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────────
