@@ -40,6 +40,57 @@ public record SpellGraph(RingNode root,
         return out;
     }
 
+    /** Manifestation signs acting as base shapes (Column, Dispersion). Multiple coexist. */
+    public List<SignNode> carriers() {
+        return byRole(SignType.ManifestationRole.CARRIER);
+    }
+
+    /** Manifestation signs that ride on a carrier (Bolt → impacts/projectiles). */
+    public List<SignNode> riders() {
+        return byRole(SignType.ManifestationRole.RIDER);
+    }
+
+    private List<SignNode> byRole(SignType.ManifestationRole role) {
+        List<SignNode> out = new ArrayList<>();
+        for (SignNode n : modifiers) {
+            if (n.type().manifestationRole() == role) out.add(n);
+        }
+        return out;
+    }
+
+    /**
+     * Human-readable description of the manifestation form, e.g.
+     * {@code "Column + Dispersion"}, {@code "Dispersion with Bolt impacts"},
+     * {@code "Bolt"}, or {@code "default (no signs)"}.
+     */
+    public String describeForm() {
+        String carriers = distinctNames(carriers());
+        String riders = distinctNames(riders());
+        if (!carriers.isEmpty()) {
+            return riders.isEmpty() ? carriers : carriers + " with " + riders + " impacts";
+        }
+        if (!riders.isEmpty()) {
+            return riders;
+        }
+        return "default (no signs)";
+    }
+
+    private static String distinctNames(List<SignNode> nodes) {
+        StringBuilder sb = new StringBuilder();
+        List<SignType> seen = new ArrayList<>();
+        for (SignNode n : nodes) {
+            if (seen.contains(n.type())) continue;
+            seen.add(n.type());
+            if (!sb.isEmpty()) sb.append(" + ");
+            sb.append(titleCase(n.type().name()));
+        }
+        return sb.toString();
+    }
+
+    private static String titleCase(String enumName) {
+        return enumName.charAt(0) + enumName.substring(1).toLowerCase(Locale.ROOT);
+    }
+
     /** Multi-line structured dump for server logging (Phase 1 verification). */
     public String toDebugString() {
         StringBuilder sb = new StringBuilder();
@@ -50,15 +101,19 @@ public record SpellGraph(RingNode root,
         sb.append(String.format(Locale.ROOT,
                 "  sigil: %s quality=%.2f centre=(%.1f,%.1f)%n",
                 core.type(), core.quality(), core.centre().x, core.centre().y));
+        sb.append(String.format(Locale.ROOT, "  form: %s%n", describeForm()));
         sb.append("  signs:");
         if (signsByType().isEmpty()) {
             sb.append(" (none — sigil default behaviour)\n");
         } else {
             sb.append('\n');
             for (SignBundle b : signsByType()) {
+                String role = b.type().tier() == SignType.Tier.MANIFESTATION
+                        ? b.type().manifestationRole().toString()
+                        : b.type().tier().toString();
                 sb.append(String.format(Locale.ROOT,
                         "    %s x%d [%s, %s]%n",
-                        b.type(), b.count(), b.type().tier(), b.type().stackingMode()));
+                        b.type(), b.count(), role, b.type().stackingMode()));
             }
         }
         sb.append(String.format(Locale.ROOT,

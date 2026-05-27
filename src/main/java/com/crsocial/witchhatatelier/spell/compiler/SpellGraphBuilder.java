@@ -12,18 +12,16 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * Builds a {@link SpellGraph} from a closed ring's recognized content. Enforces
- * the structural compilation rules from {@code docs/magic_system/02_spell_compiler.md}:
+ * Builds a {@link SpellGraph} from a closed ring's recognized content. The only
+ * structural rule enforced is <b>exactly one Sigil per ring</b> (multi-element
+ * spells use nested rings, per {@code docs/magic_system/02_spell_compiler.md}).
  *
- * <ul>
- *   <li>exactly one Sigil per ring,</li>
- *   <li>at most one Manifestation sign type per ring,</li>
- *   <li>at most one Force sign type per ring.</li>
- * </ul>
- *
- * Multiple occurrences of the <em>same</em> sign type are valid (stacking). On
- * any violation the builder emits no graph and logs the reason; the inscription
- * then falls back to the Prepared state.
+ * <p>Signs combine freely: multiple occurrences of the same type stack, and
+ * different types coexist. Manifestation signs follow a carrier/rider hierarchy
+ * (Column/Dispersion are carriers, Bolt is a rider) exposed via
+ * {@link SpellGraph#carriers()} / {@link SpellGraph#riders()}; Force signs
+ * simply coexist. On a missing sigil the builder emits no graph and the
+ * inscription falls back to the Prepared state.
  */
 public final class SpellGraphBuilder {
 
@@ -37,11 +35,11 @@ public final class SpellGraphBuilder {
      * @param ctx          per-cast environment (currently unused by the builder;
      *                     threaded for the meaning engine and future ink/wand systems)
      */
-    public static Optional<SpellGraph> build(TriggerResult trigger,
-                                             List<List<Point>> ringStrokes,
-                                             List<SigilCluster> clusters,
-                                             List<RecognitionResult> recognitions,
-                                             CastingContext ctx) {
+    public static CompileResult build(TriggerResult trigger,
+                                      List<List<Point>> ringStrokes,
+                                      List<SigilCluster> clusters,
+                                      List<RecognitionResult> recognitions,
+                                      CastingContext ctx) {
         if (clusters.size() != recognitions.size()) {
             throw new IllegalArgumentException(
                     "clusters/recognitions size mismatch: " + clusters.size() + " vs " + recognitions.size());
@@ -73,48 +71,22 @@ public final class SpellGraphBuilder {
 
         // ── Rule: exactly one Sigil per ring ────────────────────────────────────
         if (sigils.isEmpty()) {
-            WitchHatAtelierMod.LOGGER.info(
-                    "[Compiler] Rejected: no sigil recognized inside the ring. Falling back to Prepared.");
-            return Optional.empty();
+            return CompileResult.rejected("No sigil recognized inside the ring");
         }
         if (sigils.size() > 1) {
-            WitchHatAtelierMod.LOGGER.info(
-                    "[Compiler] Rejected: {} sigils in one ring (only one allowed; combine via nested rings). "
-                            + "Falling back to Prepared.", sigils.size());
-            return Optional.empty();
+            return CompileResult.rejected(sigils.size() + " sigils in one ring (only one allowed; combine via nested rings)");
         }
         SigilNode core = sigils.getFirst();
-
-        // ── Rule: at most one Manifestation sign type ───────────────────────────
-        if (distinctTypeCount(signs, SignType.Tier.MANIFESTATION) > 1) {
-            WitchHatAtelierMod.LOGGER.info(
-                    "[Compiler] Rejected: multiple Manifestation sign types in one ring. Falling back to Prepared.");
-            return Optional.empty();
-        }
-        // ── Rule: at most one Force sign type ────────────────────────────────────
-        if (distinctTypeCount(signs, SignType.Tier.FORCE) > 1) {
-            WitchHatAtelierMod.LOGGER.info(
-                    "[Compiler] Rejected: multiple Force sign types in one ring. Falling back to Prepared.");
-            return Optional.empty();
-        }
 
         RingNode ring = buildRing(trigger.ringStrokeIds(), ringStrokes);
         SymmetryReport symmetry = SymmetryAnalyzer.analyze(core.centre(), signs);
         SizeReport size = buildSize(clusters, ringStrokes);
 
-        return Optional.of(new SpellGraph(ring, core, List.copyOf(signs),
+        return CompileResult.success(new SpellGraph(ring, core, List.copyOf(signs),
                 Optional.empty(), symmetry, size));
     }
 
     // ── Geometry helpers ─────────────────────────────────────────────────────────
-
-    private static long distinctTypeCount(List<SignNode> signs, SignType.Tier tier) {
-        return signs.stream()
-                .map(SignNode::type)
-                .filter(t -> t.tier() == tier)
-                .distinct()
-                .count();
-    }
 
     private static Vector2f centroid(SigilCluster cluster) {
         float sx = 0f, sy = 0f;

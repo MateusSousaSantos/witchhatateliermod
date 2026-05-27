@@ -9,8 +9,9 @@ import com.crsocial.witchhatatelier.items.PaperType;
 import com.crsocial.witchhatatelier.items.SpellPaperItem;
 import com.crsocial.witchhatatelier.spell.cluster.SigilCluster;
 import com.crsocial.witchhatatelier.spell.cluster.SigilClusterer;
+import com.crsocial.witchhatatelier.ModCommands;
 import com.crsocial.witchhatatelier.spell.compiler.CastingContext;
-import com.crsocial.witchhatatelier.spell.compiler.SpellGraph;
+import com.crsocial.witchhatatelier.spell.compiler.CompileResult;
 import com.crsocial.witchhatatelier.spell.compiler.SpellGraphBuilder;
 import com.crsocial.witchhatatelier.spell.trigger.TriggerEvaluator;
 import com.crsocial.witchhatatelier.spell.recognition.PDollarPlusRecognizer;
@@ -20,6 +21,7 @@ import com.crsocial.witchhatatelier.spell.recognition.PointCloudPreprocessor;
 import com.crsocial.witchhatatelier.spell.recognition.RecognitionResult;
 import com.crsocial.witchhatatelier.spell.recognition.TemplateRegistry;
 import net.minecraft.ChatFormatting;
+import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.particles.ParticleTypes;
@@ -44,7 +46,6 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
 /**
  * Server-side handler for {@link SaveGesturePayload}.
@@ -187,6 +188,8 @@ public final class SaveGestureHandler {
         }
 
         List<Integer> ringIds = payload.activationRingStrokeIds();
+        if (ringIds.isEmpty()) return; // only run the pipeline when a ring was closed
+
         List<List<Point>> contentStrokes = new ArrayList<>();
         for (var e : byStroke.entrySet()) {
             if (ringIds.contains(e.getKey())) continue;
@@ -208,6 +211,8 @@ public final class SaveGestureHandler {
         PDollarPlusRecognizer recognizer = new PDollarPlusRecognizer(TemplateRegistry.get(), minScore);
 
         String who = player != null ? player.getScoreboardName() : "<unknown>";
+        boolean debugMode = player != null && ModCommands.SPELL_DEBUGGERS.contains(player.getUUID());
+
         WitchHatAtelierMod.LOGGER.info(
                 "[SpellPipeline] player='{}' ring={} content_strokes={} → {} sigil cluster(s); templates={}.",
                 who, ringIds, contentStrokes.size(), clusters.size(), TemplateRegistry.get().size());
@@ -224,8 +229,6 @@ public final class SaveGestureHandler {
                     String.format(java.util.Locale.ROOT, "%.3f", r.confidenceScore()),
                     String.format(java.util.Locale.ROOT, "%.3f", r.indicativeAngle()));
 
-            // Diagnostic: log top-3 ranked scores so the user can see why a particular
-            // template won (or why the match was rejected as ambiguous / below threshold).
             List<PDollarPlusRecognizer.Scored> ranked =
                     recognizer.matchVerbose(processed, TemplateRegistry.get().all());
             int topK = Math.min(3, ranked.size());
@@ -237,43 +240,104 @@ public final class SaveGestureHandler {
                         String.format(java.util.Locale.ROOT, "%.3f", s.score()));
             }
 
-            if (player != null) {
+            if (debugMode) {
                 boolean recognized = !RecognitionResult.UNKNOWN.equals(r.spellName());
                 int pct = Math.round(r.confidenceScore() * 100f);
-                Component msg = Component.empty()
+                player.sendSystemMessage(Component.empty()
                         .append(Component.literal("[Sigil " + (i + 1) + "] ")
                                 .withStyle(ChatFormatting.DARK_PURPLE))
                         .append(Component.literal(recognized ? r.spellName() : "unrecognized")
                                 .withStyle(recognized ? ChatFormatting.GOLD : ChatFormatting.GRAY))
                         .append(Component.literal(" (" + pct + "%)")
-                                .withStyle(ChatFormatting.DARK_GRAY));
-                player.sendSystemMessage(msg);
-            }
-        }
-
-        // ── Compile the spell graph (Phase 1) ───────────────────────────────────
-        // A non-empty ring stroke set is the signal to attempt compilation.
-        if (!ringIds.isEmpty()) {
-            List<List<Point>> ringStrokes = new ArrayList<>();
-            List<Integer> contentIds = new ArrayList<>();
-            for (var e : byStroke.entrySet()) {
-                if (ringIds.contains(e.getKey())) {
-                    ringStrokes.add(e.getValue());
-                } else {
-                    contentIds.add(e.getKey());
+                                .withStyle(ChatFormatting.DARK_GRAY)));
+                for (int k = 0; k < topK; k++) {
+                    PDollarPlusRecognizer.Scored s = ranked.get(k);
+                    int sPct = Math.round(s.score() * 100f);
+                    player.sendSystemMessage(Component.empty()
+                            .append(Component.literal("  #" + (k + 1) + " ")
+                                    .withStyle(ChatFormatting.DARK_GRAY))
+                            .append(Component.literal(s.spellName() + ":" + s.variantName())
+                                    .withStyle(ChatFormatting.GRAY))
+                            .append(Component.literal(" " + sPct + "%")
+                                    .withStyle(ChatFormatting.DARK_GRAY)));
                 }
             }
-            TriggerEvaluator.TriggerResult trigger =
-                    new TriggerEvaluator.TriggerResult(ringIds, contentIds);
-            CastingContext ctx = buildCastingContext(payload, player);
-
-            Optional<SpellGraph> graph =
-                    SpellGraphBuilder.build(trigger, ringStrokes, clusters, recognitions, ctx);
-            graph.ifPresent(spellGraph -> WitchHatAtelierMod.LOGGER.info(
-                    "[Compiler] Compiled spell graph for player='{}':\n{}",
-                    who, spellGraph.toDebugString()));
-            // Rejections are logged inside SpellGraphBuilder.
         }
+
+        // Group recognitions by name for the summary line (e.g. "fire ×1  column ×4")
+        Map<String, Integer> recogCounts = new LinkedHashMap<>();
+        for (RecognitionResult r : recognitions) {
+            if (!RecognitionResult.UNKNOWN.equals(r.spellName())) {
+                recogCounts.merge(r.spellName(), 1, Integer::sum);
+            }
+        }
+
+        // ── Compile the spell graph ───────────────────────────────────────────────
+        List<List<Point>> ringStrokes = new ArrayList<>();
+        List<Integer> contentIds = new ArrayList<>();
+        for (var e : byStroke.entrySet()) {
+            if (ringIds.contains(e.getKey())) {
+                ringStrokes.add(e.getValue());
+            } else {
+                contentIds.add(e.getKey());
+            }
+        }
+        TriggerEvaluator.TriggerResult trigger =
+                new TriggerEvaluator.TriggerResult(ringIds, contentIds);
+        CastingContext ctx = buildCastingContext(payload, player);
+
+        CompileResult result = SpellGraphBuilder.build(trigger, ringStrokes, clusters, recognitions, ctx);
+
+        if (result.isSuccess()) {
+            var graph = result.graph().get();
+            WitchHatAtelierMod.LOGGER.info(
+                    "[Compiler] Compiled spell graph for player='{}':\n{}", who, graph.toDebugString());
+            if (player != null) {
+                player.sendSystemMessage(Component.empty()
+                        .append(Component.literal("◆ ").withStyle(ChatFormatting.GOLD))
+                        .append(Component.literal(graph.core().type().toString())
+                                .withStyle(s -> s.withColor(ChatFormatting.YELLOW).withBold(true))));
+                player.sendSystemMessage(Component.literal("  ")
+                        .append(Component.literal(graph.describeForm())
+                                .withStyle(ChatFormatting.AQUA)));
+                if (!recogCounts.isEmpty()) {
+                    player.sendSystemMessage(Component.literal("  ")
+                            .append(buildRecognitionSummary(recogCounts)));
+                }
+                if (debugMode) {
+                    for (String line : graph.toDebugString().split("\n")) {
+                        player.sendSystemMessage(Component.literal(line)
+                                .withStyle(ChatFormatting.GRAY));
+                    }
+                }
+            }
+        } else {
+            WitchHatAtelierMod.LOGGER.info("[Compiler] Rejected: {}", result.rejectionReason());
+            if (player != null) {
+                assert result.rejectionReason() != null;
+                player.sendSystemMessage(Component.empty()
+                        .append(Component.literal("◆ ").withStyle(ChatFormatting.DARK_PURPLE))
+                        .append(Component.literal("✗ ").withStyle(ChatFormatting.RED))
+                        .append(Component.literal(result.rejectionReason())
+                                .withStyle(ChatFormatting.RED)));
+                if (!recogCounts.isEmpty()) {
+                    player.sendSystemMessage(Component.literal("  ")
+                            .append(buildRecognitionSummary(recogCounts)));
+                }
+            }
+        }
+    }
+
+    private static MutableComponent buildRecognitionSummary(Map<String, Integer> counts) {
+        MutableComponent line = Component.empty();
+        boolean first = true;
+        for (Map.Entry<String, Integer> e : counts.entrySet()) {
+            if (!first) line.append(Component.literal("   ").withStyle(ChatFormatting.DARK_GRAY));
+            line.append(Component.literal(e.getKey()).withStyle(ChatFormatting.AQUA));
+            line.append(Component.literal(" ×" + e.getValue()).withStyle(ChatFormatting.GRAY));
+            first = false;
+        }
+        return line;
     }
 
     private static CastingContext buildCastingContext(SaveGesturePayload payload, Player player) {

@@ -10,25 +10,38 @@ import java.util.Optional;
  * {@code docs/magic_system/signs.md}.
  */
 public enum SignType {
-    COLUMN(Tier.MANIFESTATION, StackingMode.MAGNITUDE),
-    DISPERSION(Tier.MANIFESTATION, StackingMode.MAGNITUDE),
-    BOLT(Tier.MANIFESTATION, StackingMode.REPETITION),
-    CRUSH(Tier.FORCE, StackingMode.MAGNITUDE),
-    CONVERGENCE(Tier.FORCE, StackingMode.MAGNITUDE),
-    COLLECTION(Tier.META, StackingMode.MAGNITUDE),
-    LEVITATION(Tier.META, StackingMode.MAGNITUDE),
-    CROSSHAIR(Tier.META, StackingMode.MAGNITUDE);
+    COLUMN(Tier.MANIFESTATION, StackingMode.MAGNITUDE, ManifestationRole.CARRIER),
+    DISPERSION(Tier.MANIFESTATION, StackingMode.MAGNITUDE, ManifestationRole.CARRIER),
+    BOLT(Tier.MANIFESTATION, StackingMode.REPETITION, ManifestationRole.RIDER),
+    CRUSH(Tier.FORCE, StackingMode.MAGNITUDE, ManifestationRole.NONE),
+    CONVERGENCE(Tier.FORCE, StackingMode.MAGNITUDE, ManifestationRole.NONE),
+    COLLECTION(Tier.META, StackingMode.MAGNITUDE, ManifestationRole.NONE),
+    LEVITATION(Tier.META, StackingMode.MAGNITUDE, ManifestationRole.NONE),
+    CROSSHAIR(Tier.META, StackingMode.MAGNITUDE, ManifestationRole.NONE);
 
     public enum Tier { MANIFESTATION, FORCE, META }
 
     public enum StackingMode { MAGNITUDE, REPETITION }
 
+    /**
+     * Role of a Manifestation sign when several combine in one ring.
+     * <ul>
+     *   <li>{@code CARRIER} — a base output shape (Column, Dispersion). Multiple
+     *       carriers coexist (e.g. "a column and dispersion").</li>
+     *   <li>{@code RIDER} — attaches onto whatever carrier is present (Bolt → impacts).</li>
+     *   <li>{@code NONE} — not a Manifestation sign (Force / Meta).</li>
+     * </ul>
+     */
+    public enum ManifestationRole { CARRIER, RIDER, NONE }
+
     private final Tier tier;
     private final StackingMode stackingMode;
+    private final ManifestationRole manifestationRole;
 
-    SignType(Tier tier, StackingMode stackingMode) {
+    SignType(Tier tier, StackingMode stackingMode, ManifestationRole manifestationRole) {
         this.tier = tier;
         this.stackingMode = stackingMode;
+        this.manifestationRole = manifestationRole;
     }
 
     public Tier tier() {
@@ -37,6 +50,10 @@ public enum SignType {
 
     public StackingMode stackingMode() {
         return stackingMode;
+    }
+
+    public ManifestationRole manifestationRole() {
+        return manifestationRole;
     }
 
     /**
