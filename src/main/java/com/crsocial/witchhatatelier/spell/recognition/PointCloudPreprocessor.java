@@ -26,8 +26,14 @@ import java.util.Map;
  */
 public final class PointCloudPreprocessor {
 
-    /** Output of {@link #process}: the normalized cloud plus its rotational and geometric signatures. */
-    public record Processed(PointCloud cloud, float indicativeAngle, float normalizedArcLength) {}
+    /**
+     * Output of {@link #process}: the normalized cloud plus its rotational/geometric
+     * signatures and the cached {@link SigilMetrics} consumed by {@link SigilFilters}.
+     */
+    public record Processed(PointCloud cloud,
+                            float indicativeAngle,
+                            float normalizedArcLength,
+                            SigilMetrics metrics) {}
 
     private PointCloudPreprocessor() {}
 
@@ -65,8 +71,17 @@ public final class PointCloudPreprocessor {
             return new PointCloud(in.name(), out);
         }
 
+        // Per-stroke point floor — without one, very short strokes (Cross-hair's
+        // marks, Earth's dot rings after injection) get 1–2 points based on
+        // proportional length and become invisible to the chamfer. The floor is
+        // capped at n/numStrokes so it never starves longer strokes when there
+        // are many short ones.
+        int configFloor = com.crsocial.witchhatatelier.Config.MIN_POINTS_PER_STROKE.get();
+        int strokeCount = byStroke.size();
+        int minPerStroke = Math.clamp(n / strokeCount, 2, configFloor);
+
         int remaining = n;
-        int strokesLeft = byStroke.size();
+        int strokesLeft = strokeCount;
         for (var e : byStroke.entrySet()) {
             int strokeID = e.getKey();
             List<Point> stroke = e.getValue();
@@ -76,11 +91,12 @@ public final class PointCloudPreprocessor {
             if (strokesLeft == 1) {
                 strokeN = remaining;
             } else if (totalLength > 0) {
-                strokeN = Math.max(2, (int) Math.round(n * (strokeLen / totalLength)));
-                strokeN = Math.min(strokeN, remaining - 2 * (strokesLeft - 1));
-                strokeN = Math.max(strokeN, 2);
+                strokeN = (int) Math.round(n * (strokeLen / totalLength));
+                // Reserve at least minPerStroke for each remaining stroke.
+                strokeN = Math.min(strokeN, remaining - minPerStroke * (strokesLeft - 1));
+                strokeN = Math.max(strokeN, minPerStroke);
             } else {
-                strokeN = 2;
+                strokeN = minPerStroke;
             }
             out.addAll(resampleStroke(stroke, strokeN, strokeID));
             remaining -= strokeN;
@@ -311,14 +327,45 @@ public final class PointCloudPreprocessor {
     }
 
     public static Processed process(PointCloud raw, int n) {
-        PointCloud resampled  = resample(raw, n);
-        PointCloud scaled     = scaleToReferenceSquare(resampled);
-        float arcLength       = totalArcLength(scaled);
-        PointCloud centered   = translateToOrigin(scaled);
-        float angle           = indicativeAngle(centered);
-        PointCloud rotated    = rotateBy(centered, -angle);
-        PointCloud withAngles = computeTurningAngles(rotated);
-        return new Processed(withAngles, angle, arcLength);
+        return process(raw, n,
+                com.crsocial.witchhatatelier.Config.DOT_INJECTION_RADIUS.get().floatValue(),
+                com.crsocial.witchhatatelier.Config.DOT_INJECTION_CIRCLE_POINTS.get());
+    }
+
+    /**
+     * Explicit-parameter overload used by templates loaded from JSON, where the
+     * raw coordinate space is normalized [0,1] and the dot-injection geometry
+     * needs to be sized in that same frame.
+     *
+     * <p>The pipeline is: <i>dot-inject raw → scale → translate → resample → turning angles</i>,
+     * with {@link SigilMetrics} computed at the end so the filters in {@link SigilFilters}
+     * never need to iterate the cloud at match time.</p>
+     *
+     * <p>Aspect ratio and ink density are <i>scale-invariant</i> — they're computed
+     * from the post-injection cloud rather than the raw one, but the values are
+     * identical because scaling preserves the ratio of length to diagonal.</p>
+     */
+    public static Processed process(PointCloud raw, int n, float dotRadius, int dotCirclePoints) {
+        // Count dots in the *raw* cloud — after injection, every dot becomes a
+        // full ring whose path length exceeds dotRadius and the count zeroes out.
+        int dotCount = SigilFilters.countDots(raw.points(), dotRadius);
+
+        List<Point> injected   = SigilFilters.injectDotsIfNeeded(raw.points(), dotRadius, dotCirclePoints);
+        PointCloud postInject  = injected == raw.points() ? raw : new PointCloud(raw.name(), injected);
+        PointCloud scaled      = scaleToReferenceSquare(postInject);
+        PointCloud centered    = translateToOrigin(scaled);
+        PointCloud resampled   = resample(centered, n);
+        PointCloud withAngles  = computeTurningAngles(resampled);
+
+        // Metrics are computed from the ORIGINAL raw cloud (not postInject) so:
+        //   • bbox/length/density reflect what the user drew, not what we augmented
+        //   • injected dot rings don't get miscounted as closed loops
+        //     (a ring is a single self-closing stroke whose endpoints are 0 apart)
+        // The grid histogram still uses the processed cloud — that's where shape
+        // comparison happens.
+        float closureFraction  = com.crsocial.witchhatatelier.Config.LOOP_CLOSURE_FRACTION.get().floatValue();
+        SigilMetrics metrics   = SigilMetrics.compute(raw, withAngles, dotCount, closureFraction);
+        return new Processed(withAngles, 0f, 0f, metrics);
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────────

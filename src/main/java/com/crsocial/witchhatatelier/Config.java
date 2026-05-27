@@ -91,48 +91,90 @@ public class Config {
                     "Lower values are permissive; higher values demand a clear winner.",
                     "Range: 0.00 – 0.30. Default: 0.10.")
             .defineInRange("recognitionAmbiguityMargin", 0.10, 0.0, 0.30);
-    public static final ModConfigSpec.DoubleValue SCORE_CURVE_EXPONENT = BUILDER
-            .comment("Exponent applied to the linear chamfer-derived score before thresholding.",
-                    "1.0 = linear (legacy behavior). 2.0 = quadratic — pushes mid scores down",
-                    "(0.80 → 0.64) while top scores barely move (0.95 → 0.90), giving a much",
-                    "cleaner separation between correct sigils and partial matches.",
-                    "Pairs with RECOGNITION_MIN_SCORE; you may need to lower the threshold",
-                    "when raising the exponent because the curve compresses the entire range.",
-                    "Range: 1.0 – 4.0. Default: 2.0.")
-            .defineInRange("scoreCurveExponent", 2.0, 1.0, 4.0);
-    public static final ModConfigSpec.DoubleValue COVERAGE_WEIGHT = BUILDER
-            .comment("Asymmetric chamfer weight: how heavily template-not-covered-by-input",
-                    "distances count versus input-to-template distances. Higher = more",
-                    "sensitive to drawings that fail to cover the template (e.g., a simple",
-                    "T-shape against a complex multi-stroke template).",
-                    "1.0 = symmetric (legacy behavior). 2.0 = recommended starting point.",
-                    "Range: 0.0 – 10.0. Default: 2.0.")
-            .defineInRange("coverageWeight", 4.0, 0.0, 10.0);
-    public static final ModConfigSpec.DoubleValue COVERAGE_TOUCH_THRESHOLD = BUILDER
-            .comment("Maximum point distance (in $P+'s normalized 3-channel space) within",
-                    "which an input point counts as 'covering' a template point. Template",
-                    "points whose nearest input lies beyond this threshold are treated as",
-                    "uncovered and contribute to Phase B (coverage failure) of the chamfer.",
-                    "Without a gate, Phase A's NN lookup marks template points as 'touched'",
-                    "even when the input is far away, vacuously satisfying coverage. The",
-                    "gate is closer to $P+'s coverage spirit.",
-                    "Lower values demand tighter coverage; higher values are permissive.",
-                    "Range: 0.01 – 0.30. Default: 0.05.")
-            .defineInRange("coverageTouchThreshold", 0.10, 0.01, 0.30);
-    public static final ModConfigSpec.DoubleValue ARC_LENGTH_RATIO_MIN = BUILDER
-            .comment("Minimum allowed ratio of candidate arc length to template arc length.",
-                    "A simple shape drawn against a complex template is rejected when their",
-                    "total path lengths differ too much, regardless of stroke count.",
-                    "This is drawing-style-agnostic: a triangle in one stroke vs three strokes",
-                    "has the same arc length, so both pass. But a trapezoid vs a multi-arm star",
-                    "will fail because the star traces far more path relative to its bounding box.",
-                    "Range: 0.1 – 1.0. Default: 0.4.")
-            .defineInRange("arcLengthRatioMin", 0.4, 0.1, 1.0);
-    public static final ModConfigSpec.DoubleValue ARC_LENGTH_RATIO_MAX = BUILDER
-            .comment("Maximum allowed ratio of candidate arc length to template arc length.",
-                    "Rejects candidates that trace far more path than the template expects.",
-                    "Range: 1.0 – 10.0. Default: 2.5.")
-            .defineInRange("arcLengthRatioMax", 2.5, 1.0, 10.0);
+    // ── Filtering pipeline (pre / post around the $P+ chamfer) ──────────────────
+
+    public static final ModConfigSpec.DoubleValue ASPECT_RATIO_TALL_THRESHOLD = BUILDER
+            .comment("Aspect ratio (width / height) below which a sigil is classified as",
+                    "'tall'. A candidate classified tall will be rejected against any",
+                    "template classified wide (and vice versa) before the chamfer runs,",
+                    "regardless of magnitude.",
+                    "Range: 0.50 – 1.00. Default: 0.85.")
+            .defineInRange("aspectRatioTallThreshold", 0.85, 0.50, 1.00);
+    public static final ModConfigSpec.DoubleValue ASPECT_RATIO_WIDE_THRESHOLD = BUILDER
+            .comment("Aspect ratio (width / height) above which a sigil is classified as",
+                    "'wide'. Paired with the tall threshold to form a direction-aware",
+                    "pre-filter: tall vs. wide cross-matches are rejected, square↔tall",
+                    "and square↔wide are allowed (chamfer decides).",
+                    "Range: 1.00 – 2.00. Default: 1.18.")
+            .defineInRange("aspectRatioWideThreshold", 1.18, 1.00, 2.00);
+    public static final ModConfigSpec.IntValue DOT_COUNT_TOLERANCE = BUILDER
+            .comment("Allowed |candidate.dotCount − template.dotCount|. Dot count is the",
+                    "number of zero-length 'tap' strokes detected before dot injection.",
+                    "Templates with dots (Earth, Cross-hair) need at least one dot in",
+                    "the candidate; this tolerance permits one missing or spurious dot.",
+                    "Range: 0 – 5. Default: 1.")
+            .defineInRange("dotCountTolerance", 1, 0, 5);
+    public static final ModConfigSpec.IntValue LOOP_COUNT_TOLERANCE = BUILDER
+            .comment("Allowed |candidate.closedLoopCount − template.closedLoopCount|.",
+                    "Loop count is computed via Euler's formula on the stroke-endpoint",
+                    "graph: E − V + C, where endpoints within LOOP_CLOSURE_FRACTION of",
+                    "the bounding-box diagonal are stitched into the same vertex.",
+                    "Templates with N closed loops (Fire=1, Collection=2, …) need the",
+                    "candidate to land within this tolerance.",
+                    "Range: 0 – 3. Default: 1.")
+            .defineInRange("loopCountTolerance", 1, 0, 3);
+    public static final ModConfigSpec.DoubleValue LOOP_CLOSURE_FRACTION = BUILDER
+            .comment("Endpoint stitching radius for closed-loop counting, expressed as",
+                    "a fraction of the bounding-box diagonal. Stroke endpoints within",
+                    "this radius are merged into the same graph vertex.",
+                    "Range: 0.02 – 0.30. Default: 0.12.")
+            .defineInRange("loopClosureFraction", 0.12, 0.02, 0.30);
+    public static final ModConfigSpec.IntValue MIN_POINTS_PER_STROKE = BUILDER
+            .comment("Minimum points the resampler allocates to any single stroke,",
+                    "regardless of its proportional arc length. Without a floor, very",
+                    "short strokes (Cross-hair's marks, Earth's dot rings) get 1–2",
+                    "points and become invisible to the chamfer. The floor is capped",
+                    "at n/numStrokes so it never starves longer strokes when many",
+                    "strokes are present.",
+                    "Range: 2 – 16. Default: 4.")
+            .defineInRange("minPointsPerStroke", 4, 2, 16);
+    public static final ModConfigSpec.DoubleValue INK_DENSITY_MAX_REL_DIFF = BUILDER
+            .comment("Maximum allowed relative deviation between candidate and template",
+                    "ink density. Ink density = totalStrokeLength / bboxDiagonal,",
+                    "measuring how much path is drawn per unit of shape extent.",
+                    "A simple cross has density ≈ 1.4; a detailed starburst is 7+.",
+                    "0.25 means accept candidates whose density is within ±25% of the template's.",
+                    "Range: 0.05 – 1.00. Default: 0.25.")
+            .defineInRange("inkDensityMaxRelDiff", 0.25, 0.05, 1.0);
+    public static final ModConfigSpec.DoubleValue GRID_CHECK_SCORE_THRESHOLD = BUILDER
+            .comment("Chamfer-score threshold above which the 3×3 spatial histogram",
+                    "post-filter activates. The post-filter is a sanity check on",
+                    "otherwise-high scores — it confirms the candidate's spatial mass",
+                    "distribution resembles the template's, not just its outline.",
+                    "Below this score, no extra check runs.",
+                    "Range: 0.5 – 1.0. Default: 0.80.")
+            .defineInRange("gridCheckScoreThreshold", 0.80, 0.5, 1.0);
+    public static final ModConfigSpec.DoubleValue GRID_MIN_SIMILARITY = BUILDER
+            .comment("Minimum 3×3 histogram similarity (1 − L1/2 over normalized mass)",
+                    "required to keep an otherwise-high-scoring match. Lower = permissive,",
+                    "higher = strict. 0.60 means at least 60% of the spatial mass must",
+                    "fall in matching cells across the two normalized 3×3 grids.",
+                    "Range: 0.30 – 0.95. Default: 0.60.")
+            .defineInRange("gridMinSimilarity", 0.60, 0.30, 0.95);
+    public static final ModConfigSpec.DoubleValue DOT_INJECTION_RADIUS = BUILDER
+            .comment("Radius (in normalized [0,1] canvas coordinates) used both to",
+                    "detect dot-strokes (path length < radius) and to size the",
+                    "injected circle of points that replaces each dot. The injection",
+                    "ensures the $P+ resampler always has real geometry instead of a",
+                    "stack of duplicate coordinates.",
+                    "Range: 0.001 – 0.10. Default: 0.01.")
+            .defineInRange("dotInjectionRadius", 0.01, 0.001, 0.10);
+    public static final ModConfigSpec.IntValue DOT_INJECTION_CIRCLE_POINTS = BUILDER
+            .comment("Number of points that form each injected dot ring. Must be at",
+                    "least 3 for the resampler to see geometry rather than collinear",
+                    "points; 8 gives the resampler a clean circle to bite into.",
+                    "Range: 3 – 32. Default: 8.")
+            .defineInRange("dotInjectionCirclePoints", 8, 3, 32);
 
     // Must be declared AFTER all values so the builder has them all registered before building.
     static final ModConfigSpec SPEC = BUILDER.build();

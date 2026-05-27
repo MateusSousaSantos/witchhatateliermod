@@ -82,7 +82,7 @@ public final class SpellTemplateLoader extends SimpleJsonResourceReloadListener 
                     registry.register(new Template(
                             spellName, variantName, rawCloud,
                             processed.cloud(), resampleN, processed.indicativeAngle(), isRing,
-                            processed.normalizedArcLength()));
+                            processed.normalizedArcLength(), processed.metrics()));
                     variantCount++;
                 }
                 spellCount++;
