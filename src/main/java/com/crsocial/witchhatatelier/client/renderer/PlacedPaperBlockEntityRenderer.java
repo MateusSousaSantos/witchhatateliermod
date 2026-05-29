@@ -23,6 +23,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.WeakHashMap;
 
 /**
  * Renders gesture strokes on the outward face of any {@link PlacedPaper} block variant.
@@ -64,6 +65,14 @@ public class PlacedPaperBlockEntityRenderer implements BlockEntityRenderer<Place
     /** Tiny forward-offset so ink sits just in front of the paper surface without z-fighting. */
     private static final float Z_FIGHT_OFFSET = 0.002f;
 
+    // ── Grid cache ────────────────────────────────────────────────────────────────
+
+    private record CachedGrid(CompoundTag tag, boolean[][] grid) {}
+
+    // Keyed by block entity identity; WeakHashMap lets entries evict automatically
+    // when a chunk is unloaded and the block entity is garbage-collected.
+    private static final Map<PlacedPaperBlockEntity, CachedGrid> GRID_CACHE = new WeakHashMap<>();
+
     // ── Constructor ───────────────────────────────────────────────────────────────
 
     @SuppressWarnings("unused")
@@ -97,27 +106,14 @@ public class PlacedPaperBlockEntityRenderer implements BlockEntityRenderer<Place
         float circleR2 = 0f;
         if (isRound) { float r = 0.5f - margin; circleR2 = r * r; }
 
-        // ── Group points by strokeID (preserves draw order) ──────────────────────
-        Map<Integer, List<float[]>> strokes = new LinkedHashMap<>();
-        for (int i = 0; i < pointsList.size(); i++) {
-            CompoundTag pt = pointsList.getCompound(i);
-            strokes.computeIfAbsent(pt.getInt("strokeID"), k -> new ArrayList<>())
-                   .add(new float[]{ pt.getFloat("x"), pt.getFloat("y") });
-        }
-
-        // ── Rasterize all strokes onto a shared boolean grid ─────────────────────
-        boolean[][] grid = new boolean[gridSize][gridSize];
-        for (List<float[]> stroke : strokes.values()) {
-            for (int i = 0; i < stroke.size(); i++) {
-                int cx = uvToCell(stroke.get(i)[0], gridSize);
-                int cy = uvToCell(stroke.get(i)[1], gridSize);
-                markCell(grid, cx, cy, gridSize);
-                if (i > 0) {
-                    int px = uvToCell(stroke.get(i - 1)[0], gridSize);
-                    int py = uvToCell(stroke.get(i - 1)[1], gridSize);
-                    bresenham(grid, px, py, cx, cy, gridSize);
-                }
-            }
+        // ── Rasterize (or reuse cached grid) ─────────────────────────────────────
+        CachedGrid cached = GRID_CACHE.get(be);
+        boolean[][] grid;
+        if (cached != null && cached.tag() == data) {
+            grid = cached.grid();
+        } else {
+            grid = rasterize(pointsList, gridSize);
+            GRID_CACHE.put(be, new CachedGrid(data, grid));
         }
 
         // ── Emit one axis-aligned quad per filled grid cell ───────────────────────
@@ -160,6 +156,29 @@ public class PlacedPaperBlockEntityRenderer implements BlockEntityRenderer<Place
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────────
+
+    private static boolean[][] rasterize(ListTag pointsList, int gridSize) {
+        Map<Integer, List<float[]>> strokes = new LinkedHashMap<>();
+        for (int i = 0; i < pointsList.size(); i++) {
+            CompoundTag pt = pointsList.getCompound(i);
+            strokes.computeIfAbsent(pt.getInt("strokeID"), k -> new ArrayList<>())
+                   .add(new float[]{ pt.getFloat("x"), pt.getFloat("y") });
+        }
+        boolean[][] grid = new boolean[gridSize][gridSize];
+        for (List<float[]> stroke : strokes.values()) {
+            for (int i = 0; i < stroke.size(); i++) {
+                int cx = uvToCell(stroke.get(i)[0], gridSize);
+                int cy = uvToCell(stroke.get(i)[1], gridSize);
+                markCell(grid, cx, cy, gridSize);
+                if (i > 0) {
+                    int px = uvToCell(stroke.get(i - 1)[0], gridSize);
+                    int py = uvToCell(stroke.get(i - 1)[1], gridSize);
+                    bresenham(grid, px, py, cx, cy, gridSize);
+                }
+            }
+        }
+        return grid;
+    }
 
     // Small papers have a proportionally larger visible border in their texture,
     // so they need a bigger margin to keep ink inside the paper outline.

@@ -384,7 +384,7 @@ public class CanvasScreen extends Screen {
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
-        if (isInsideDisplay(mouseX, mouseY)) return super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
+        if (isOutsideDisplay(mouseX, mouseY)) return super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
         // Record the canvas point under the cursor before zooming.
         float cx = logX(mouseX);
         float cy = logY(mouseY);
@@ -491,15 +491,15 @@ public class CanvasScreen extends Screen {
     // Coordinate helpers
     // ════════════════════════════════════════════════════════════════════════════
 
-    /** Returns {@code true} if the screen-space point is inside the display rectangle. */
-    private boolean isInsideDisplay(double sx, double sy) {
+    /** Returns {@code true} if the screen-space point is outside the display rectangle. */
+    private boolean isOutsideDisplay(double sx, double sy) {
         return !(sx >= displayX) || !(sx < displayX + displayW)
                 || !(sy >= displayY) || !(sy < displayY + displayH);
     }
 
     /** Returns {@code true} if the screen-space point maps to a valid canvas coordinate (shape-aware). */
     private boolean isInsideCanvas(double sx, double sy) {
-        if (isInsideDisplay(sx, sy)) return false;
+        if (isOutsideDisplay(sx, sy)) return false;
         float cx = logX(sx), cy = logY(sy);
         if (profile.inputShape() == CanvasProfile.Shape.CIRCLE) {
             float dcx = cx - canvasSize.width()  / 2f;
