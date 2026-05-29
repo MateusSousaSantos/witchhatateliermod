@@ -152,15 +152,15 @@ public class Config {
                     "otherwise-high scores — it confirms the candidate's spatial mass",
                     "distribution resembles the template's, not just its outline.",
                     "Below this score, no extra check runs.",
-                    "Range: 0.5 – 1.0. Default: 0.80.")
-            .defineInRange("gridCheckScoreThreshold", 0.80, 0.5, 1.0);
+                    "Range: 0.5 – 1.0. Default: 0.70.")
+            .defineInRange("gridCheckScoreThreshold", 0.70, 0.5, 1.0);
     public static final ModConfigSpec.DoubleValue GRID_MIN_SIMILARITY = BUILDER
             .comment("Minimum 3×3 histogram similarity (1 − L1/2 over normalized mass)",
                     "required to keep an otherwise-high-scoring match. Lower = permissive,",
-                    "higher = strict. 0.60 means at least 60% of the spatial mass must",
+                    "higher = strict. 0.70 means at least 70% of the spatial mass must",
                     "fall in matching cells across the two normalized 3×3 grids.",
-                    "Range: 0.30 – 0.95. Default: 0.60.")
-            .defineInRange("gridMinSimilarity", 0.60, 0.30, 0.95);
+                    "Range: 0.30 – 0.95. Default: 0.70.")
+            .defineInRange("gridMinSimilarity", 0.70, 0.30, 0.95);
     public static final ModConfigSpec.DoubleValue DOT_INJECTION_RADIUS = BUILDER
             .comment("Radius (in normalized [0,1] canvas coordinates) used both to",
                     "detect dot-strokes (path length < radius) and to size the",
