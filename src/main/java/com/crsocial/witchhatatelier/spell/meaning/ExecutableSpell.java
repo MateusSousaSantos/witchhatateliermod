@@ -1,0 +1,44 @@
+package com.crsocial.witchhatatelier.spell.meaning;
+
+import com.crsocial.witchhatatelier.spell.compiler.SigilType;
+import org.jetbrains.annotations.Nullable;
+import org.joml.Vector3f;
+
+import java.util.List;
+
+/**
+ * Serializable mechanical payload produced by {@link MeaningEngine}. Carries
+ * everything the runtime needs to execute the spell server-side; the visual
+ * pipeline reads from the {@link com.crsocial.witchhatatelier.spell.compiler.SpellGraph}
+ * separately. See {@code docs/magic_system/03_meaning_engine.md}.
+ *
+ * @param element       central sigil's element
+ * @param ops           resolved per-sign behaviour operations
+ * @param magnitude     per-spell magnitude (power, AoE, quality, size)
+ * @param origin        where the spell emerges from
+ * @param direction     world-space net direction; zero = radial / undirected
+ * @param durationTicks lifetime in server ticks
+ * @param inner         composed inner-ring spell when {@code SpellGraph.inner} is present
+ */
+public record ExecutableSpell(SigilType element,
+                              List<BehaviorOp> ops,
+                              Magnitude magnitude,
+                              Origin origin,
+                              Vector3f direction,
+                              long durationTicks,
+                              @Nullable ExecutableSpell inner) {
+
+    /** Human-readable single-line summary for server logging. */
+    public String toLogString() {
+        StringBuilder ks = new StringBuilder();
+        for (int i = 0; i < ops.size(); i++) {
+            if (i > 0) ks.append(", ");
+            BehaviorOp op = ops.get(i);
+            ks.append(op.kind()).append("×").append(op.count());
+        }
+        return String.format(java.util.Locale.ROOT,
+                "ExecutableSpell{element=%s ops=[%s] power=%.2f aoe=%.2f quality=%.2f size=%.2f duration=%dt origin=%s}",
+                element, ks, magnitude.power(), magnitude.aoe(),
+                magnitude.quality(), magnitude.sizeNormalized(), durationTicks, origin);
+    }
+}

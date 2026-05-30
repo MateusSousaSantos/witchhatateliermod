@@ -1,0 +1,24 @@
+{
+  "sigil": "fire",
+  "sign":  "column",
+  "behavior_kind": "flame_pillar",
+
+  "base": {
+    "power":          1.5,
+    "duration_ticks": 60,
+    "aoe":            1.0
+  },
+
+  "effects": [
+    {
+      "type":                 "spawn_blocks",
+      "block":                "minecraft:fire",
+      "shape":                "vertical_column",
+      "blocks_per_magnitude": 3
+    }
+  ],
+
+  "stacking_curve": "linear",
+
+  "_comment": "A roaring pillar of flame erupts upward from the glyph, igniting and scorching anything in the column. Height scales with SignBundle.count x Quality x Size."
+}

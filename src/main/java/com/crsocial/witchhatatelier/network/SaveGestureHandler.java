@@ -13,6 +13,8 @@ import com.crsocial.witchhatatelier.ModCommands;
 import com.crsocial.witchhatatelier.spell.compiler.CastingContext;
 import com.crsocial.witchhatatelier.spell.compiler.CompileResult;
 import com.crsocial.witchhatatelier.spell.compiler.SpellGraphBuilder;
+import com.crsocial.witchhatatelier.spell.meaning.ExecutableSpell;
+import com.crsocial.witchhatatelier.spell.meaning.MeaningEngine;
 import com.crsocial.witchhatatelier.spell.trigger.TriggerEvaluator;
 import com.crsocial.witchhatatelier.spell.recognition.PDollarPlusRecognizer;
 import com.crsocial.witchhatatelier.spell.recognition.Point;
@@ -292,6 +294,9 @@ public final class SaveGestureHandler {
             var graph = result.graph().get();
             WitchHatAtelierMod.LOGGER.info(
                     "[Compiler] Compiled spell graph for player='{}':\n{}", who, graph.toDebugString());
+
+            java.util.Optional<ExecutableSpell> executable = MeaningEngine.evaluate(graph, ctx);
+
             if (player != null) {
                 player.sendSystemMessage(Component.empty()
                         .append(Component.literal("◆ ").withStyle(ChatFormatting.GOLD))
@@ -304,12 +309,28 @@ public final class SaveGestureHandler {
                     player.sendSystemMessage(Component.literal("  ")
                             .append(buildRecognitionSummary(recogCounts)));
                 }
+                if (executable.isPresent()) {
+                    player.sendSystemMessage(Component.empty()
+                            .append(Component.literal("  ✓ ").withStyle(ChatFormatting.GREEN))
+                            .append(Component.literal(executable.get().toLogString())
+                                    .withStyle(ChatFormatting.DARK_GREEN)));
+                } else {
+                    player.sendSystemMessage(Component.empty()
+                            .append(Component.literal("  · ").withStyle(ChatFormatting.DARK_GRAY))
+                            .append(Component.literal("Prepared (no matrix cell for this combination)")
+                                    .withStyle(ChatFormatting.GRAY)));
+                }
                 if (debugMode) {
                     for (String line : graph.toDebugString().split("\n")) {
                         player.sendSystemMessage(Component.literal(line)
                                 .withStyle(ChatFormatting.GRAY));
                     }
                 }
+            }
+
+            if (executable.isPresent()) {
+                WitchHatAtelierMod.LOGGER.info(
+                        "[MeaningEngine] player='{}' → {}", who, executable.get().toLogString());
             }
         } else {
             WitchHatAtelierMod.LOGGER.info("[Compiler] Rejected: {}", result.rejectionReason());
