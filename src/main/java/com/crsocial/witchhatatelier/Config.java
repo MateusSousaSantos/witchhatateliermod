@@ -76,12 +76,12 @@ public class Config {
             .comment("Number of equidistant points the $P+ recognizer resamples each sigil to.",
                     "Lower = faster, less accurate; higher = slower, more accurate.",
                     "Range: 16 – 128. Default: 64.")
-            .defineInRange("resampleN", 64, 16, 128);
+            .defineInRange("resampleN", 128, 16, 128);
     public static final ModConfigSpec.DoubleValue RECOGNITION_MIN_SCORE = BUILDER
             .comment("Minimum confidence score for a recognized spell.",
                     "Below this, the result is reported as 'unknown'.",
                     "Range: 0.0 – 1.0. Default: 0.75.")
-            .defineInRange("recognitionMinScore", 0.75, 0.0, 1.0);
+            .defineInRange("recognitionMinScore", 0.80, 0.0, 1.0);
     public static final ModConfigSpec.DoubleValue RECOGNITION_AMBIGUITY_MARGIN = BUILDER
             .comment("Minimum score gap between the best template and the runner-up of a",
                     "DIFFERENT spell. If the winner beats the second-best by less than this",
@@ -90,7 +90,22 @@ public class Config {
                     "this gate against each other.",
                     "Lower values are permissive; higher values demand a clear winner.",
                     "Range: 0.00 – 0.30. Default: 0.10.")
-            .defineInRange("recognitionAmbiguityMargin", 0.10, 0.0, 0.30);
+            .defineInRange("recognitionAmbiguityMargin", 0.01, 0.0, 0.30);
+    public static final ModConfigSpec.DoubleValue RECOGNITION_CONSENSUS_BONUS = BUILDER
+            .comment("Consensus tie-breaker bonus. When the winning sigil fails the",
+                    "ambiguity margin against a DIFFERENT spell, the recognizer counts how",
+                    "many of the top-N surviving templates share the winner's spell and adds",
+                    "this much to the winner's score per match. Several variants of one spell",
+                    "clustering at the top (e.g. levitation ×3) is strong evidence, so that",
+                    "agreement can break an otherwise-ambiguous near-tie.",
+                    "Set to 0.0 to disable the consensus rescue.",
+                    "Range: 0.00 – 0.10. Default: 0.01.")
+            .defineInRange("recognitionConsensusBonus", 0.01, 0.0, 0.10);
+    public static final ModConfigSpec.IntValue RECOGNITION_CONSENSUS_TOP_N = BUILDER
+            .comment("How many of the top-ranked surviving templates the consensus",
+                    "tie-breaker inspects when counting same-spell agreement.",
+                    "Range: 1 – 20. Default: 5.")
+            .defineInRange("recognitionConsensusTopN", 5, 1, 20);
     // ── Filtering pipeline (pre / post around the $P+ chamfer) ──────────────────
 
     public static final ModConfigSpec.DoubleValue ASPECT_RATIO_TALL_THRESHOLD = BUILDER
@@ -145,7 +160,7 @@ public class Config {
                     "A simple cross has density ≈ 1.4; a detailed starburst is 7+.",
                     "0.25 means accept candidates whose density is within ±25% of the template's.",
                     "Range: 0.05 – 1.00. Default: 0.25.")
-            .defineInRange("inkDensityMaxRelDiff", 0.25, 0.05, 1.0);
+            .defineInRange("inkDensityMaxRelDiff", 0.50, 0.05, 1.0);
     public static final ModConfigSpec.DoubleValue GRID_CHECK_SCORE_THRESHOLD = BUILDER
             .comment("Chamfer-score threshold above which the 3×3 spatial histogram",
                     "post-filter activates. The post-filter is a sanity check on",
@@ -155,10 +170,11 @@ public class Config {
                     "Range: 0.5 – 1.0. Default: 0.70.")
             .defineInRange("gridCheckScoreThreshold", 0.70, 0.5, 1.0);
     public static final ModConfigSpec.DoubleValue GRID_MIN_SIMILARITY = BUILDER
-            .comment("Minimum 3×3 histogram similarity (1 − L1/2 over normalized mass)",
-                    "required to keep an otherwise-high-scoring match. Lower = permissive,",
-                    "higher = strict. 0.70 means at least 70% of the spatial mass must",
-                    "fall in matching cells across the two normalized 3×3 grids.",
+            .comment("3×3 histogram similarity (1 − L1/2 over normalized mass) at or above",
+                    "which a match keeps its full chamfer score. Below this, the score is",
+                    "scaled down proportionally (soft penalty = gridSim / gridMinSimilarity),",
+                    "ramping to 0 as the spatial mass distribution diverges — a near-miss is",
+                    "demoted, not deleted. Lower = permissive, higher = strict.",
                     "Range: 0.30 – 0.95. Default: 0.70.")
             .defineInRange("gridMinSimilarity", 0.70, 0.30, 0.95);
     public static final ModConfigSpec.DoubleValue DOT_INJECTION_RADIUS = BUILDER

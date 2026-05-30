@@ -259,6 +259,21 @@ public final class SigilFilters {
         return 1f - l1 * 0.5f;
     }
 
+    /**
+     * Soft companion to {@link #gridSimilarity}: converts a similarity into a
+     * score multiplier in {@code [0, 1]}. Returns {@code 1.0} when {@code gridSim}
+     * is at or above {@code gridMinSimilarity} (full credit), then ramps linearly
+     * to {@code 0.0} as similarity falls to zero ({@code gridSim / gridMinSimilarity}).
+     *
+     * <p>This lets the recognizer <i>demote</i> a spatially-divergent match instead
+     * of hard-rejecting it: a strong chamfer score whose point-mass distribution is
+     * slightly off is penalized in proportion, not deleted outright.</p>
+     */
+    public static float gridScoreMultiplier(float gridSim, float gridMinSimilarity) {
+        if (gridMinSimilarity <= 0f || gridSim >= gridMinSimilarity) return 1f;
+        return Math.max(0f, gridSim / gridMinSimilarity);
+    }
+
     // ── 4. Zero-length stroke injection (input fixup) ───────────────────────────
 
     /**

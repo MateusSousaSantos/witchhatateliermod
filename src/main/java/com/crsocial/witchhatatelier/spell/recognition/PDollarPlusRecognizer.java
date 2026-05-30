@@ -1,6 +1,7 @@
 package com.crsocial.witchhatatelier.spell.recognition;
 
 import com.crsocial.witchhatatelier.Config;
+import com.crsocial.witchhatatelier.WitchHatAtelierMod;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -80,8 +81,10 @@ public final class PDollarPlusRecognizer {
         float gridCheckThreshold = Config.GRID_CHECK_SCORE_THRESHOLD.get().floatValue();
         float gridMinSimilarity  = Config.GRID_MIN_SIMILARITY.get().floatValue();
 
-        // Per-spell best score and overall best template.
+        // Per-spell best score, overall best template, and the full ranked list of
+        // survivors (templates that cleared the pre-filters) for consensus scoring.
         Map<String, Float> bestPerSpell = new HashMap<>();
+        List<Scored> survivors = new ArrayList<>();
         Template best = null;
         float bestScore = 0f;
         for (Template t : templates) {
@@ -99,13 +102,18 @@ public final class PDollarPlusRecognizer {
             // Stage 2 — chamfer.
             float s = score(cloud, t.processedCloud());
 
-            // Stage 3 — spatial sanity check on otherwise-high scores.
+            // Stage 3 — spatial agreement as a SOFT penalty (not a hard reject). On
+            // otherwise-high scores, fold the 3×3 histogram similarity into the score:
+            // full credit at/above gridMinSimilarity, ramping toward 0 as the spatial
+            // mass distribution diverges. A near-miss is demoted, not deleted — so a
+            // strong chamfer match can no longer be silently dropped by the grid check.
             if (s > gridCheckThreshold && tMetrics != null && candMetrics != null) {
                 float gridSim = SigilFilters.gridSimilarity(
                         candMetrics.gridHistogram(), tMetrics.gridHistogram());
-                if (gridSim < gridMinSimilarity) continue;
+                s *= SigilFilters.gridScoreMultiplier(gridSim, gridMinSimilarity);
             }
 
+            survivors.add(new Scored(t.spellName(), t.variantName(), s));
             Float prev = bestPerSpell.get(t.spellName());
             if (prev == null || s > prev) bestPerSpell.put(t.spellName(), s);
             if (s > bestScore) {
@@ -116,22 +124,55 @@ public final class PDollarPlusRecognizer {
 
         // Ambiguity runner-up: best score of any different spell.
         float bestOfOtherSpell = 0f;
+        String runnerUpSpell = null;
         if (best != null) {
             String winner = best.spellName();
             for (Map.Entry<String, Float> e : bestPerSpell.entrySet()) {
                 if (!e.getKey().equals(winner) && e.getValue() > bestOfOtherSpell) {
                     bestOfOtherSpell = e.getValue();
+                    runnerUpSpell = e.getKey();
                 }
             }
         }
 
+        // Hard rejections first: no winner, or the absolute score is below the floor.
+        // Consensus can't rescue a genuinely weak match — only a near-tie.
         float margin = Config.RECOGNITION_AMBIGUITY_MARGIN.get().floatValue();
-        if (best == null
-                || bestScore < minScore
-                || (bestScore - bestOfOtherSpell) < margin) {
+        if (best == null || bestScore < minScore) {
             return RecognitionResult.unknown(bestScore, candidate.indicativeAngle());
         }
-        return new RecognitionResult(best.spellName(), bestScore, candidate.indicativeAngle());
+
+        // Consensus tie-breaker. When the winner fails to clear the runner-up of a
+        // DIFFERENT spell by `margin`, count how many of the top-N survivors share
+        // the winner's spell and award `consensusBonus` per hit. Several variants of
+        // one spell clustering at the top (e.g. levitation ×3) is strong evidence that
+        // spell is the answer, so that agreement can push a near-tie over the line.
+        float effectiveScore = bestScore;
+        float gap = bestScore - bestOfOtherSpell;
+        if (gap < margin) {
+            survivors.sort((x, y) -> Float.compare(y.score(), x.score()));
+            int topN = Math.min(Config.RECOGNITION_CONSENSUS_TOP_N.get(), survivors.size());
+            int agree = 0;
+            for (int i = 0; i < topN; i++) {
+                if (survivors.get(i).spellName().equals(best.spellName())) agree++;
+            }
+            float bonus = Config.RECOGNITION_CONSENSUS_BONUS.get().floatValue() * agree;
+            effectiveScore = Math.min(1f, bestScore + bonus);
+            gap = effectiveScore - bestOfOtherSpell;
+        }
+
+        if (gap < margin) {
+            WitchHatAtelierMod.LOGGER.warn(
+                    "[Recognizer] Ambiguity gate rejected '{}' (score={}) — runner-up '{}' scored {} (gap={}, margin={})",
+                    best.spellName(),
+                    String.format(java.util.Locale.ROOT, "%.3f", effectiveScore),
+                    runnerUpSpell,
+                    String.format(java.util.Locale.ROOT, "%.3f", bestOfOtherSpell),
+                    String.format(java.util.Locale.ROOT, "%.3f", gap),
+                    String.format(java.util.Locale.ROOT, "%.3f", margin));
+            return RecognitionResult.unknown(effectiveScore, candidate.indicativeAngle());
+        }
+        return new RecognitionResult(best.spellName(), effectiveScore, candidate.indicativeAngle());
     }
 
     /**
