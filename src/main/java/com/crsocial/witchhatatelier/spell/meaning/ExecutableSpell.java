@@ -32,6 +32,16 @@ public record ExecutableSpell(SigilType element,
                               long durationTicks,
                               @Nullable ExecutableSpell inner) {
 
+    /**
+     * Returns a copy with the spatial vectors replaced. Used each tick of a
+     * channeled cast to re-aim the spell at the caster's live crosshair without
+     * mutating the shared base vectors (JOML {@link Vector3f} is mutable).
+     */
+    public ExecutableSpell withOrigin(Vector3f originWorld, Vector3f surfaceNormal, Vector3f direction) {
+        return new ExecutableSpell(element, ops, magnitude, origin,
+                originWorld, surfaceNormal, direction, durationTicks, inner);
+    }
+
     /** Human-readable single-line summary for server logging. */
     public String toLogString() {
         StringBuilder ks = new StringBuilder();

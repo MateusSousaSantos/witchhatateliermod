@@ -3,6 +3,8 @@ package com.crsocial.witchhatatelier.spell.meaning.effect;
 import com.crsocial.witchhatatelier.WitchHatAtelierMod;
 import com.crsocial.witchhatatelier.entity.ModEntities;
 import com.crsocial.witchhatatelier.entity.PyreballEntity;
+import com.crsocial.witchhatatelier.entity.child.LightBlockChild;
+import com.crsocial.witchhatatelier.spell.cast.CastContext;
 import com.crsocial.witchhatatelier.spell.meaning.BehaviorOp;
 import com.crsocial.witchhatatelier.spell.meaning.ExecutableSpell;
 import com.google.gson.JsonObject;
@@ -28,6 +30,9 @@ import java.util.List;
 public final class PyreballEffect implements EffectKind {
 
     public static final String KEY = "pyreball";
+
+    /** Light level the orb's light-block child emits (0-15). */
+    private static final int LIGHT_LEVEL = 15;
 
     @Override
     public String key() {
@@ -58,6 +63,80 @@ public final class PyreballEffect implements EffectKind {
         }
     }
 
+    // ── Channeled-cast lifecycle ────────────────────────────────────────────────
+    // The orb is spawned once and then re-positioned to the caster's live crosshair
+    // every tick so it follows the player's aim for the channel's duration.
+
+    @Override
+    public void begin(CastContext ctx) {
+        PyreballEntity orb = spawnTracked(ctx.level(), ctx.spell(), ctx.totalTicks());
+        if (orb != null) {
+            ctx.scratch().put(KEY, orb);
+        } else {
+            // Entity unavailable (unregistered/failed) → fall back to the one-shot path.
+            execute(ctx.level(), ctx.caster(), ctx.spell());
+        }
+    }
+
+    @Override
+    public void tick(CastContext ctx) {
+        if (!(ctx.scratch().get(KEY) instanceof PyreballEntity orb)) return;
+        if (orb.isRemoved()) return;
+        var o = ctx.spell().originWorld();
+        orb.setPos(o.x, o.y, o.z);
+    }
+
+    @Override
+    public void end(CastContext ctx) {
+        if (ctx.scratch().get(KEY) instanceof PyreballEntity orb && !orb.isRemoved()) {
+            orb.discard();
+        }
+    }
+
+    /**
+     * Spawns a single {@link PyreballEntity} at the spell origin with its lifetime
+     * pinned to the channel duration, and returns it for per-tick tracking. Returns
+     * {@code null} when the matrix cell does not resolve to a pyreball entity (the
+     * caller then uses the one-shot fallback).
+     */
+    @SuppressWarnings("unchecked")
+    private PyreballEntity spawnTracked(ServerLevel level, ExecutableSpell spell, int lifetimeTicks) {
+        for (BehaviorOp op : spell.ops()) {
+            if (!KEY.equalsIgnoreCase(op.kind())) continue;
+            if (!(op.payload() instanceof List<?> raw)) continue;
+            for (EffectInstruction ins : (List<EffectInstruction>) raw) {
+                if (!(ins instanceof UniqueEntitySpawn spawn)) continue;
+                ResourceLocation entityId = spawn.entityId();
+                if (entityId == null) continue;
+                EntityType<?> type = BuiltInRegistries.ENTITY_TYPE.getOptional(entityId).orElse(null);
+                if (type != ModEntities.PYREBALL.get()) continue;
+
+                PyreballEntity orb = ModEntities.PYREBALL.get().create(level);
+                if (orb == null) continue;
+                float power = spell.magnitude().power();
+                float maxScale = Mth.clamp(0.5f + 0.5f * power, 0.5f, 4.0f);
+                orb.moveTo(spell.originWorld().x, spell.originWorld().y, spell.originWorld().z, 0f, 0f);
+                configureOrb(orb, lifetimeTicks, maxScale);
+                level.addFreshEntity(orb);
+                WitchHatAtelierMod.LOGGER.info(
+                        "[{}] Channel orb spawned (lifetime={}t, maxScale={}).", KEY, lifetimeTicks, maxScale);
+                return orb;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Applies the per-cast lifetime and scale to a freshly created orb and declares
+     * its children — here, a light block that follows the orb around. Future
+     * pyreball variants can attach more children at this single point.
+     */
+    private void configureOrb(PyreballEntity orb, int lifetimeTicks, float maxScale) {
+        orb.setLifetimeTicks(lifetimeTicks);
+        orb.setMaxScale(maxScale);
+        orb.children().add(new LightBlockChild(LIGHT_LEVEL));
+    }
+
     private boolean spawnEntity(ServerLevel level, ExecutableSpell spell,
                                 BlockPos origin, UniqueEntitySpawn spawn) {
         ResourceLocation entityId = spawn.entityId();
@@ -79,8 +158,7 @@ public final class PyreballEffect implements EffectKind {
             if (entity == null) return false;
             entity.moveTo(spell.originWorld().x, spell.originWorld().y, spell.originWorld().z,
                     0f, 0f);
-            entity.setLifetimeTicks(lifetime);
-            entity.setMaxScale(maxScale);
+            configureOrb(entity, lifetime, maxScale);
             level.addFreshEntity(entity);
             WitchHatAtelierMod.LOGGER.info(
                     "[{}] Spawned {} at {} (lifetime={}t, maxScale={}).",

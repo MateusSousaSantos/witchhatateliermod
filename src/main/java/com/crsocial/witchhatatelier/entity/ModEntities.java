@@ -30,7 +30,7 @@ public final class ModEntities {
                     EntityType.Builder.<PyreballEntity>of(PyreballEntity::new, MobCategory.MISC)
                             .sized(1.0f, 1.0f)
                             .clientTrackingRange(8)
-                            .updateInterval(10)
+                            .updateInterval(1)
                             .build(ResourceLocation.fromNamespaceAndPath(
                                     WitchHatAtelierMod.MODID, "pyreball").toString()));
 }

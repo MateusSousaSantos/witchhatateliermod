@@ -10,6 +10,7 @@ import com.crsocial.witchhatatelier.items.SpellPaperItem;
 import com.crsocial.witchhatatelier.spell.cluster.SigilCluster;
 import com.crsocial.witchhatatelier.spell.cluster.SigilClusterer;
 import com.crsocial.witchhatatelier.ModCommands;
+import com.crsocial.witchhatatelier.spell.cast.SpellCastManager;
 import com.crsocial.witchhatatelier.spell.compiler.CastingContext;
 import com.crsocial.witchhatatelier.spell.compiler.CompileResult;
 import com.crsocial.witchhatatelier.spell.compiler.SpellGraphBuilder;
@@ -32,6 +33,7 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.InteractionHand;
@@ -78,88 +80,104 @@ public final class SaveGestureHandler {
         context.enqueueWork(() -> {
             Player player = context.player();
 
-            // ── Block-entity path ──────────────────────────────────────────────
-            BlockPos origin = payload.blockOrigin();
-            if (origin != null) {
-                BlockEntity be = player.level().getBlockEntity(origin);
-                if (be instanceof PlacedPaperBlockEntity placed) {
-                    if (placed.isSpent()) {
-                        WitchHatAtelierMod.LOGGER.info(
-                                "[SaveGesture] Ignored – placed_paper at {} is spent (player '{}').",
-                                origin, player.getScoreboardName());
-                        return;
-                    }
-                    placed.setGestureData(buildNbt(payload));
-                    WitchHatAtelierMod.LOGGER.info(
-                            "[SaveGesture] Saved {} point(s) to placed_paper at {} for player '{}'.",
-                            payload.points().size(), origin, player.getScoreboardName());
-                } else {
-                    WitchHatAtelierMod.LOGGER.warn(
-                            "[SaveGesture] No PlacedPaperBlockEntity at {} for player '{}'.",
-                            origin, player.getScoreboardName());
-                }
-                return;
+            // Save the gesture first; the item path returns the exact inscribed stack
+            // so the channeled cast can be keyed to it regardless of which slot it
+            // lands in. Then run the pipeline and broadcast activation feedback — all
+            // on the server thread, in order.
+            ItemStack inscribed = null;
+            if (payload.blockOrigin() != null) {
+                saveBlockPath(payload, player, payload.blockOrigin());
+            } else {
+                inscribed = saveItemPath(payload, player);
             }
 
-            // ── Item path ──────────────────────────────────────────────────────
-            InteractionHand paperHand = findPaperHand(player);
-            if (paperHand == null) {
-                WitchHatAtelierMod.LOGGER.warn(
-                        "[SaveGesture] Ignored – player '{}' had no paper in either hand.",
-                        player.getScoreboardName());
+            runSpellPipeline(payload, player, inscribed);
+            playActivationEffects(payload, player);
+        });
+    }
+
+    // ── Save paths ──────────────────────────────────────────────────────────────
+
+    private static void saveBlockPath(SaveGesturePayload payload, Player player, BlockPos origin) {
+        BlockEntity be = player.level().getBlockEntity(origin);
+        if (be instanceof PlacedPaperBlockEntity placed) {
+            if (placed.isSpent()) {
+                WitchHatAtelierMod.LOGGER.info(
+                        "[SaveGesture] Ignored – placed_paper at {} is spent (player '{}').",
+                        origin, player.getScoreboardName());
                 return;
             }
+            placed.setGestureData(buildNbt(payload));
+            WitchHatAtelierMod.LOGGER.info(
+                    "[SaveGesture] Saved {} point(s) to placed_paper at {} for player '{}'.",
+                    payload.points().size(), origin, player.getScoreboardName());
+        } else {
+            WitchHatAtelierMod.LOGGER.warn(
+                    "[SaveGesture] No PlacedPaperBlockEntity at {} for player '{}'.",
+                    origin, player.getScoreboardName());
+        }
+    }
 
-            ItemStack paperStack = player.getItemInHand(paperHand);
-            CompoundTag nbt = buildNbt(payload);
+    /**
+     * Saves the gesture onto a held paper and returns the resulting inscribed stack
+     * (or {@code null} if nothing was inscribed). The returned reference is the exact
+     * stack carrying the gesture, even when it lands in the inventory rather than the
+     * hand (e.g. drawn on a multi-count stack).
+     */
+    private static ItemStack saveItemPath(SaveGesturePayload payload, Player player) {
+        InteractionHand paperHand = findPaperHand(player);
+        if (paperHand == null) {
+            WitchHatAtelierMod.LOGGER.warn(
+                    "[SaveGesture] Ignored – player '{}' had no paper in either hand.",
+                    player.getScoreboardName());
+            return null;
+        }
 
-            if (paperStack.getItem() instanceof SpellPaperItem paper) {
-                if (paper.isBlank()) {
-                    // Consume one blank → produce the corresponding inscribed item.
-                    PaperType type = paper.getPaperType();
-                    paperStack.shrink(1);
-                    ItemStack result = new ItemStack(ModItems.inscribedFor(type).get());
-                    result.set(DataComponents.CUSTOM_DATA, CustomData.of(nbt));
-                    giveOrDrop(player, paperHand, paperStack, result);
-                    WitchHatAtelierMod.LOGGER.info(
-                            "[SaveGesture] Created {} with {} point(s) for player '{}'.",
-                            type.getId() + "_spell_paper", payload.points().size(),
-                            player.getScoreboardName());
-                } else if (SpellPaperItem.isSpent(paperStack)) {
-                    WitchHatAtelierMod.LOGGER.info(
-                            "[SaveGesture] Ignored – held {} is spent (player '{}').",
-                            paper.getPaperType().getId() + "_spell_paper",
-                            player.getScoreboardName());
-                    return;
-                } else {
-                    // Overwrite existing inscribed paper in-place.
-                    ItemStack result = paperStack.copy();
-                    result.set(DataComponents.CUSTOM_DATA, CustomData.of(nbt));
-                    player.setItemInHand(paperHand, result);
-                    WitchHatAtelierMod.LOGGER.info(
-                            "[SaveGesture] Updated {} with {} point(s) for player '{}'.",
-                            paper.getPaperType().getId() + "_spell_paper", payload.points().size(),
-                            player.getScoreboardName());
-                }
-            } else if (paperStack.is(Items.PAPER)) {
-                // Vanilla paper → medium-square inscribed paper.
+        ItemStack paperStack = player.getItemInHand(paperHand);
+        CompoundTag nbt = buildNbt(payload);
+
+        if (paperStack.getItem() instanceof SpellPaperItem paper) {
+            if (paper.isBlank()) {
+                // Consume one blank → produce the corresponding inscribed item.
+                PaperType type = paper.getPaperType();
                 paperStack.shrink(1);
-                ItemStack result = new ItemStack(ModItems.inscribedFor(PaperType.MEDIUM_SQUARE).get());
+                ItemStack result = new ItemStack(ModItems.inscribedFor(type).get());
                 result.set(DataComponents.CUSTOM_DATA, CustomData.of(nbt));
                 giveOrDrop(player, paperHand, paperStack, result);
                 WitchHatAtelierMod.LOGGER.info(
-                        "[SaveGesture] Converted vanilla paper → medium_square_spell_paper for player '{}'.",
+                        "[SaveGesture] Created {} with {} point(s) for player '{}'.",
+                        type.getId() + "_spell_paper", payload.points().size(),
                         player.getScoreboardName());
+                return result;
+            } else if (SpellPaperItem.isSpent(paperStack)) {
+                WitchHatAtelierMod.LOGGER.info(
+                        "[SaveGesture] Ignored – held {} is spent (player '{}').",
+                        paper.getPaperType().getId() + "_spell_paper",
+                        player.getScoreboardName());
+                return null;
+            } else {
+                // Overwrite existing inscribed paper in-place.
+                ItemStack result = paperStack.copy();
+                result.set(DataComponents.CUSTOM_DATA, CustomData.of(nbt));
+                player.setItemInHand(paperHand, result);
+                WitchHatAtelierMod.LOGGER.info(
+                        "[SaveGesture] Updated {} with {} point(s) for player '{}'.",
+                        paper.getPaperType().getId() + "_spell_paper", payload.points().size(),
+                        player.getScoreboardName());
+                return result;
             }
-        });
-
-        // Recognition runs alongside (and after) any NBT writes. It only logs — no state mutation.
-        context.enqueueWork(() -> runSpellPipeline(payload, context.player()));
-
-        // Activation feedback: broadcast a sound + particle burst to everyone nearby
-        // whenever the canvas detected a closing ring. Runs on the server thread so all
-        // tracking clients see/hear the same effect.
-        context.enqueueWork(() -> playActivationEffects(payload, context.player()));
+        } else if (paperStack.is(Items.PAPER)) {
+            // Vanilla paper → medium-square inscribed paper.
+            paperStack.shrink(1);
+            ItemStack result = new ItemStack(ModItems.inscribedFor(PaperType.MEDIUM_SQUARE).get());
+            result.set(DataComponents.CUSTOM_DATA, CustomData.of(nbt));
+            giveOrDrop(player, paperHand, paperStack, result);
+            WitchHatAtelierMod.LOGGER.info(
+                    "[SaveGesture] Converted vanilla paper → medium_square_spell_paper for player '{}'.",
+                    player.getScoreboardName());
+            return result;
+        }
+        return null;
     }
 
     // ── Activation effects (server-side broadcast) ──────────────────────────────
@@ -193,7 +211,7 @@ public final class SaveGestureHandler {
 
     // ── Spell pipeline (cluster → preprocess → recognize) ───────────────────────
 
-    private static void runSpellPipeline(SaveGesturePayload payload, Player player) {
+    private static void runSpellPipeline(SaveGesturePayload payload, Player player, ItemStack inscribed) {
         if (payload.points().isEmpty()) return;
 
         Map<Integer, List<Point>> byStroke = new LinkedHashMap<>();
@@ -345,11 +363,19 @@ public final class SaveGestureHandler {
                 WitchHatAtelierMod.LOGGER.info(
                         "[MeaningEngine] player='{}' → {}", who, executable.get().toLogString());
 
-                // ── Phase 3: dispatch to runtime and consume the medium ───────────
+                // ── Phase 3: dispatch to runtime ──────────────────────────────────
                 if (player != null && player.level() instanceof ServerLevel serverLevel) {
-                    boolean fired = SpellExecutor.run(serverLevel, player, executable.get());
-                    if (fired) {
-                        consumeMedium(payload, player, serverLevel);
+                    if (payload.blockOrigin() == null && player instanceof ServerPlayer sp) {
+                        // Hand cast → start a channeled, aim-following cast keyed to the
+                        // inscribed paper just produced. The paper is consumed when the
+                        // channel finishes or is canceled, so we do NOT consume here.
+                        SpellCastManager.get().start(sp, executable.get(), inscribed);
+                    } else {
+                        // Surface / placed-paper cast → instantaneous (unchanged).
+                        boolean fired = SpellExecutor.run(serverLevel, player, executable.get());
+                        if (fired) {
+                            consumeMedium(payload, player, serverLevel);
+                        }
                     }
                 }
             }

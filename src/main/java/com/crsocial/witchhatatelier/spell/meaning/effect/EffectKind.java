@@ -1,5 +1,6 @@
 package com.crsocial.witchhatatelier.spell.meaning.effect;
 
+import com.crsocial.witchhatatelier.spell.cast.CastContext;
 import com.crsocial.witchhatatelier.spell.meaning.ExecutableSpell;
 import com.google.gson.JsonObject;
 import net.minecraft.server.level.ServerLevel;
@@ -38,5 +39,35 @@ public interface EffectKind {
      */
     default void execute(ServerLevel level, Player caster, ExecutableSpell spell) {
         // No-op. Phase 3 will override.
+    }
+
+    // ── Channeled-cast lifecycle ────────────────────────────────────────────────
+    // A hand cast runs as a channel for the spell's duration (see
+    // com.crsocial.witchhatatelier.spell.cast.SpellCastManager). Block effects keep
+    // the default behaviour: fire once on begin and hold. Entity effects override
+    // tick to follow the caster's live aim.
+
+    /**
+     * Invoked once when the channel starts. Defaults to the instantaneous
+     * {@link #execute} so block effects (pillars) fire a single time then hold.
+     */
+    default void begin(CastContext ctx) {
+        execute(ctx.level(), ctx.caster(), ctx.spell());
+    }
+
+    /**
+     * Invoked every server tick while the channel is active, with {@code ctx.spell()}
+     * recomputed from the caster's live aim. Default is a no-op.
+     */
+    default void tick(CastContext ctx) {
+        // No-op.
+    }
+
+    /**
+     * Invoked once when the channel ends — naturally, on cancel, or on player loss.
+     * Default is a no-op. {@code ctx.level()}/{@code ctx.caster()} may be null.
+     */
+    default void end(CastContext ctx) {
+        // No-op.
     }
 }

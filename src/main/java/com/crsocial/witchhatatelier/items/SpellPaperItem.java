@@ -30,6 +30,7 @@ import org.jetbrains.annotations.NotNull;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 /**
  * Represents any paper item — both blank (stackable, no gesture data) and
@@ -158,6 +159,50 @@ public class SpellPaperItem extends Item {
         CompoundTag tag = existing != null ? existing.copyTag() : new CompoundTag();
         tag.putBoolean("spent", true);
         stack.set(DataComponents.CUSTOM_DATA, CustomData.of(tag));
+    }
+
+    // ── Channeled-cast tracking ────────────────────────────────────────────────
+    // A channeled cast stamps a unique id into the paper's NBT at start. Because
+    // an ItemStack's object identity is NOT preserved across inventory slot moves,
+    // this tag is how the cast manager re-locates the paper to consume it on cancel.
+
+    /** Stamps {@code castId} into the paper so an active channel can find it later. */
+    public static void markCastInProgress(ItemStack stack, UUID castId) {
+        CustomData existing = stack.get(DataComponents.CUSTOM_DATA);
+        CompoundTag tag = existing != null ? existing.copyTag() : new CompoundTag();
+        tag.putUUID("castId", castId);
+        stack.set(DataComponents.CUSTOM_DATA, CustomData.of(tag));
+    }
+
+    /** Returns the stamped cast id, or {@code null} if none. */
+    public static UUID getCastId(ItemStack stack) {
+        CustomData data = stack.get(DataComponents.CUSTOM_DATA);
+        if (data == null) return null;
+        CompoundTag tag = data.copyTag();
+        return tag.hasUUID("castId") ? tag.getUUID("castId") : null;
+    }
+
+    /** Removes the cast-id stamp (called when the channel ends). */
+    public static void clearCastId(ItemStack stack) {
+        CustomData existing = stack.get(DataComponents.CUSTOM_DATA);
+        if (existing == null) return;
+        CompoundTag tag = existing.copyTag();
+        if (tag.contains("castId")) {
+            tag.remove("castId");
+            stack.set(DataComponents.CUSTOM_DATA, CustomData.of(tag));
+        }
+    }
+
+    /** Scans the player's inventory for the inscribed paper carrying {@code castId}. */
+    public static ItemStack findByCastId(Player player, UUID castId) {
+        if (castId == null) return null;
+        var inventory = player.getInventory();
+        for (int i = 0; i < inventory.getContainerSize(); i++) {
+            ItemStack s = inventory.getItem(i);
+            if (s.isEmpty() || !(s.getItem() instanceof SpellPaperItem)) continue;
+            if (castId.equals(getCastId(s))) return s;
+        }
+        return null;
     }
 
     @Override

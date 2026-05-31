@@ -9,6 +9,8 @@ import org.slf4j.Logger;
 
 import com.mojang.logging.LogUtils;
 
+import com.crsocial.witchhatatelier.network.CastingStateHandler;
+import com.crsocial.witchhatatelier.network.CastingStatePayload;
 import com.crsocial.witchhatatelier.network.SaveGestureHandler;
 import com.crsocial.witchhatatelier.network.SaveGesturePayload;
 import net.neoforged.bus.api.IEventBus;
@@ -48,6 +50,11 @@ public class WitchHatAtelierMod {
                 SaveGesturePayload.TYPE,
                 SaveGesturePayload.STREAM_CODEC,
                 SaveGestureHandler::handle
+        );
+        registrar.playToClient(
+                CastingStatePayload.TYPE,
+                CastingStatePayload.STREAM_CODEC,
+                CastingStateHandler::handle
         );
     }
 

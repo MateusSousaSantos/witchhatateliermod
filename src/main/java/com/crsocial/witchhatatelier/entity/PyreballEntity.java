@@ -1,10 +1,11 @@
 package com.crsocial.witchhatatelier.entity;
 
-import net.minecraft.core.BlockPos;
+import com.crsocial.witchhatatelier.entity.child.ChildManager;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
@@ -13,10 +14,6 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.Entity.RemovalReason;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.level.block.Block;
-import net.minecraft.world.level.block.Blocks;
-import net.minecraft.world.level.block.LightBlock;
-import net.minecraft.world.level.block.state.BlockState;
 import org.jetbrains.annotations.NotNull;
 import software.bernie.geckolib.animatable.GeoEntity;
 import software.bernie.geckolib.animatable.instance.AnimatableInstanceCache;
@@ -31,8 +28,8 @@ import software.bernie.geckolib.util.GeckoLibUtil;
  * The Fire + Levitation spell summon: a hovering orb of fire. The orb's
  * visual size starts at {@link #getMaxScale()} (set by the spell from the
  * caster's power) and shrinks linearly toward {@link #MIN_SCALE} over its
- * lifetime. While alive, a {@link Blocks#LIGHT} block is parked at its
- * position so the world lights up around it.
+ * lifetime. While alive, its {@link #children()} (e.g. a light block) are kept
+ * attached and follow it around — see {@link ChildManager}.
  */
 public class PyreballEntity extends Entity implements GeoEntity {
 
@@ -43,8 +40,6 @@ public class PyreballEntity extends Entity implements GeoEntity {
 
     /** Smallest scale the orb shrinks to right before despawning. */
     public static final float MIN_SCALE = 0.2f;
-    /** Light level emitted by the parked {@link Blocks#LIGHT} block (0-15). */
-    private static final int LIGHT_LEVEL = 15;
     /** Server ticks between looped fire-ambient sounds while the orb is alive. */
     private static final int LOOP_SOUND_INTERVAL = 40;
 
@@ -55,14 +50,26 @@ public class PyreballEntity extends Entity implements GeoEntity {
 
     private final AnimatableInstanceCache cache = GeckoLibUtil.createInstanceCache(this);
 
+    /** Satellites (e.g. the light block) that follow the orb around. */
+    private final ChildManager children = new ChildManager();
+
     private int age;
-    private boolean placedLightHere;
-    private BlockPos lightPos;
+
+    // Client-side smoothing: base Entity#lerpTo snaps instantly, which looks janky
+    // while the orb is driven across the world each tick to follow the caster's aim.
+    // We store the latest synced position and ease toward it over a few client ticks.
+    private double lerpTargetX, lerpTargetY, lerpTargetZ;
+    private int lerpSteps;
 
     public PyreballEntity(EntityType<? extends PyreballEntity> type, Level level) {
         super(type, level);
         this.noPhysics = true;
         this.setNoGravity(true);
+    }
+
+    /** The orb's child satellites; the spell effect attaches children here at spawn. */
+    public ChildManager children() {
+        return children;
     }
 
     public void setLifetimeTicks(int ticks) {
@@ -101,48 +108,55 @@ public class PyreballEntity extends Entity implements GeoEntity {
     public void tick() {
         super.tick();
         this.setDeltaMovement(0, 0, 0);
-        if (!level().isClientSide) {
-            if (age == 0) {
-                tryPlaceLight();
-                level().playSound(null, getX(), getY(), getZ(),
-                        SPAWN_SOUND, SoundSource.PLAYERS, 1.2f, 0.9f);
-            }
-            if (age > 0 && age % LOOP_SOUND_INTERVAL == 0) {
-                level().playSound(null, getX(), getY(), getZ(),
-                        LOOP_SOUND, SoundSource.BLOCKS, 0.6f, 1.0f);
-            }
-            age++;
-            if (age >= getLifetimeTicks()) {
-                discard();
-            }
+
+        if (level().isClientSide) {
+            tickClientLerp();
+            return;
         }
+
+        children.followAll((ServerLevel) level(), position());
+        if (age == 0) {
+            level().playSound(null, getX(), getY(), getZ(),
+                    SPAWN_SOUND, SoundSource.PLAYERS, 1.2f, 0.9f);
+        }
+        if (age > 0 && age % LOOP_SOUND_INTERVAL == 0) {
+            level().playSound(null, getX(), getY(), getZ(),
+                    LOOP_SOUND, SoundSource.BLOCKS, 0.6f, 1.0f);
+        }
+        age++;
+        if (age >= getLifetimeTicks()) {
+            discard();
+        }
+    }
+
+    /**
+     * Captures the latest server-synced position instead of snapping to it (the base
+     * {@link Entity#lerpTo} behaviour). {@link #tickClientLerp} then eases toward it,
+     * and the renderer interpolates {@code xOld→x} between frames — smooth motion.
+     */
+    @Override
+    public void lerpTo(double x, double y, double z, float yRot, float xRot, int steps) {
+        this.lerpTargetX = x;
+        this.lerpTargetY = y;
+        this.lerpTargetZ = z;
+        this.lerpSteps = Math.max(steps, 1);
+    }
+
+    private void tickClientLerp() {
+        if (lerpSteps <= 0) return;
+        double nx = getX() + (lerpTargetX - getX()) / lerpSteps;
+        double ny = getY() + (lerpTargetY - getY()) / lerpSteps;
+        double nz = getZ() + (lerpTargetZ - getZ()) / lerpSteps;
+        lerpSteps--;
+        setPos(nx, ny, nz);
     }
 
     @Override
     public void remove(@NotNull RemovalReason reason) {
-        clearLight();
-        super.remove(reason);
-    }
-
-    private void tryPlaceLight() {
-        if (placedLightHere) return;
-        BlockPos pos = blockPosition();
-        BlockState here = level().getBlockState(pos);
-        if (!here.isAir()) return;
-        BlockState lit = Blocks.LIGHT.defaultBlockState().setValue(LightBlock.LEVEL, LIGHT_LEVEL);
-        level().setBlock(pos, lit, Block.UPDATE_ALL);
-        placedLightHere = true;
-        lightPos = pos.immutable();
-    }
-
-    private void clearLight() {
-        if (!placedLightHere || lightPos == null || level().isClientSide) return;
-        BlockState current = level().getBlockState(lightPos);
-        if (current.is(Blocks.LIGHT)) {
-            level().setBlock(lightPos, Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL);
+        if (level() instanceof ServerLevel serverLevel) {
+            children.detachAll(serverLevel);
         }
-        placedLightHere = false;
-        lightPos = null;
+        super.remove(reason);
     }
 
     @Override
@@ -154,10 +168,7 @@ public class PyreballEntity extends Entity implements GeoEntity {
         if (tag.contains("MaxScale")) {
             setMaxScale(tag.getFloat("MaxScale"));
         }
-        placedLightHere = tag.getBoolean("PlacedLight");
-        if (tag.contains("LightX")) {
-            lightPos = new BlockPos(tag.getInt("LightX"), tag.getInt("LightY"), tag.getInt("LightZ"));
-        }
+        children.load(tag);
     }
 
     @Override
@@ -165,12 +176,7 @@ public class PyreballEntity extends Entity implements GeoEntity {
         tag.putInt("Age", age);
         tag.putInt("LifetimeTicks", getLifetimeTicks());
         tag.putFloat("MaxScale", getMaxScale());
-        tag.putBoolean("PlacedLight", placedLightHere);
-        if (lightPos != null) {
-            tag.putInt("LightX", lightPos.getX());
-            tag.putInt("LightY", lightPos.getY());
-            tag.putInt("LightZ", lightPos.getZ());
-        }
+        children.save(tag);
     }
 
     // ── GeckoLib ─────────────────────────────────────────────────────────────
