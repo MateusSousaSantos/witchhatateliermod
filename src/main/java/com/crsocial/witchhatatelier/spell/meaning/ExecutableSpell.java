@@ -16,6 +16,8 @@ import java.util.List;
  * @param ops           resolved per-sign behaviour operations
  * @param magnitude     per-spell magnitude (power, AoE, quality, size)
  * @param origin        where the spell emerges from
+ * @param originWorld   world-space position the spell emerges from
+ * @param surfaceNormal world-space normal of the casting surface (1,0,0) etc.
  * @param direction     world-space net direction; zero = radial / undirected
  * @param durationTicks lifetime in server ticks
  * @param inner         composed inner-ring spell when {@code SpellGraph.inner} is present
@@ -24,6 +26,8 @@ public record ExecutableSpell(SigilType element,
                               List<BehaviorOp> ops,
                               Magnitude magnitude,
                               Origin origin,
+                              Vector3f originWorld,
+                              Vector3f surfaceNormal,
                               Vector3f direction,
                               long durationTicks,
                               @Nullable ExecutableSpell inner) {

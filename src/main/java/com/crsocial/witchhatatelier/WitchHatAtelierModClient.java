@@ -5,8 +5,11 @@ import com.crsocial.witchhatatelier.client.ModKeybindings;
 import com.crsocial.witchhatatelier.client.gesture.DebugTemplateScreen;
 import com.crsocial.witchhatatelier.client.gesture.RecognitionDebugScreen;
 import com.crsocial.witchhatatelier.client.renderer.PlacedPaperBlockEntityRenderer;
+import com.crsocial.witchhatatelier.client.renderer.PyreballRenderer;
+import com.crsocial.witchhatatelier.entity.ModEntities;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.blockentity.BlockEntityRenderers;
+import net.minecraft.client.renderer.entity.EntityRenderers;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -41,8 +44,9 @@ public class WitchHatAtelierModClient {
     @SubscribeEvent
     static void onClientSetup(FMLClientSetupEvent event) {
         WitchHatAtelierMod.LOGGER.info("MINECRAFT NAME >> {}", Minecraft.getInstance().getUser().getName());
-        event.enqueueWork(() ->
-            BlockEntityRenderers.register(ModBlockEntities.PLACED_PAPER.get(), PlacedPaperBlockEntityRenderer::new)
-        );
+        event.enqueueWork(() -> {
+            BlockEntityRenderers.register(ModBlockEntities.PLACED_PAPER.get(), PlacedPaperBlockEntityRenderer::new);
+            EntityRenderers.register(ModEntities.PYREBALL.get(), PyreballRenderer::new);
+        });
     }
 }

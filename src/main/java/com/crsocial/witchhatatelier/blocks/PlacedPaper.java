@@ -78,6 +78,8 @@ public class PlacedPaper extends Block implements EntityBlock {
         BlockEntity rawBe = params.getOptionalParameter(LootContextParams.BLOCK_ENTITY);
         if (!(rawBe instanceof PlacedPaperBlockEntity be)) return List.of();
 
+        if (be.isSpent()) return List.of();
+
         PaperType type = be.getPaperType();
         CompoundTag gestureData = be.getGestureData();
 
@@ -109,6 +111,7 @@ public class PlacedPaper extends Block implements EntityBlock {
     @OnlyIn(Dist.CLIENT)
     protected static void openCanvasFromBlock(Level level, BlockPos pos, ItemStack stack) {
         if (!(level.getBlockEntity(pos) instanceof PlacedPaperBlockEntity be)) return;
+        if (be.isSpent()) return;
         boolean editable = stack.getItem() instanceof Wand;
         List<GesturePoint> points = SpellPaperItem.loadPointsFromTag(be.getGestureData());
         GestureCanvasClient.openCanvas(be.getPaperType(), points, editable, pos);

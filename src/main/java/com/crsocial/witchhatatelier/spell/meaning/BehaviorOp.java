@@ -13,8 +13,10 @@ import org.jetbrains.annotations.Nullable;
  *
  * @param sign    sign type that produced this op, or {@code null} for the
  *                sigil's "no-signs" default behaviour
- * @param count   sign occurrences contributing to this op (always {@code 1}
- *                for {@link com.crsocial.witchhatatelier.spell.compiler.SignType.StackingMode#REPETITION})
+ * @param count   sign occurrences contributing to this op (always the raw
+ *                bundle count — the {@link com.crsocial.witchhatatelier.spell.compiler.SignType.StackingMode}
+ *                is the effect's concern: REPETITION effects loop {@code count}
+ *                times, MAGNITUDE effects fold {@code count} into a scalar).
  * @param kind    behaviour kind string from the matrix JSON (e.g. {@code "stone_pillar"})
  * @param payload effect-specific configuration, parsed from the matrix JSON
  */

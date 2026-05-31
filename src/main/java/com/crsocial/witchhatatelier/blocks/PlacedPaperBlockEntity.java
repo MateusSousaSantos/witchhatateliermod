@@ -25,6 +25,7 @@ public class PlacedPaperBlockEntity extends BlockEntity {
 
     private PaperType paperType = PaperType.MEDIUM_SQUARE;
     private CompoundTag gestureData = new CompoundTag();
+    private boolean spent = false;
 
     public PlacedPaperBlockEntity(BlockPos pos, BlockState state) {
         super(ModBlockEntities.PLACED_PAPER.get(), pos, state);
@@ -44,6 +45,15 @@ public class PlacedPaperBlockEntity extends BlockEntity {
 
     public void setGestureData(CompoundTag gestureData) {
         this.gestureData = gestureData;
+        setChanged();
+        syncToClient();
+    }
+
+    public boolean isSpent() { return spent; }
+
+    public void setSpent(boolean spent) {
+        if (this.spent == spent) return;
+        this.spent = spent;
         setChanged();
         syncToClient();
     }
@@ -73,6 +83,7 @@ public class PlacedPaperBlockEntity extends BlockEntity {
         super.saveAdditional(tag, registries);
         tag.putString("paperType", paperType.getId());
         tag.put("gestureData", gestureData.copy());
+        tag.putBoolean("spent", spent);
     }
 
     @Override
@@ -85,5 +96,6 @@ public class PlacedPaperBlockEntity extends BlockEntity {
         if (tag.contains("gestureData")) {
             gestureData = tag.getCompound("gestureData");
         }
+        spent = tag.getBoolean("spent");
     }
 }

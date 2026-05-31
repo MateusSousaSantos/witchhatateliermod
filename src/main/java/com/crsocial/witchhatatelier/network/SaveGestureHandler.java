@@ -15,6 +15,7 @@ import com.crsocial.witchhatatelier.spell.compiler.CompileResult;
 import com.crsocial.witchhatatelier.spell.compiler.SpellGraphBuilder;
 import com.crsocial.witchhatatelier.spell.meaning.ExecutableSpell;
 import com.crsocial.witchhatatelier.spell.meaning.MeaningEngine;
+import com.crsocial.witchhatatelier.spell.meaning.SpellExecutor;
 import com.crsocial.witchhatatelier.spell.trigger.TriggerEvaluator;
 import com.crsocial.witchhatatelier.spell.recognition.PDollarPlusRecognizer;
 import com.crsocial.witchhatatelier.spell.recognition.Point;
@@ -82,6 +83,12 @@ public final class SaveGestureHandler {
             if (origin != null) {
                 BlockEntity be = player.level().getBlockEntity(origin);
                 if (be instanceof PlacedPaperBlockEntity placed) {
+                    if (placed.isSpent()) {
+                        WitchHatAtelierMod.LOGGER.info(
+                                "[SaveGesture] Ignored – placed_paper at {} is spent (player '{}').",
+                                origin, player.getScoreboardName());
+                        return;
+                    }
                     placed.setGestureData(buildNbt(payload));
                     WitchHatAtelierMod.LOGGER.info(
                             "[SaveGesture] Saved {} point(s) to placed_paper at {} for player '{}'.",
@@ -118,6 +125,12 @@ public final class SaveGestureHandler {
                             "[SaveGesture] Created {} with {} point(s) for player '{}'.",
                             type.getId() + "_spell_paper", payload.points().size(),
                             player.getScoreboardName());
+                } else if (SpellPaperItem.isSpent(paperStack)) {
+                    WitchHatAtelierMod.LOGGER.info(
+                            "[SaveGesture] Ignored – held {} is spent (player '{}').",
+                            paper.getPaperType().getId() + "_spell_paper",
+                            player.getScoreboardName());
+                    return;
                 } else {
                     // Overwrite existing inscribed paper in-place.
                     ItemStack result = paperStack.copy();
@@ -331,6 +344,14 @@ public final class SaveGestureHandler {
             if (executable.isPresent()) {
                 WitchHatAtelierMod.LOGGER.info(
                         "[MeaningEngine] player='{}' → {}", who, executable.get().toLogString());
+
+                // ── Phase 3: dispatch to runtime and consume the medium ───────────
+                if (player != null && player.level() instanceof ServerLevel serverLevel) {
+                    boolean fired = SpellExecutor.run(serverLevel, player, executable.get());
+                    if (fired) {
+                        consumeMedium(payload, player, serverLevel);
+                    }
+                }
             }
         } else {
             WitchHatAtelierMod.LOGGER.info("[Compiler] Rejected: {}", result.rejectionReason());
@@ -346,6 +367,33 @@ public final class SaveGestureHandler {
                             .append(buildRecognitionSummary(recogCounts)));
                 }
             }
+        }
+    }
+
+    // ── Medium consumption (Phase 3: Prepared → Activated → Used) ──────────────
+
+    private static void consumeMedium(SaveGesturePayload payload, Player player, ServerLevel level) {
+        BlockPos blockOrigin = payload.blockOrigin();
+        if (blockOrigin != null) {
+            // Surface cast: mark the placed_paper as spent so it stays in the world
+            // but rejects any further casts. The inscription is considered consumed.
+            if (level.getBlockEntity(blockOrigin) instanceof PlacedPaperBlockEntity placed) {
+                placed.setSpent(true);
+                WitchHatAtelierMod.LOGGER.info(
+                        "[SaveGesture] Marked placed_paper at {} as spent after spell fired.", blockOrigin);
+            }
+            return;
+        }
+        // Hand cast: mark the held inscribed paper as spent (no shrink) so it
+        // stays in the inventory but can't be re-cast or re-drawn.
+        InteractionHand paperHand = findPaperHand(player);
+        if (paperHand == null) return;
+        ItemStack held = player.getItemInHand(paperHand);
+        if (held.getItem() instanceof SpellPaperItem paper && !paper.isBlank()) {
+            SpellPaperItem.markSpent(held);
+            WitchHatAtelierMod.LOGGER.info(
+                    "[SaveGesture] Marked held {} as spent after spell fired.",
+                    paper.getPaperType().getId());
         }
     }
 
@@ -368,18 +416,39 @@ public final class SaveGestureHandler {
                 : CastingContext.MediumKind.PAPER_ITEM;
 
         Vector3f originWorld;
+        Vector3f surfaceNormal;
+
         if (origin != null) {
-            originWorld = new Vector3f(origin.getX() + 0.5f, origin.getY() + 0.5f, origin.getZ() + 0.5f);
+            // Surface cast — anchor to the paper's outward face.
+            net.minecraft.core.Direction facing = net.minecraft.core.Direction.UP;
+            if (player != null
+                    && player.level().getBlockEntity(origin) instanceof PlacedPaperBlockEntity be) {
+                var state = be.getBlockState();
+                if (state.hasProperty(com.crsocial.witchhatatelier.blocks.PlacedPaper.FACING)) {
+                    facing = state.getValue(com.crsocial.witchhatatelier.blocks.PlacedPaper.FACING);
+                }
+            }
+            surfaceNormal = new Vector3f(
+                    facing.getStepX(), facing.getStepY(), facing.getStepZ());
+            originWorld = new Vector3f(
+                    origin.getX() + 0.5f + facing.getStepX() * 0.5f,
+                    origin.getY() + 0.5f + facing.getStepY() * 0.5f,
+                    origin.getZ() + 0.5f + facing.getStepZ() * 0.5f);
         } else if (player != null) {
+            // Hand cast — origin is in front of the player along their look vector.
+            var look = player.getLookAngle();
+            surfaceNormal = new Vector3f((float) look.x, (float) look.y, (float) look.z);
+            if (surfaceNormal.lengthSquared() < 1e-6f) surfaceNormal.set(0f, 1f, 0f);
+            else surfaceNormal.normalize();
             originWorld = new Vector3f((float) player.getX(),
-                    (float) (player.getY() + player.getBbHeight() * 0.5),
-                    (float) player.getZ());
+                    (float) player.getEyeY(),
+                    (float) player.getZ())
+                    .add(new Vector3f(surfaceNormal).mul(1.5f));
         } else {
             originWorld = new Vector3f();
+            surfaceNormal = new Vector3f(0f, 1f, 0f);
         }
 
-        // Surface-normal resolution (placed-paper facing) is Phase 3; default to up.
-        Vector3f surfaceNormal = new Vector3f(0f, 1f, 0f);
         return CastingContext.of(medium, originWorld, surfaceNormal);
     }
 

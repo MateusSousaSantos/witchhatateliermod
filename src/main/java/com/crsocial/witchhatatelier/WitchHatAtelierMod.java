@@ -3,6 +3,7 @@ package com.crsocial.witchhatatelier;
 import com.crsocial.witchhatatelier.blocks.ModBlockEntities;
 import com.crsocial.witchhatatelier.blocks.ModBlocks;
 import com.crsocial.witchhatatelier.datagen.DataGenerators;
+import com.crsocial.witchhatatelier.entity.ModEntities;
 import com.crsocial.witchhatatelier.items.ModItems;
 import org.slf4j.Logger;
 
@@ -34,6 +35,7 @@ public class WitchHatAtelierMod {
         ModItems.register(modEventBus);
         ModBlocks.register(modEventBus);
         ModBlockEntities.register(modEventBus);
+        ModEntities.register(modEventBus);
         ModCreativeModeTabs.register(modEventBus);
         NeoForge.EVENT_BUS.register(this);
 

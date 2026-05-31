@@ -65,15 +65,14 @@ public final class MeaningEngine {
                 continue;
             }
 
-            int repetitions = bundle.type().stackingMode() == SignType.StackingMode.REPETITION
-                    ? bundle.count() : 1;
+            int magnitudeCount = bundle.count();
             float magnitudeScalar = bundle.type().stackingMode() == SignType.StackingMode.MAGNITUDE
-                    ? entry.stackingCurve().apply(bundle.count()) : 1.0f;
+                    ? entry.stackingCurve().apply(magnitudeCount) : 1.0f;
 
             float opPower = entry.basePower() * magnitudeScalar * quality * Math.max(0.1f, size);
             float opAoe = entry.baseAoe() * magnitudeScalar;
 
-            ops.add(new BehaviorOp(bundle.type(), repetitions,
+            ops.add(new BehaviorOp(bundle.type(), magnitudeCount,
                     entry.behaviorKind(), kind.get().parsePayload(entry.effects())));
 
             if (opPower > maxPower) maxPower = opPower;
@@ -123,8 +122,12 @@ public final class MeaningEngine {
         Vector3f finalDirection = new Vector3f(direction).add(directionBias);
         if (finalDirection.lengthSquared() > 1e-6f) finalDirection.normalize();
 
+        Vector3f originWorld = new Vector3f(ctx.originWorld()).add(originOffset);
+        Vector3f surfaceNormal = new Vector3f(ctx.surfaceNormal());
+
         return Optional.of(new ExecutableSpell(
-                element, List.copyOf(ops), finalMagnitude, origin, finalDirection, finalDuration, null));
+                element, List.copyOf(ops), finalMagnitude, origin,
+                originWorld, surfaceNormal, finalDirection, finalDuration, null));
     }
 
     private static Origin originFor(CastingContext.MediumKind medium) {

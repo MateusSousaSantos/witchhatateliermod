@@ -54,5 +54,6 @@
   "screen.witchhatatelier.gesture_canvas.label.size": "Canvas size",
 
   "screen.witchhatatelier.gesture_canvas.tooltip.wand_required": "Equip a Wand to edit this paper.",
-  "screen.witchhatatelier.gesture_canvas.tooltip.read_only": "View only"
+  "screen.witchhatatelier.gesture_canvas.tooltip.read_only": "View only",
+  "item.witchhatateliermod.spell_paper.spent": "Spent"
 }

@@ -31,7 +31,7 @@ public final class LevitationSignBehavior implements SignBehavior {
 
     // ── Per-element tuning constants ─────────────────────────────────────────
 
-    private static final float FIRE_MAX_RISE = 4.0f;
+    private static final float FIRE_MAX_RISE = 1.0f;
     private static final float AIR_MAX_RISE = 6.0f;
     private static final float AIR_DRIFT_SCALE = 2.0f;
     private static final float WATER_MAX_DRIFT = 3.0f;
