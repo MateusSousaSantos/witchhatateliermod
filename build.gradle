@@ -23,6 +23,7 @@ sourceSets.main.resources {
 
     // Exclude common development only resources from finalized outputs
     exclude("**/*.bbmodel") // BlockBench project files
+    exclude("**/*.ajblueprint") // Animated Java / BlockBench project files
     exclude("src/generated/**/.cache") // datagen cache files
 }
 
@@ -33,6 +34,11 @@ repositories {
         content {
             includeGroup("software.bernie.geckolib")
         }
+    }
+    mavenCentral()
+    maven {
+        name = "RedlanceMinecraft"
+        url = "https://repo.redlance.org/public"
     }
 }
 
@@ -126,7 +132,7 @@ configurations {
 dependencies {
     // GeckoLib for animated models
     implementation "software.bernie.geckolib:geckolib-neoforge-1.21.1:4.7.2"
-
+    implementation "com.zigythebird.playeranim:PlayerAnimationLibNeo:$pal_version"
     // Example optional mod dependency with JEI
     // The JEI API is declared for compile time use, while the full JEI artifact is used at runtime
     // compileOnly "mezz.jei:jei-${mc_version}-common-api:${jei_version}"
@@ -149,7 +155,14 @@ dependencies {
     // http://www.gradle.org/docs/current/userguide/artifact_dependencies_tutorial.html
     // http://www.gradle.org/docs/current/userguide/dependency_management.html
 }
-
+configurations.configureEach {
+    resolutionStrategy {
+        force 'org.slf4j:slf4j-api:2.0.9'
+        force 'com.google.code.gson:gson:2.10.1'
+        force 'it.unimi.dsi:fastutil:8.5.12'
+        force 'io.netty:netty-buffer:4.1.97.Final'
+    }
+}
 // This block of code expands all declared replace properties in the specified resource targets.
 // A missing property will result in an error. Properties are expanded using ${} Groovy notation.
 var generateModMetadata = tasks.register("generateModMetadata", ProcessResources) {

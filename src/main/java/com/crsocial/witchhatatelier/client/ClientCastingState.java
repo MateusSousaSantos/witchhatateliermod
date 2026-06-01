@@ -1,5 +1,10 @@
 package com.crsocial.witchhatatelier.client;
 
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.multiplayer.ClientLevel;
+import net.minecraft.client.player.AbstractClientPlayer;
+import net.minecraft.world.entity.Entity;
+
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -7,9 +12,8 @@ import java.util.concurrent.ConcurrentHashMap;
  * Client-side record of which players are currently channeling a spell, fed by
  * {@link com.crsocial.witchhatatelier.network.CastingStateHandler}.
  *
- * <p>This is the attachment point for a future holding/casting player animation:
- * {@link #onCastingStateChanged} is the stub hook a renderer/animation layer will
- * read. No animation assets exist yet.</p>
+ * <p>{@link #onCastingStateChanged} drives the casting player animation layer
+ * (see {@link CastingAnimation}) whenever a player's channeling state flips.</p>
  */
 public final class ClientCastingState {
 
@@ -31,6 +35,13 @@ public final class ClientCastingState {
     }
 
     private static void onCastingStateChanged(int entityId, boolean active) {
-        // TODO: drive the holding/casting player animation here once it exists.
+        ClientLevel level = Minecraft.getInstance().level;
+        if (level == null) {
+            return;
+        }
+        Entity entity = level.getEntity(entityId);
+        if (entity instanceof AbstractClientPlayer player) {
+            CastingAnimation.setCasting(player, active);
+        }
     }
 }

@@ -1,6 +1,7 @@
 package com.crsocial.witchhatatelier;
 
 import com.crsocial.witchhatatelier.blocks.ModBlockEntities;
+import com.crsocial.witchhatatelier.client.CastingAnimation;
 import com.crsocial.witchhatatelier.client.ModKeybindings;
 import com.crsocial.witchhatatelier.client.gesture.DebugTemplateScreen;
 import com.crsocial.witchhatatelier.client.gesture.RecognitionDebugScreen;
@@ -47,6 +48,7 @@ public class WitchHatAtelierModClient {
         event.enqueueWork(() -> {
             BlockEntityRenderers.register(ModBlockEntities.PLACED_PAPER.get(), PlacedPaperBlockEntityRenderer::new);
             EntityRenderers.register(ModEntities.PYREBALL.get(), PyreballRenderer::new);
+            CastingAnimation.register();
         });
     }
 }
