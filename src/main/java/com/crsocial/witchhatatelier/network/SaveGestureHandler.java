@@ -22,6 +22,7 @@ import com.crsocial.witchhatatelier.spell.recognition.PDollarPlusRecognizer;
 import com.crsocial.witchhatatelier.spell.recognition.Point;
 import com.crsocial.witchhatatelier.spell.recognition.PointCloud;
 import com.crsocial.witchhatatelier.spell.recognition.PointCloudPreprocessor;
+import com.crsocial.witchhatatelier.spell.recognition.RecognitionLog;
 import com.crsocial.witchhatatelier.spell.recognition.RecognitionResult;
 import com.crsocial.witchhatatelier.spell.recognition.TemplateRegistry;
 import net.minecraft.ChatFormatting;
@@ -254,7 +255,18 @@ public final class SaveGestureHandler {
         for (int i = 0; i < clusters.size(); i++) {
             PointCloud raw = clusters.get(i).toPointCloud("candidate_" + i);
             PointCloudPreprocessor.Processed processed = PointCloudPreprocessor.process(raw, resampleN);
-            RecognitionResult r = recognizer.match(processed);
+            // When logging, run the traced variant so the decision trail is captured;
+            // otherwise the plain match() (identical result, no trace overhead).
+            PDollarPlusRecognizer.MatchTrace trace = null;
+            RecognitionResult r;
+            if (RecognitionLog.isEnabled()) {
+                PDollarPlusRecognizer.Traced traced =
+                        recognizer.matchTraced(processed, TemplateRegistry.get().all());
+                r = traced.result();
+                trace = traced.trace();
+            } else {
+                r = recognizer.match(processed);
+            }
             recognitions.add(r);
             WitchHatAtelierMod.LOGGER.info(
                     "[SpellPipeline] sigil[{}] → {} (score={}, angle={}rad).",
@@ -271,6 +283,22 @@ public final class SaveGestureHandler {
                         "[SpellPipeline]   #{} {}:{} score={}",
                         k + 1, s.spellName(), s.variantName(),
                         String.format(java.util.Locale.ROOT, "%.3f", s.score()));
+            }
+
+            // Phase 0 — persist the full recognition event (raw strokes, processed cloud,
+            // every template's chamfer distance + score, final result, live thresholds).
+            if (RecognitionLog.isEnabled()) {
+                BlockPos bo = payload.blockOrigin();
+                RecognitionLog.log(new RecognitionLog.Entry(
+                        who,
+                        player != null ? player.getStringUUID() : "<none>",
+                        player != null ? ModCommands.intendedLabel(player.getUUID()) : null,
+                        bo != null ? "PLACED_PAPER" : "PAPER_ITEM",
+                        bo != null ? new int[]{bo.getX(), bo.getY(), bo.getZ()} : null,
+                        debugMode,
+                        i, clusters.size(), TemplateRegistry.get().size(),
+                        clusters.get(i).strokes(), processed.cloud(), processed.indicativeAngle(),
+                        r, ranked, trace));
             }
 
             if (debugMode) {

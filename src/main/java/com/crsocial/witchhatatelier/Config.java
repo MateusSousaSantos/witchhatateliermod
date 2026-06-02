@@ -80,8 +80,11 @@ public class Config {
     public static final ModConfigSpec.DoubleValue RECOGNITION_MIN_SCORE = BUILDER
             .comment("Minimum confidence score for a recognized spell.",
                     "Below this, the result is reported as 'unknown'.",
-                    "Range: 0.0 – 1.0. Default: 0.75.")
-            .defineInRange("recognitionMinScore", 0.80, 0.0, 1.0);
+                    "Tuned (2026-06) on a 119-sample labeled corpus together with the",
+                    "worst-pair soft-demote: 0.90 gives ~85% valid recall and rejects",
+                    "~89% of garbage. Lower re-admits garbage; higher rejects real casts.",
+                    "Range: 0.0 – 1.0. Default: 0.90.")
+            .defineInRange("recognitionMinScore", 0.90, 0.0, 1.0);
     public static final ModConfigSpec.DoubleValue RECOGNITION_AMBIGUITY_MARGIN = BUILDER
             .comment("Minimum score gap between the best template and the runner-up of a",
                     "DIFFERENT spell. If the winner beats the second-best by less than this",
@@ -106,6 +109,14 @@ public class Config {
                     "tie-breaker inspects when counting same-spell agreement.",
                     "Range: 1 – 20. Default: 5.")
             .defineInRange("recognitionConsensusTopN", 5, 1, 20);
+    public static final ModConfigSpec.BooleanValue RECOGNITION_LOGGING_ENABLED = BUILDER
+            .comment("When true, append a structured JSONL record for every recognized sigil to",
+                    "logs/spell_recognition.jsonl (one line per sigil). Each record captures the",
+                    "raw strokes, the processed point cloud, the full per-template chamfer distance",
+                    "AND score, best-per-spell, the final result, and the active thresholds — the",
+                    "data source for calibrating the recognizer (and a future training corpus).",
+                    "Off by default; enable during data-collection sessions.")
+            .define("recognitionLoggingEnabled", false);
     // ── Filtering pipeline (pre / post around the $P+ chamfer) ──────────────────
 
     public static final ModConfigSpec.DoubleValue ASPECT_RATIO_TALL_THRESHOLD = BUILDER
@@ -177,6 +188,26 @@ public class Config {
                     "demoted, not deleted. Lower = permissive, higher = strict.",
                     "Range: 0.30 – 0.95. Default: 0.70.")
             .defineInRange("gridMinSimilarity", 0.70, 0.30, 0.95);
+    public static final ModConfigSpec.DoubleValue WORST_PAIR_FREE_ALLOWANCE = BUILDER
+            .comment("Phase-2 worst-pair SOFT-demote: free allowance. Worst-pair distance",
+                    "up to this value adds nothing to the effective chamfer distance — a",
+                    "single moderately-far point (a hook, an endpoint) is tolerated. Above",
+                    "it, the excess is weighted (WORST_PAIR_WEIGHT) and ADDED to the mean",
+                    "distance before scoring, so the match is demoted, not deleted. Set",
+                    "near the upper bulk of valid draws' worst-pair (~0.23 median).",
+                    "Tuned (2026-06) on a 119-sample labeled corpus: 0.20.",
+                    "Range: 0.00 – 0.60. Default: 0.20.")
+            .defineInRange("worstPairFreeAllowance", 0.20, 0.00, 0.60);
+    public static final ModConfigSpec.DoubleValue WORST_PAIR_WEIGHT = BUILDER
+            .comment("Phase-2 worst-pair SOFT-demote: weight on the excess worst-pair",
+                    "distance above the free allowance. effectiveDistance = meanDistance +",
+                    "WORST_PAIR_WEIGHT * max(0, worstPair - WORST_PAIR_FREE_ALLOWANCE). The",
+                    "score is then 1 - effectiveDistance/sqrt(3) as usual. Garbage that",
+                    "strands points far away is pushed below RECOGNITION_MIN_SCORE while a",
+                    "strong mean match survives one outlier. 0.0 disables the demote.",
+                    "Tuned (2026-06) on a 119-sample labeled corpus: 0.50.",
+                    "Range: 0.00 – 2.00. Default: 0.50.")
+            .defineInRange("worstPairWeight", 0.50, 0.00, 2.00);
     public static final ModConfigSpec.DoubleValue DOT_INJECTION_RADIUS = BUILDER
             .comment("Radius (in normalized [0,1] canvas coordinates) used both to",
                     "detect dot-strokes (path length < radius) and to size the",

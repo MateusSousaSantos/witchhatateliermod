@@ -40,8 +40,16 @@ public final class PDollarPlusRecognizer {
         this.minScore = minScore;
     }
 
-    /** One ranked entry, used by {@link #matchVerbose}. */
-    public record Scored(String spellName, String variantName, float score) {}
+    /**
+     * One ranked entry, used by {@link #matchVerbose}. Carries the {@code [0,1]} score,
+     * the underlying raw chamfer {@code rawDistance} (the mean matched-pair distance) it
+     * was derived from, and the {@code worstPairDistance}/{@code p90PairDistance} of the
+     * winning match direction. The worst-pair channels are the Phase-2 signal: garbage
+     * tends to match a template on average while stranding a few points far away — the
+     * mean hides that sprawl, the worst-pair exposes it.
+     */
+    public record Scored(String spellName, String variantName, float score,
+                         float rawDistance, float worstPairDistance, float p90PairDistance) {}
 
     /** Matches against all content templates in the registry. */
     public RecognitionResult match(PointCloudPreprocessor.Processed candidate) {
@@ -57,7 +65,7 @@ public final class PDollarPlusRecognizer {
      *       {@link SigilFilters#inkDensityPasses}) — O(1) given cached
      *       {@link SigilMetrics}. Skip the chamfer entirely on structurally
      *       incompatible templates.</li>
-     *   <li><b>Chamfer score</b> ({@link #score}) — the expensive O(N²) step.</li>
+     *   <li><b>Chamfer score</b> ( ) — the expensive O(N²) step.</li>
      *   <li><b>Post-filter</b> ({@link SigilFilters#gridSimilarity}) — runs only
      *       when the score is high enough to be a credible match. Confirms the
      *       point-mass distribution matches; rejects high scores whose spatial
@@ -66,9 +74,79 @@ public final class PDollarPlusRecognizer {
      */
     public RecognitionResult match(PointCloudPreprocessor.Processed candidate,
                                    List<Template> templates) {
+        return matchInternal(candidate, templates, null);
+    }
+
+    // ── Decision-trail diagnostics (Phase 0) ──────────────────────────────────────
+
+    /**
+     * One row of the {@link #match} decision trail: a template's prefilter verdict,
+     * its raw chamfer score vs the grid-adjusted final score, and its distance stats.
+     * Score/stat fields are {@code NaN} for templates rejected by a prefilter (the
+     * chamfer is skipped for those).
+     */
+    public record TemplateTrace(
+            String spellName, String variantName,
+            boolean prefilterPassed, String rejectedBy,
+            float rawScore, float gridSim, float gridMultiplier, float finalScore,
+            float dist, float worstPair, float p90Pair) {}
+
+    /**
+     * The full decision trail behind one {@link #match} call: every template's verdict
+     * plus the meta-gates (winner, runner-up, worst-pair gate, consensus, ambiguity).
+     * {@code rejectionStage} is {@code null} when a spell was accepted, otherwise names
+     * the gate that forced {@code unknown}.
+     */
+    public record MatchTrace(
+            List<TemplateTrace> templates,
+            String winnerSpell, String winnerVariant,
+            float bestScore, float bestWorstPair,
+            String runnerUpSpell, float bestOfOtherSpell,
+            float margin, float gap,
+            int consensusAgree, float consensusBonus, float effectiveScore,
+            float worstPairFree, float worstPairWeight,
+            String rejectionStage) {}
+
+    /** A {@link #match} result paired with its decision trail. */
+    public record Traced(RecognitionResult result, MatchTrace trace) {}
+
+    /** Mutable accumulator filled by {@link #matchInternal} only when tracing is on. */
+    private static final class TraceCollector {
+        final List<TemplateTrace> templates = new ArrayList<>();
+        String winnerSpell, winnerVariant, runnerUpSpell, rejectionStage;
+        float bestScore, bestWorstPair, bestOfOtherSpell, margin, gap, consensusBonus, effectiveScore;
+        float worstPairFree, worstPairWeight;
+        int consensusAgree;
+    }
+
+    /**
+     * Like {@link #match(PointCloudPreprocessor.Processed, List)} but also returns the
+     * full decision trail, so a caller can see exactly why a winner beat the raw
+     * chamfer leaders — which templates a prefilter removed, which the grid penalty
+     * demoted, and whether the worst-pair / consensus / ambiguity gates fired.
+     */
+    public Traced matchTraced(PointCloudPreprocessor.Processed candidate,
+                              List<Template> templates) {
+        TraceCollector tc = new TraceCollector();
+        RecognitionResult r = matchInternal(candidate, templates, tc);
+        MatchTrace mt = new MatchTrace(
+                List.copyOf(tc.templates),
+                tc.winnerSpell, tc.winnerVariant,
+                tc.bestScore, tc.bestWorstPair,
+                tc.runnerUpSpell, tc.bestOfOtherSpell,
+                tc.margin, tc.gap,
+                tc.consensusAgree, tc.consensusBonus, tc.effectiveScore,
+                tc.worstPairFree, tc.worstPairWeight, tc.rejectionStage);
+        return new Traced(r, mt);
+    }
+
+    private RecognitionResult matchInternal(PointCloudPreprocessor.Processed candidate,
+                                            List<Template> templates,
+                                            TraceCollector tc) {
         PointCloud cloud = candidate.cloud();
 
         if (templates.isEmpty() || cloud.points().isEmpty()) {
+            if (tc != null) tc.rejectionStage = "empty";
             return RecognitionResult.unknown(0f, candidate.indicativeAngle());
         }
 
@@ -80,6 +158,8 @@ public final class PDollarPlusRecognizer {
         int   loopTolerance      = Config.LOOP_COUNT_TOLERANCE.get();
         float gridCheckThreshold = Config.GRID_CHECK_SCORE_THRESHOLD.get().floatValue();
         float gridMinSimilarity  = Config.GRID_MIN_SIMILARITY.get().floatValue();
+        float worstPairFree      = Config.WORST_PAIR_FREE_ALLOWANCE.get().floatValue();
+        float worstPairWeight    = Config.WORST_PAIR_WEIGHT.get().floatValue();
 
         // Per-spell best score, overall best template, and the full ranked list of
         // survivors (templates that cleared the pre-filters) for consensus scoring.
@@ -87,38 +167,61 @@ public final class PDollarPlusRecognizer {
         List<Scored> survivors = new ArrayList<>();
         Template best = null;
         float bestScore = 0f;
+        float bestWorstPair = 0f;
         for (Template t : templates) {
             SigilMetrics tMetrics = t.metrics();
 
             // Stage 1 — cheap structural pre-filters. All O(1) given cached metrics;
             // any failure short-circuits before the expensive chamfer.
+            String rejectedBy = null;
             if (tMetrics != null && candMetrics != null) {
-                if (!SigilFilters.aspectRatioPasses(candMetrics, tMetrics, tallThreshold, wideThreshold)) continue;
-                if (!SigilFilters.dotCountPasses(candMetrics, tMetrics, dotTolerance)) continue;
-                if (!SigilFilters.loopCountPasses(candMetrics, tMetrics, loopTolerance)) continue;
-                if (!SigilFilters.inkDensityPasses(candMetrics, tMetrics, maxDensityRelDiff)) continue;
+                if (!SigilFilters.aspectRatioPasses(candMetrics, tMetrics, tallThreshold, wideThreshold)) rejectedBy = "aspectRatio";
+                else if (!SigilFilters.dotCountPasses(candMetrics, tMetrics, dotTolerance)) rejectedBy = "dotCount";
+                else if (!SigilFilters.loopCountPasses(candMetrics, tMetrics, loopTolerance)) rejectedBy = "loopCount";
+                else if (!SigilFilters.inkDensityPasses(candMetrics, tMetrics, maxDensityRelDiff)) rejectedBy = "inkDensity";
+            }
+            if (rejectedBy != null) {
+                if (tc != null) tc.templates.add(new TemplateTrace(
+                        t.spellName(), t.variantName(), false, rejectedBy,
+                        Float.NaN, Float.NaN, Float.NaN, Float.NaN, Float.NaN, Float.NaN, Float.NaN));
+                continue;
             }
 
-            // Stage 2 — chamfer.
-            float s = score(cloud, t.processedCloud());
+            // Stage 2 — chamfer + Phase-2 soft-demote. The score is derived not from the
+            // raw mean but from an EFFECTIVE distance that folds in the worst-pair excess
+            // above the free allowance: garbage that strands points far away is pushed
+            // down, while a strong mean match survives one outlier. `d` stays the pure
+            // mean (for the log's distributions); only the score sees the penalty.
+            ChamferStats cs = chamferStats(cloud, t.processedCloud());
+            float d = cs.mean();
+            float effDist = d + worstPairWeight * Math.max(0f, cs.worstPair() - worstPairFree);
+            float rawScore = scoreFromDistance(effDist);
+            float s = rawScore;
 
             // Stage 3 — spatial agreement as a SOFT penalty (not a hard reject). On
             // otherwise-high scores, fold the 3×3 histogram similarity into the score:
             // full credit at/above gridMinSimilarity, ramping toward 0 as the spatial
             // mass distribution diverges. A near-miss is demoted, not deleted — so a
             // strong chamfer match can no longer be silently dropped by the grid check.
+            float gridSim = Float.NaN;
+            float gridMult = 1f;
             if (s > gridCheckThreshold && tMetrics != null && candMetrics != null) {
-                float gridSim = SigilFilters.gridSimilarity(
+                gridSim = SigilFilters.gridSimilarity(
                         candMetrics.gridHistogram(), tMetrics.gridHistogram());
-                s *= SigilFilters.gridScoreMultiplier(gridSim, gridMinSimilarity);
+                gridMult = SigilFilters.gridScoreMultiplier(gridSim, gridMinSimilarity);
+                s *= gridMult;
             }
 
-            survivors.add(new Scored(t.spellName(), t.variantName(), s));
+            survivors.add(new Scored(t.spellName(), t.variantName(), s, d, cs.worstPair(), cs.p90Pair()));
+            if (tc != null) tc.templates.add(new TemplateTrace(
+                    t.spellName(), t.variantName(), true, null,
+                    rawScore, gridSim, gridMult, s, d, cs.worstPair(), cs.p90Pair()));
             Float prev = bestPerSpell.get(t.spellName());
             if (prev == null || s > prev) bestPerSpell.put(t.spellName(), s);
             if (s > bestScore) {
                 bestScore = s;
                 best = t;
+                bestWorstPair = cs.worstPair();
             }
         }
 
@@ -138,7 +241,26 @@ public final class PDollarPlusRecognizer {
         // Hard rejections first: no winner, or the absolute score is below the floor.
         // Consensus can't rescue a genuinely weak match — only a near-tie.
         float margin = Config.RECOGNITION_AMBIGUITY_MARGIN.get().floatValue();
+        if (tc != null) {
+            tc.bestScore = bestScore;
+            tc.bestWorstPair = bestWorstPair;
+            tc.bestOfOtherSpell = bestOfOtherSpell;
+            tc.runnerUpSpell = runnerUpSpell;
+            tc.margin = margin;
+            tc.worstPairFree = worstPairFree;
+            tc.worstPairWeight = worstPairWeight;
+            tc.effectiveScore = bestScore;
+            tc.gap = bestScore - bestOfOtherSpell;
+            if (best != null) {
+                tc.winnerSpell = best.spellName();
+                tc.winnerVariant = best.variantName();
+            }
+        }
+        // Phase 2 is now a soft-demote folded into `bestScore` above (the winner's score
+        // already carries its worst-pair penalty), so the floor check below is the only
+        // distance gate — a sprawling match simply fails to clear minScore.
         if (best == null || bestScore < minScore) {
+            if (tc != null) tc.rejectionStage = (best == null) ? "noWinner" : "belowMinScore";
             return RecognitionResult.unknown(bestScore, candidate.indicativeAngle());
         }
 
@@ -159,9 +281,12 @@ public final class PDollarPlusRecognizer {
             float bonus = Config.RECOGNITION_CONSENSUS_BONUS.get().floatValue() * agree;
             effectiveScore = Math.min(1f, bestScore + bonus);
             gap = effectiveScore - bestOfOtherSpell;
+            if (tc != null) { tc.consensusAgree = agree; tc.consensusBonus = bonus; }
         }
+        if (tc != null) { tc.effectiveScore = effectiveScore; tc.gap = gap; }
 
         if (gap < margin) {
+            if (tc != null) tc.rejectionStage = "ambiguityGate";
             WitchHatAtelierMod.LOGGER.warn(
                     "[Recognizer] Ambiguity gate rejected '{}' (score={}) — runner-up '{}' scored {} (gap={}, margin={})",
                     best.spellName(),
@@ -187,8 +312,9 @@ public final class PDollarPlusRecognizer {
         PointCloud cloud = candidate.cloud();
         List<Scored> out = new ArrayList<>(templates.size());
         for (Template t : templates) {
-            float s = score(cloud, t.processedCloud());
-            out.add(new Scored(t.spellName(), t.variantName(), s));
+            ChamferStats cs = chamferStats(cloud, t.processedCloud());
+            float s = scoreFromDistance(cs.mean());
+            out.add(new Scored(t.spellName(), t.variantName(), s, cs.mean(), cs.worstPair(), cs.p90Pair()));
         }
         out.sort((x, y) -> Float.compare(y.score(), x.score()));
         return out;
@@ -197,14 +323,24 @@ public final class PDollarPlusRecognizer {
     // ── Symmetric score (original $P+ GreedyCloudMatch) ───────────────────────────
 
     /**
-     * Symmetric score: try both match directions and take the better (smaller)
-     * distance, then normalize to [0,1]. Mirrors the reference:
-     * {@code min(CloudDistance(A→B), CloudDistance(B→A))}.
+     * Chamfer statistics for one match direction: the mean matched-pair distance (the
+     * score's basis) plus the worst (max) and 90th-percentile matched-pair distances.
      */
-    private static float score(PointCloud candidate, PointCloud template) {
-        float d0 = cloudDistance(candidate.points(), template.points());
-        float d1 = cloudDistance(template.points(), candidate.points());
-        float d  = Math.min(d0, d1);
+    private record ChamferStats(float mean, float worstPair, float p90Pair) {}
+
+    /**
+     * Symmetric chamfer: compute both match directions and keep the better (smaller
+     * mean) — mirrors the reference {@code min(CloudDistance(A→B), CloudDistance(B→A))} —
+     * but return that winning direction's full {@link ChamferStats}, not just the mean.
+     */
+    private static ChamferStats chamferStats(PointCloud candidate, PointCloud template) {
+        ChamferStats a = cloudDistanceStats(candidate.points(), template.points());
+        ChamferStats b = cloudDistanceStats(template.points(), candidate.points());
+        return a.mean() <= b.mean() ? a : b;
+    }
+
+    /** Normalizes a raw chamfer distance into a {@code [0,1]} score via {@code 1 − d/√3}. */
+    private static float scoreFromDistance(float d) {
         return Math.max(0f, 1f - d / REFERENCE_SIZE);
     }
 
@@ -221,14 +357,17 @@ public final class PDollarPlusRecognizer {
      *       find its nearest neighbor in {@code input} and accumulate that
      *       distance.</li>
      * </ol>
-     * Returns the average distance over all accumulated terms.
+     * Returns the {@link ChamferStats} over all accumulated terms: the mean (the
+     * reference {@code CloudDistance}), the worst (max) matched-pair distance, and the
+     * 90th-percentile matched-pair distance.
      */
-    private static float cloudDistance(List<Point> input, List<Point> template) {
+    private static ChamferStats cloudDistanceStats(List<Point> input, List<Point> template) {
         int n1 = input.size();
         int n2 = template.size();
-        if (n1 == 0 || n2 == 0) return REFERENCE_SIZE;
+        if (n1 == 0 || n2 == 0) return new ChamferStats(REFERENCE_SIZE, REFERENCE_SIZE, REFERENCE_SIZE);
 
         boolean[] matched = new boolean[n2];
+        float[] pairs = new float[n1 + n2];
         double sum = 0.0;
         int terms = 0;
 
@@ -243,7 +382,7 @@ public final class PDollarPlusRecognizer {
             if (bestJ >= 0) {
                 matched[bestJ] = true;
                 sum += bestD;
-                terms++;
+                pairs[terms++] = bestD;
             }
         }
 
@@ -258,11 +397,19 @@ public final class PDollarPlusRecognizer {
             }
             if (bestD < Float.MAX_VALUE) {
                 sum += bestD;
-                terms++;
+                pairs[terms++] = bestD;
             }
         }
 
-        return terms > 0 ? (float) (sum / terms) : REFERENCE_SIZE;
+        if (terms == 0) return new ChamferStats(REFERENCE_SIZE, REFERENCE_SIZE, REFERENCE_SIZE);
+
+        float mean = (float) (sum / terms);
+        float[] sorted = java.util.Arrays.copyOf(pairs, terms);
+        java.util.Arrays.sort(sorted);
+        float worst = sorted[terms - 1];
+        int p90Idx = Math.min(terms - 1, Math.max(0, (int) Math.ceil(0.9 * terms) - 1));
+        float p90 = sorted[p90Idx];
+        return new ChamferStats(mean, worst, p90);
     }
 
     /**
