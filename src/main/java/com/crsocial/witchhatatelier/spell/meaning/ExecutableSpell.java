@@ -1,6 +1,7 @@
 package com.crsocial.witchhatatelier.spell.meaning;
 
 import com.crsocial.witchhatatelier.spell.compiler.SigilType;
+import net.minecraft.core.BlockPos;
 import org.jetbrains.annotations.Nullable;
 import org.joml.Vector3f;
 
@@ -22,6 +23,8 @@ import java.util.List;
  * @param totalCostPerTick  aggregate fuel cost per tick across all ops
  * @param totalCostPerUse   aggregate fuel cost per trigger/event across all ops
  * @param inner             composed inner-ring spell when {@code SpellGraph.inner} is present
+ * @param sourceBlock       placed-paper block the cast emerged from (the summon's fuel
+ *                          source), or {@code null} for hand casts
  */
 public record ExecutableSpell(SigilType element,
                               List<BehaviorOp> ops,
@@ -32,7 +35,8 @@ public record ExecutableSpell(SigilType element,
                               Vector3f direction,
                               float totalCostPerTick,
                               float totalCostPerUse,
-                              @Nullable ExecutableSpell inner) {
+                              @Nullable ExecutableSpell inner,
+                              @Nullable BlockPos sourceBlock) {
 
     /**
      * Returns a copy with the spatial vectors replaced. Used each tick of a
@@ -41,7 +45,7 @@ public record ExecutableSpell(SigilType element,
      */
     public ExecutableSpell withOrigin(Vector3f originWorld, Vector3f surfaceNormal, Vector3f direction) {
         return new ExecutableSpell(element, ops, magnitude, origin,
-                originWorld, surfaceNormal, direction, totalCostPerTick, totalCostPerUse, inner);
+                originWorld, surfaceNormal, direction, totalCostPerTick, totalCostPerUse, inner, sourceBlock);
     }
 
     /** Human-readable single-line summary for server logging. */

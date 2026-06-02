@@ -503,7 +503,7 @@ public final class SaveGestureHandler {
             surfaceNormal = new Vector3f(0f, 1f, 0f);
         }
 
-        return CastingContext.of(medium, originWorld, surfaceNormal);
+        return CastingContext.of(medium, originWorld, surfaceNormal, origin);
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────────

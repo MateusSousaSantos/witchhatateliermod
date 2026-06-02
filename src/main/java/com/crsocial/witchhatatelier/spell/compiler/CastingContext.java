@@ -1,5 +1,6 @@
 package com.crsocial.witchhatatelier.spell.compiler;
 
+import net.minecraft.core.BlockPos;
 import org.jetbrains.annotations.Nullable;
 import org.joml.Vector3f;
 
@@ -13,7 +14,8 @@ public record CastingContext(@Nullable InkId ink,
                              @Nullable WandId wand,
                              MediumKind medium,
                              Vector3f originWorld,
-                             Vector3f surfaceNormal) {
+                             Vector3f surfaceNormal,
+                             @Nullable BlockPos sourceBlock) {
 
     /** Where the inscription lives — affects origin/direction, never spell content. */
     public enum MediumKind { PAPER_ITEM, PLACED_PAPER, INSCRIBED_BLOCK }
@@ -24,8 +26,14 @@ public record CastingContext(@Nullable InkId ink,
     /** Reserved — the wand system is not implemented yet. */
     public record WandId(String id) {}
 
-    /** Builds a context with the reserved ink/wand slots left null. */
-    public static CastingContext of(MediumKind medium, Vector3f originWorld, Vector3f surfaceNormal) {
-        return new CastingContext(null, null, medium, originWorld, surfaceNormal);
+    /**
+     * Builds a context with the reserved ink/wand slots left null.
+     *
+     * @param sourceBlock the placed-paper block the cast emerges from, or {@code null}
+     *                    for hand casts — used to anchor summoned entities to their fuel.
+     */
+    public static CastingContext of(MediumKind medium, Vector3f originWorld, Vector3f surfaceNormal,
+                                    @Nullable BlockPos sourceBlock) {
+        return new CastingContext(null, null, medium, originWorld, surfaceNormal, sourceBlock);
     }
 }

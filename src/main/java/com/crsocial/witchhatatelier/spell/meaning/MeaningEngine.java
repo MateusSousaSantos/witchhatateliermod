@@ -128,7 +128,7 @@ public final class MeaningEngine {
         return Optional.of(new ExecutableSpell(
                 element, List.copyOf(ops), finalMagnitude, origin,
                 originWorld, surfaceNormal, finalDirection,
-                totalCostPerTick, totalCostPerUse, null));
+                totalCostPerTick, totalCostPerUse, null, ctx.sourceBlock()));
     }
 
     private static Origin originFor(CastingContext.MediumKind medium) {

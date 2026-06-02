@@ -1,6 +1,10 @@
 package com.crsocial.witchhatatelier.entity;
 
+import com.crsocial.witchhatatelier.blocks.PlacedPaperBlockEntity;
 import com.crsocial.witchhatatelier.entity.child.ChildManager;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.particles.ParticleTypes;
+import net.minecraft.nbt.NbtUtils;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
@@ -15,6 +19,7 @@ import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.Entity.RemovalReason;
 import net.minecraft.world.level.Level;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import software.bernie.geckolib.animatable.GeoEntity;
 import software.bernie.geckolib.animatable.instance.AnimatableInstanceCache;
 import software.bernie.geckolib.animation.AnimatableManager;
@@ -53,6 +58,15 @@ public class PyreballEntity extends Entity implements GeoEntity {
     /** Satellites (e.g. the light block) that follow the orb around. */
     private final ChildManager children = new ChildManager();
 
+    /**
+     * The placed-paper block this orb draws its fuel from, or {@code null} if the orb
+     * is unanchored (e.g. a hand-channeled cast, whose lifecycle the
+     * {@code SpellCastManager} owns directly). When set, the orb verifies each server
+     * tick that the block still exists and {@link #dissipate dissipates} if it doesn't.
+     */
+    @Nullable
+    private BlockPos fuelSource;
+
     private int age;
 
     // Client-side smoothing: base Entity#lerpTo snaps instantly, which looks janky
@@ -70,6 +84,19 @@ public class PyreballEntity extends Entity implements GeoEntity {
     /** The orb's child satellites; the spell effect attaches children here at spawn. */
     public ChildManager children() {
         return children;
+    }
+
+    /**
+     * Anchors the orb to the block supplying its fuel. Pass {@code null} to leave it
+     * unanchored (the orb then lives out its lifetime / external lifecycle instead).
+     */
+    public void setFuelSource(@Nullable BlockPos pos) {
+        this.fuelSource = pos == null ? null : pos.immutable();
+    }
+
+    @Nullable
+    public BlockPos getFuelSource() {
+        return fuelSource;
     }
 
     public void setLifetimeTicks(int ticks) {
@@ -114,7 +141,18 @@ public class PyreballEntity extends Entity implements GeoEntity {
             return;
         }
 
-        children.followAll((ServerLevel) level(), position());
+        ServerLevel server = (ServerLevel) level();
+        // Fuel check: an anchored orb only persists while its source block is intact.
+        // Break the placed paper and the orb has nothing to burn — it dissipates.
+        // (Skip while the source chunk is unloaded so we don't fizzle on a far-off
+        // cast that's merely out of view, rather than actually broken.)
+        if (fuelSource != null && server.isLoaded(fuelSource)
+                && !(server.getBlockEntity(fuelSource) instanceof PlacedPaperBlockEntity)) {
+            dissipate(server);
+            return;
+        }
+
+        children.followAll(server, position());
         if (age == 0) {
             level().playSound(null, getX(), getY(), getZ(),
                     SPAWN_SOUND, SoundSource.PLAYERS, 1.2f, 0.9f);
@@ -127,6 +165,19 @@ public class PyreballEntity extends Entity implements GeoEntity {
         if (age >= getLifetimeTicks()) {
             discard();
         }
+    }
+
+    /**
+     * Fizzles the orb out — used when its {@link #fuelSource} is gone. Plays a brief
+     * extinguish sound and a puff of smoke, then removes the entity (which detaches
+     * any children via {@link #remove}).
+     */
+    private void dissipate(ServerLevel level) {
+        level.playSound(null, getX(), getY(), getZ(),
+                SoundEvents.FIRE_EXTINGUISH, SoundSource.BLOCKS, 0.7f, 1.2f);
+        level.sendParticles(ParticleTypes.SMOKE, getX(), getY(), getZ(),
+                12, 0.2, 0.2, 0.2, 0.02);
+        discard();
     }
 
     /**
@@ -168,6 +219,9 @@ public class PyreballEntity extends Entity implements GeoEntity {
         if (tag.contains("MaxScale")) {
             setMaxScale(tag.getFloat("MaxScale"));
         }
+        fuelSource = tag.contains("FuelSource")
+                ? NbtUtils.readBlockPos(tag, "FuelSource").orElse(null)
+                : null;
         children.load(tag);
     }
 
@@ -176,6 +230,9 @@ public class PyreballEntity extends Entity implements GeoEntity {
         tag.putInt("Age", age);
         tag.putInt("LifetimeTicks", getLifetimeTicks());
         tag.putFloat("MaxScale", getMaxScale());
+        if (fuelSource != null) {
+            tag.put("FuelSource", NbtUtils.writeBlockPos(fuelSource));
+        }
         children.save(tag);
     }
 

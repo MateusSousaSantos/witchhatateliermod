@@ -162,6 +162,9 @@ public final class PyreballEffect implements EffectKind {
             entity.moveTo(spell.originWorld().x, spell.originWorld().y, spell.originWorld().z,
                     0f, 0f);
             configureOrb(entity, lifetime, maxScale);
+            // Anchor the orb to the placed-paper block that summoned it; the orb
+            // dissipates on its own once that fuel source is broken (see PyreballEntity).
+            entity.setFuelSource(spell.sourceBlock());
             level.addFreshEntity(entity);
             WitchHatAtelierMod.LOGGER.info(
                     "[{}] Spawned {} at {} (lifetime={}t, maxScale={}).",
