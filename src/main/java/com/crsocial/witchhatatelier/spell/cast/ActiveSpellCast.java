@@ -21,21 +21,19 @@ final class ActiveSpellCast {
     final ExecutableSpell baseSpell;
     /** Stamped into the paper's CustomData so it can be relocated after slot moves. */
     final UUID castId;
-    final int totalTicks;
     /** Whether the paper was in a hand when the cast began (drives cancel-on-unhold). */
     final boolean heldAtStart;
     final EffectScratch scratch = new EffectScratch();
+    final SpellFuel fuel;
 
-    int remainingTicks;
     boolean finished;
 
     ActiveSpellCast(UUID casterId, ExecutableSpell baseSpell, UUID castId,
-                    int totalTicks, boolean heldAtStart) {
+                    boolean heldAtStart, SpellFuel fuel) {
         this.casterId = casterId;
         this.baseSpell = baseSpell;
         this.castId = castId;
-        this.totalTicks = totalTicks;
         this.heldAtStart = heldAtStart;
-        this.remainingTicks = totalTicks;
+        this.fuel = fuel;
     }
 }

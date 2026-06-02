@@ -4,9 +4,8 @@
   "behavior_kind": "pyreball",
 
   "base": {
-    "power":          1.5,
-    "duration_ticks": 1000,
-    "aoe":            1.0
+    "power": 1.5,
+    "aoe":   1.0
   },
 
   "effects": [
@@ -19,6 +18,11 @@
   ],
 
   "stacking_curve": "linear",
+
+  "cost": {
+    "per_tick": 1.0,
+    "per_use": 0.0
+  },
 
   "_comment": "A pyreball - a hovering orb of fire that levitates above the glyph, scorching nearby entities. Burn radius and lifetime scale with SignBundle.count x Quality x Size."
 }

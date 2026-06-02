@@ -11,21 +11,23 @@ import java.util.List;
  * cell. The matrix key is {@code (sigil, sign)} only — no environmental
  * overrides. See {@code docs/magic_system/03_meaning_engine.md}.
  *
- * @param sigil          element domain
- * @param sign           behaviour modifier
- * @param behaviorKind   identifier the engine maps to an effect implementation
- *                       (e.g. {@code "stone_pillar"} → {@code StonePillarEffect})
- * @param basePower      baseline power before scaling
- * @param baseDurationTicks baseline duration in server ticks
- * @param baseAoe        baseline area-of-effect multiplier
- * @param effects        raw effect-list payloads, interpreted by the effect kind
- * @param stackingCurve  how the per-cell magnitude scales with sign count
+ * @param sigil         element domain
+ * @param sign          behaviour modifier
+ * @param behaviorKind  identifier the engine maps to an effect implementation
+ *                      (e.g. {@code "stone_pillar"} → {@code StonePillarEffect})
+ * @param basePower     baseline power before scaling
+ * @param baseAoe       baseline area-of-effect multiplier
+ * @param effects       raw effect-list payloads, interpreted by the effect kind
+ * @param stackingCurve how the per-cell magnitude scales with sign count
+ * @param costPerTick   fuel drained per server tick during this effect (default 0.0)
+ * @param costPerUse    fuel drained once per trigger/event (default 0.0)
  */
 public record MatrixEntry(SigilType sigil,
                           SignType sign,
                           String behaviorKind,
                           float basePower,
-                          long baseDurationTicks,
                           float baseAoe,
                           List<JsonObject> effects,
-                          StackingCurve stackingCurve) {}
+                          StackingCurve stackingCurve,
+                          float costPerTick,
+                          float costPerUse) {}

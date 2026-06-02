@@ -69,7 +69,11 @@ public final class PyreballEffect implements EffectKind {
 
     @Override
     public void begin(CastContext ctx) {
-        PyreballEntity orb = spawnTracked(ctx.level(), ctx.spell(), ctx.totalTicks());
+        float cpt = ctx.spell().totalCostPerTick();
+        int lifetime = cpt > 0f
+                ? (int) Math.min(Integer.MAX_VALUE, ctx.fuel().capacity() / cpt)
+                : Integer.MAX_VALUE;
+        PyreballEntity orb = spawnTracked(ctx.level(), ctx.spell(), lifetime);
         if (orb != null) {
             ctx.scratch().put(KEY, orb);
         } else {
@@ -148,8 +152,7 @@ public final class PyreballEffect implements EffectKind {
             return false;
         }
 
-        long engineDuration = spell.durationTicks();
-        int lifetime = (int) Math.max(1L, Math.min(Integer.MAX_VALUE, engineDuration));
+        int lifetime = 200; // 10 seconds, constant for one-shot fallback (no fuel context)
         float power = spell.magnitude().power();
         float maxScale = Mth.clamp(0.5f + 0.5f * power, 0.5f, 4.0f);
 

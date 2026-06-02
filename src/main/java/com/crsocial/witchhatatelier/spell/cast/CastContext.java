@@ -20,12 +20,11 @@ import org.jetbrains.annotations.Nullable;
 public record CastContext(@Nullable ServerLevel level,
                           @Nullable ServerPlayer caster,
                           ExecutableSpell spell,
-                          int totalTicks,
-                          int remainingTicks,
-                          EffectScratch scratch) {
+                          EffectScratch scratch,
+                          SpellFuel fuel) {
 
-    /** Fraction of the channel elapsed, in {@code [0,1]}. */
+    /** Fraction of the channel's fuel exhausted (consumed / capacity), in {@code [0,1]}. */
     public float progress() {
-        return 1f - (float) remainingTicks / Math.max(1, totalTicks);
+        return fuel != null ? fuel.progress() : 0f;
     }
 }

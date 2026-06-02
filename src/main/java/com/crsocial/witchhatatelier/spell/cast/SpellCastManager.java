@@ -1,5 +1,6 @@
 package com.crsocial.witchhatatelier.spell.cast;
 
+import com.crsocial.witchhatatelier.Config;
 import com.crsocial.witchhatatelier.WitchHatAtelierMod;
 import com.crsocial.witchhatatelier.items.SpellPaperItem;
 import com.crsocial.witchhatatelier.network.CastingStatePayload;
@@ -76,16 +77,17 @@ public final class SpellCastManager {
             endCast(caster, existing, CancelReason.ERROR);
         }
 
-        int total = (int) Math.max(1L, Math.min(Integer.MAX_VALUE, spell.durationTicks()));
         UUID castId = UUID.randomUUID();
         SpellPaperItem.markCastInProgress(paper, castId);
         boolean heldAtStart = findHeldCastHand(caster, castId) != null;
 
-        ActiveSpellCast cast = new ActiveSpellCast(caster.getUUID(), spell, castId, total, heldAtStart);
+        float capacity = Config.DEFAULT_SPELL_FUEL.get().floatValue();
+        SpellFuel fuel = new SpellFuel(capacity);
+        ActiveSpellCast cast = new ActiveSpellCast(caster.getUUID(), spell, castId, heldAtStart, fuel);
         final ExecutableSpell live = liveSpell(cast, caster);
         SpellExecutor.forEachDistinctKind(live, (kind, s) -> {
             try {
-                kind.begin(new CastContext(level, caster, s, total, total, cast.scratch));
+                kind.begin(new CastContext(level, caster, s, cast.scratch, cast.fuel));
             } catch (Exception e) {
                 WitchHatAtelierMod.LOGGER.error(
                         "[SpellCast] begin '{}' threw: {}", kind.key(), e.toString(), e);
@@ -95,8 +97,8 @@ public final class SpellCastManager {
         active.put(caster.getUUID(), cast);
         sendCastingState(caster, true);
         WitchHatAtelierMod.LOGGER.info(
-                "[SpellCast] Started cast {} ({}t, heldAtStart={}) for '{}'.",
-                castId, total, heldAtStart, caster.getScoreboardName());
+                "[SpellCast] Started cast {} (heldAtStart={}, fuel={}) for '{}'.",
+                castId, heldAtStart, capacity, caster.getScoreboardName());
     }
 
     /** Cancels the player's active cast, if any (used on logout). */
@@ -141,19 +143,18 @@ public final class SpellCastManager {
             final ServerPlayer fp = player;
             final ServerLevel level = player.serverLevel();
             final ExecutableSpell live = liveSpell(cast, player);
-            final int remaining = cast.remainingTicks;
             SpellExecutor.forEachDistinctKind(live, (kind, s) -> {
                 try {
-                    kind.tick(new CastContext(level, fp, s, cast.totalTicks, remaining, cast.scratch));
+                    kind.tick(new CastContext(level, fp, s, cast.scratch, cast.fuel));
                 } catch (Exception e) {
                     WitchHatAtelierMod.LOGGER.error(
                             "[SpellCast] tick '{}' threw: {}", kind.key(), e.toString(), e);
                 }
             });
 
-            cast.remainingTicks--;
-            if (cast.remainingTicks <= 0) {
-                endCast(player, cast, CancelReason.COMPLETED);
+            float costThisTick = cast.baseSpell.totalCostPerTick();
+            if (costThisTick > 0f && !cast.fuel.consume(costThisTick)) {
+                endCast(player, cast, CancelReason.FUEL_EXHAUSTED);
                 toRemove.add(cast.casterId);
             }
         }
@@ -171,7 +172,7 @@ public final class SpellCastManager {
         final ServerLevel level = player != null ? player.serverLevel() : null;
         SpellExecutor.forEachDistinctKind(cast.baseSpell, (kind, s) -> {
             try {
-                kind.end(new CastContext(level, player, s, cast.totalTicks, cast.remainingTicks, cast.scratch));
+                kind.end(new CastContext(level, player, s, cast.scratch, cast.fuel));
             } catch (Exception e) {
                 WitchHatAtelierMod.LOGGER.error(
                         "[SpellCast] end '{}' threw: {}", kind.key(), e.toString(), e);

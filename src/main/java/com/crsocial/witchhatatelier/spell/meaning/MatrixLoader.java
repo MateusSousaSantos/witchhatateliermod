@@ -100,7 +100,6 @@ public final class MatrixLoader extends SimpleJsonResourceReloadListener {
 
         JsonObject base = root.has("base") ? root.getAsJsonObject("base") : new JsonObject();
         float power = base.has("power") ? base.get("power").getAsFloat() : 1.0f;
-        long duration = base.has("duration_ticks") ? base.get("duration_ticks").getAsLong() : 20L;
         float aoe = base.has("aoe") ? base.get("aoe").getAsFloat() : 1.0f;
 
         List<JsonObject> effects = new ArrayList<>();
@@ -112,9 +111,13 @@ public final class MatrixLoader extends SimpleJsonResourceReloadListener {
         StackingCurve curve = StackingCurve.parse(
                 root.has("stacking_curve") ? root.get("stacking_curve").getAsString() : null);
 
+        JsonObject costObj = root.has("cost") ? root.getAsJsonObject("cost") : new JsonObject();
+        float costPerTick = costObj.has("per_tick") ? costObj.get("per_tick").getAsFloat() : 0.0f;
+        float costPerUse = costObj.has("per_use") ? costObj.get("per_use").getAsFloat() : 0.0f;
+
         return Optional.of(new MatrixEntry(
                 sigil.get(), sign.get(), behaviorKind,
-                power, duration, aoe,
-                List.copyOf(effects), curve));
+                power, aoe,
+                List.copyOf(effects), curve, costPerTick, costPerUse));
     }
 }

@@ -223,6 +223,16 @@ public class Config {
                     "Range: 3 – 32. Default: 8.")
             .defineInRange("dotInjectionCirclePoints", 8, 3, 32);
 
+    // ── Spell casting & fuel system ─────────────────────────────────────────────
+
+    public static final ModConfigSpec.DoubleValue DEFAULT_SPELL_FUEL = BUILDER
+            .comment("Default fuel units a spell starts with. Will be replaced by",
+                    "ink-type-driven values in a future update, but for now all spells",
+                    "start with this much fuel. A spell ends when fuel reaches zero.",
+                    "Per-tick costs drain this each tick; per-use costs drain on trigger/event.",
+                    "Range: 1.0 – 10000.0. Default: 100.0.")
+            .defineInRange("defaultSpellFuel", 100.0, 1.0, 10000.0);
+
     // Must be declared AFTER all values so the builder has them all registered before building.
     static final ModConfigSpec SPEC = BUILDER.build();
 }

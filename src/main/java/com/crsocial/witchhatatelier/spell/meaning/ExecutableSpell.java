@@ -12,15 +12,16 @@ import java.util.List;
  * pipeline reads from the {@link com.crsocial.witchhatatelier.spell.compiler.SpellGraph}
  * separately. See {@code docs/magic_system/03_meaning_engine.md}.
  *
- * @param element       central sigil's element
- * @param ops           resolved per-sign behaviour operations
- * @param magnitude     per-spell magnitude (power, AoE, quality, size)
- * @param origin        where the spell emerges from
- * @param originWorld   world-space position the spell emerges from
- * @param surfaceNormal world-space normal of the casting surface (1,0,0) etc.
- * @param direction     world-space net direction; zero = radial / undirected
- * @param durationTicks lifetime in server ticks
- * @param inner         composed inner-ring spell when {@code SpellGraph.inner} is present
+ * @param element           central sigil's element
+ * @param ops               resolved per-sign behaviour operations
+ * @param magnitude         per-spell magnitude (power, AoE, quality, size)
+ * @param origin            where the spell emerges from
+ * @param originWorld       world-space position the spell emerges from
+ * @param surfaceNormal     world-space normal of the casting surface (1,0,0) etc.
+ * @param direction         world-space net direction; zero = radial / undirected
+ * @param totalCostPerTick  aggregate fuel cost per tick across all ops
+ * @param totalCostPerUse   aggregate fuel cost per trigger/event across all ops
+ * @param inner             composed inner-ring spell when {@code SpellGraph.inner} is present
  */
 public record ExecutableSpell(SigilType element,
                               List<BehaviorOp> ops,
@@ -29,7 +30,8 @@ public record ExecutableSpell(SigilType element,
                               Vector3f originWorld,
                               Vector3f surfaceNormal,
                               Vector3f direction,
-                              long durationTicks,
+                              float totalCostPerTick,
+                              float totalCostPerUse,
                               @Nullable ExecutableSpell inner) {
 
     /**
@@ -39,7 +41,7 @@ public record ExecutableSpell(SigilType element,
      */
     public ExecutableSpell withOrigin(Vector3f originWorld, Vector3f surfaceNormal, Vector3f direction) {
         return new ExecutableSpell(element, ops, magnitude, origin,
-                originWorld, surfaceNormal, direction, durationTicks, inner);
+                originWorld, surfaceNormal, direction, totalCostPerTick, totalCostPerUse, inner);
     }
 
     /** Human-readable single-line summary for server logging. */
@@ -51,8 +53,9 @@ public record ExecutableSpell(SigilType element,
             ks.append(op.kind()).append("×").append(op.count());
         }
         return String.format(java.util.Locale.ROOT,
-                "ExecutableSpell{element=%s ops=[%s] power=%.2f aoe=%.2f quality=%.2f size=%.2f duration=%dt origin=%s}",
+                "ExecutableSpell{element=%s ops=[%s] power=%.2f aoe=%.2f quality=%.2f size=%.2f cost=%.1f/t,%.1f/use origin=%s}",
                 element, ks, magnitude.power(), magnitude.aoe(),
-                magnitude.quality(), magnitude.sizeNormalized(), durationTicks, origin);
+                magnitude.quality(), magnitude.sizeNormalized(),
+                totalCostPerTick, totalCostPerUse, origin);
     }
 }

@@ -13,9 +13,7 @@ import java.util.List;
  * {@code "type": "unique_entity"} effect instruction. Spawns a mod-defined
  * "unique" entity whose behaviour is driven by the spell rather than a vanilla
  * mob template — the {@code specialEffects} tags name what it does (ignite,
- * levitate, …). Entity lifetime is driven by the engine-computed
- * {@code spell.durationTicks()} (from {@code base.duration_ticks}), not by
- * any per-effect scaling block.
+ * levitate, …). Entity lifetime is driven by the fuel consumption (per-tick or per-use).
  *
  * <p>When no {@code entity} is supplied (or its type is unavailable at runtime),
  * the effect degrades to placing {@code fallbackBlock} instead — this is the

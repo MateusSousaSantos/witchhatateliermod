@@ -11,13 +11,16 @@ import org.jetbrains.annotations.Nullable;
  * {@link com.crsocial.witchhatatelier.spell.compiler.SignType.StackingMode}
  * before emitting the op.
  *
- * @param sign    sign type that produced this op, or {@code null} for the
- *                sigil's "no-signs" default behaviour
- * @param count   sign occurrences contributing to this op (always the raw
- *                bundle count — the {@link com.crsocial.witchhatatelier.spell.compiler.SignType.StackingMode}
- *                is the effect's concern: REPETITION effects loop {@code count}
- *                times, MAGNITUDE effects fold {@code count} into a scalar).
- * @param kind    behaviour kind string from the matrix JSON (e.g. {@code "stone_pillar"})
- * @param payload effect-specific configuration, parsed from the matrix JSON
+ * @param sign        sign type that produced this op, or {@code null} for the
+ *                    sigil's "no-signs" default behaviour
+ * @param count       sign occurrences contributing to this op (always the raw
+ *                    bundle count — the {@link com.crsocial.witchhatatelier.spell.compiler.SignType.StackingMode}
+ *                    is the effect's concern: REPETITION effects loop {@code count}
+ *                    times, MAGNITUDE effects fold {@code count} into a scalar).
+ * @param kind        behaviour kind string from the matrix JSON (e.g. {@code "stone_pillar"})
+ * @param payload     effect-specific configuration, parsed from the matrix JSON
+ * @param costPerTick fuel drained per server tick during this op
+ * @param costPerUse  fuel drained once per trigger/event for this op
  */
-public record BehaviorOp(@Nullable SignType sign, int count, String kind, Object payload) {}
+public record BehaviorOp(@Nullable SignType sign, int count, String kind, Object payload,
+                         float costPerTick, float costPerUse) {}

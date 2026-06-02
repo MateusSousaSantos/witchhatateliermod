@@ -44,7 +44,8 @@ public final class MeaningEngine {
         List<BehaviorOp> ops = new ArrayList<>();
         float maxPower = 0f;
         float maxAoe = 0f;
-        long durationTicks = 0L;
+        float totalCostPerTick = 0f;
+        float totalCostPerUse = 0f;
 
         // ── One op per sign bundle that has a matrix cell ────────────────────────
         for (SignBundle bundle : graph.signsByType()) {
@@ -73,11 +74,13 @@ public final class MeaningEngine {
             float opAoe = entry.baseAoe() * magnitudeScalar;
 
             ops.add(new BehaviorOp(bundle.type(), magnitudeCount,
-                    entry.behaviorKind(), kind.get().parsePayload(entry.effects())));
+                    entry.behaviorKind(), kind.get().parsePayload(entry.effects()),
+                    entry.costPerTick(), entry.costPerUse()));
 
             if (opPower > maxPower) maxPower = opPower;
             if (opAoe > maxAoe) maxAoe = opAoe;
-            if (entry.baseDurationTicks() > durationTicks) durationTicks = entry.baseDurationTicks();
+            totalCostPerTick += entry.costPerTick();
+            totalCostPerUse += entry.costPerUse();
         }
 
         if (ops.isEmpty()) {
@@ -95,7 +98,6 @@ public final class MeaningEngine {
         Vector3f originOffset = new Vector3f();
         Vector3f directionBias = new Vector3f();
         float powerMul = 1.0f;
-        float durationMul = 1.0f;
         float aoeMul = 1.0f;
 
         for (SignBundle bundle : graph.signsByType()) {
@@ -107,7 +109,6 @@ public final class MeaningEngine {
             originOffset.add(mod.originOffset());
             directionBias.add(mod.directionBias());
             powerMul *= mod.powerMultiplier();
-            durationMul *= mod.durationMultiplier();
             aoeMul *= mod.aoeMultiplier();
         }
 
@@ -117,7 +118,6 @@ public final class MeaningEngine {
                 maxAoe * aoeMul,
                 quality,
                 size);
-        long finalDuration = Math.max(1L, (long) (durationTicks * durationMul));
 
         Vector3f finalDirection = new Vector3f(direction).add(directionBias);
         if (finalDirection.lengthSquared() > 1e-6f) finalDirection.normalize();
@@ -127,7 +127,8 @@ public final class MeaningEngine {
 
         return Optional.of(new ExecutableSpell(
                 element, List.copyOf(ops), finalMagnitude, origin,
-                originWorld, surfaceNormal, finalDirection, finalDuration, null));
+                originWorld, surfaceNormal, finalDirection,
+                totalCostPerTick, totalCostPerUse, null));
     }
 
     private static Origin originFor(CastingContext.MediumKind medium) {

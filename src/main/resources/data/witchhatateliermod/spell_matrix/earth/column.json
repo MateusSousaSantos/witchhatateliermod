@@ -4,9 +4,8 @@
   "behavior_kind": "stone_pillar",
 
   "base": {
-    "power":          1.0,
-    "duration_ticks": 60,
-    "aoe":            1.0
+    "power": 1.0,
+    "aoe":   1.0
   },
 
   "effects": [
@@ -19,6 +18,11 @@
   ],
 
   "stacking_curve": "linear",
+
+  "cost": {
+    "per_tick": 0.0,
+    "per_use": 10.0
+  },
 
   "_comment": "Stone pillar erupts upward from the glyph. Height scales with SignBundle.count x Quality x Size."
 }
