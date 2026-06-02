@@ -143,8 +143,8 @@ def tune_soft_demote(real, garbage):
         print("  @>=90% valid : FREE={} WEIGHT={} minScore={} -> reject {:.0%} garbage (keep {:.0%})"
               .format(free, weight, ms, gr, vk))
     # weight=0 baseline (no demote) at its best minScore, for comparison
-    base = [(run(0.25, 0.0, ms)[1], ms) for ms in [round(0.80 + 0.005 * k, 3) for k in range(0, 40)]
-            if run(0.25, 0.0, ms)[0] >= 0.90]
+    base = [(res[1], ms) for ms in [round(0.80 + 0.005 * k, 3) for k in range(0, 40)]
+            if (res := run(0.25, 0.0, ms))[0] >= 0.90]
     if base:
         b0 = max(base)
         print("  (no-demote baseline @>=90% valid: reject {:.0%} garbage at minScore={})".format(b0[0], b0[1]))

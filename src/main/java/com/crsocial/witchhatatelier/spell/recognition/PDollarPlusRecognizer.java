@@ -404,12 +404,46 @@ public final class PDollarPlusRecognizer {
         if (terms == 0) return new ChamferStats(REFERENCE_SIZE, REFERENCE_SIZE, REFERENCE_SIZE);
 
         float mean = (float) (sum / terms);
-        float[] sorted = java.util.Arrays.copyOf(pairs, terms);
-        java.util.Arrays.sort(sorted);
-        float worst = sorted[terms - 1];
-        int p90Idx = Math.min(terms - 1, Math.max(0, (int) Math.ceil(0.9 * terms) - 1));
-        float p90 = sorted[p90Idx];
+
+        // Find worst (max) and p90 in single pass instead of full sort.
+        float worst = Float.NEGATIVE_INFINITY;
+        for (int i = 0; i < terms; i++) worst = Math.max(worst, pairs[i]);
+
+        // p90 via partial selection: partition around p90 index without full sort.
+        int p90Idx = (int) Math.ceil(0.9 * terms) - 1;
+        p90Idx = Math.clamp(p90Idx, 0, terms - 1);
+        float p90 = quickSelect(pairs, 0, terms - 1, p90Idx);
+
         return new ChamferStats(mean, worst, p90);
+    }
+
+    /**
+     * Finds the k-th smallest element (0-indexed) in the range [left, right] via
+     * Hoare partitioning. Used to compute p90 percentile without full sort.
+     */
+    private static float quickSelect(float[] arr, int left, int right, int k) {
+        if (left == right) return arr[left];
+        int pivotIdx = partition(arr, left, right);
+        if (k == pivotIdx) return arr[k];
+        else if (k < pivotIdx) return quickSelect(arr, left, pivotIdx - 1, k);
+        else return quickSelect(arr, pivotIdx + 1, right, k);
+    }
+
+    private static int partition(float[] arr, int left, int right) {
+        float pivot = arr[(left + right) / 2];
+        int i = left, j = right;
+        while (i <= j) {
+            while (arr[i] < pivot) i++;
+            while (arr[j] > pivot) j--;
+            if (i <= j) {
+                float tmp = arr[i];
+                arr[i] = arr[j];
+                arr[j] = tmp;
+                i++;
+                j--;
+            }
+        }
+        return i;
     }
 
     /**

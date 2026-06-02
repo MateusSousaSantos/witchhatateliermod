@@ -119,6 +119,8 @@ public final class RecognitionLog {
         thr.addProperty("macroMergeRadius", Config.MACRO_MERGE_RADIUS.get());
         thr.addProperty("gridCheckScoreThreshold", Config.GRID_CHECK_SCORE_THRESHOLD.get());
         thr.addProperty("gridMinSimilarity", Config.GRID_MIN_SIMILARITY.get());
+        thr.addProperty("worstPairFreeAllowance", Config.WORST_PAIR_FREE_ALLOWANCE.get());
+        thr.addProperty("worstPairWeight", Config.WORST_PAIR_WEIGHT.get());
         root.add("thresholds", thr);
 
         // Final result.
@@ -214,7 +216,7 @@ public final class RecognitionLog {
             if (tt.rejectedBy() != null) o.addProperty("rejectedBy", tt.rejectedBy());
             if (tt.prefilterPassed()) {
                 o.addProperty("raw", round(tt.rawScore()));
-                addNum(o, "gridSim", tt.gridSim());
+                addNum(o, tt.gridSim());
                 o.addProperty("gridMult", round(tt.gridMultiplier()));
                 o.addProperty("final", round(tt.finalScore()));
                 o.addProperty("dist", round(tt.dist()));
@@ -233,9 +235,9 @@ public final class RecognitionLog {
     }
 
     /** Adds a float property, emitting JSON null for NaN (e.g. grid not computed). */
-    private static void addNum(JsonObject o, String key, float value) {
-        if (Float.isNaN(value)) o.add(key, com.google.gson.JsonNull.INSTANCE);
-        else o.addProperty(key, round(value));
+    private static void addNum(JsonObject o, float value) {
+        if (Float.isNaN(value)) o.add("gridSim", com.google.gson.JsonNull.INSTANCE);
+        else o.addProperty("gridSim", round(value));
     }
 
     private static float round(float v) {
