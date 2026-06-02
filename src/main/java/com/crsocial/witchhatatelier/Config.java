@@ -223,6 +223,17 @@ public class Config {
                     "Range: 3 – 32. Default: 8.")
             .defineInRange("dotInjectionCirclePoints", 8, 3, 32);
 
+    // ── Spell meaning (sigil stacking) ──────────────────────────────────────────
+
+    public static final ModConfigSpec.DoubleValue SIGIL_STACK_POWER_PER_EXTRA = BUILDER
+            .comment("Power bonus per DUPLICATE sigil of the same element drawn in one ring.",
+                    "Drawing the same element N times multiplies the spell's power by",
+                    "1 + (N - 1) * this value. Example at 0.5: one fire = ×1.0, two fire = ×1.5,",
+                    "three fire = ×2.0. Different elements in one ring are still rejected (combine",
+                    "them via nested rings); only repeats of the SAME element stack here.",
+                    "Range: 0.0 – 4.0. Default: 0.5 (each extra sigil = +50% power).")
+            .defineInRange("sigilStackPowerPerExtra", 0.5, 0.0, 4.0);
+
     // ── Spell casting & fuel system ─────────────────────────────────────────────
 
     public static final ModConfigSpec.DoubleValue DEFAULT_SPELL_FUEL = BUILDER
@@ -231,7 +242,17 @@ public class Config {
                     "start with this much fuel. A spell ends when fuel reaches zero.",
                     "Per-tick costs drain this each tick; per-use costs drain on trigger/event.",
                     "Range: 1.0 – 10000.0. Default: 100.0.")
-            .defineInRange("defaultSpellFuel", 100.0, 1.0, 10000.0);
+            .defineInRange("defaultSpellFuel", 600.0, 1.0, 10000.0);
+    public static final ModConfigSpec.DoubleValue COST_POWER_SCALING = BUILDER
+            .comment("How strongly fuel cost tracks a spell's power. The matrix cost.per_tick/",
+                    "per_use values are the BASE, paid in full by a spell drawn at its reference",
+                    "power. Amplifiers (quality, size, sign stacking, sign behaviours, repeated",
+                    "sigils) raise power above that baseline; cost is multiplied by",
+                    "1 + (powerFactor - 1) * this, where powerFactor = finalPower / basePower.",
+                    "0.0 = flat cost (old behaviour). 1.0 = cost rises 1:1 with power",
+                    "(double power → double cost). >1.0 = a steeper toll on heavy casts.",
+                    "Range: 0.0 – 4.0. Default: 1.0.")
+            .defineInRange("costPowerScaling", 1.0, 0.0, 4.0);
 
     // Must be declared AFTER all values so the builder has them all registered before building.
     static final ModConfigSpec SPEC = BUILDER.build();

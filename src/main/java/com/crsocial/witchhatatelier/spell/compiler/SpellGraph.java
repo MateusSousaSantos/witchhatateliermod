@@ -13,15 +13,18 @@ import java.util.Optional;
  * structurally valid (one sigil, at most one sign per conflicting tier); the
  * meaning engine assumes this and does not re-check.
  *
- * @param root      the enclosing ring
- * @param core      the central sigil (exactly one)
- * @param modifiers one node per sign occurrence
- * @param inner     nested inner-ring graph; empty until ring nesting (Phase 6)
- * @param symmetry  sign-placement symmetry report
- * @param size      inscription size report
+ * @param root       the enclosing ring
+ * @param core       the central sigil (representative of the ring's single element)
+ * @param sigilStack how many identical sigils were drawn ({@code >= 1}); repeats of
+ *                   the same element amplify the spell's power in the meaning engine
+ * @param modifiers  one node per sign occurrence
+ * @param inner      nested inner-ring graph; empty until ring nesting (Phase 6)
+ * @param symmetry   sign-placement symmetry report
+ * @param size       inscription size report
  */
 public record SpellGraph(RingNode root,
                          SigilNode core,
+                         int sigilStack,
                          List<SignNode> modifiers,
                          Optional<SpellGraph> inner,
                          SymmetryReport symmetry,
@@ -99,8 +102,8 @@ public record SpellGraph(RingNode root,
                 "  ring: strokes=%s arc=%.0f° radius=%.1f%n",
                 root.strokeIds(), root.arcCoverageDeg(), root.radius()));
         sb.append(String.format(Locale.ROOT,
-                "  sigil: %s quality=%.2f centre=(%.1f,%.1f)%n",
-                core.type(), core.quality(), core.centre().x, core.centre().y));
+                "  sigil: %s x%d quality=%.2f centre=(%.1f,%.1f)%n",
+                core.type(), sigilStack, core.quality(), core.centre().x, core.centre().y));
         sb.append(String.format(Locale.ROOT, "  form: %s%n", describeForm()));
         sb.append("  signs:");
         if (signsByType().isEmpty()) {

@@ -21,7 +21,7 @@
 
   "cost": {
     "per_tick": 0.0,
-    "per_use": 10.0
+    "per_use": 300.0
   },
 
   "_comment": "A roaring pillar of flame erupts upward from the glyph, igniting and scorching anything in the column. Height scales with SignBundle.count x Quality x Size."

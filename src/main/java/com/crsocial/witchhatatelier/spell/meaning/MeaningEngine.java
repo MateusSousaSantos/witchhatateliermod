@@ -1,5 +1,6 @@
 package com.crsocial.witchhatatelier.spell.meaning;
 
+import com.crsocial.witchhatatelier.Config;
 import com.crsocial.witchhatatelier.WitchHatAtelierMod;
 import com.crsocial.witchhatatelier.spell.compiler.CastingContext;
 import com.crsocial.witchhatatelier.spell.compiler.SigilType;
@@ -43,6 +44,7 @@ public final class MeaningEngine {
 
         List<BehaviorOp> ops = new ArrayList<>();
         float maxPower = 0f;
+        float dominantBasePower = 0f; // basePower of the op that set maxPower — the cost reference
         float maxAoe = 0f;
         float totalCostPerTick = 0f;
         float totalCostPerUse = 0f;
@@ -77,7 +79,10 @@ public final class MeaningEngine {
                     entry.behaviorKind(), kind.get().parsePayload(entry.effects()),
                     entry.costPerTick(), entry.costPerUse()));
 
-            if (opPower > maxPower) maxPower = opPower;
+            if (opPower > maxPower) {
+                maxPower = opPower;
+                dominantBasePower = entry.basePower();
+            }
             if (opAoe > maxAoe) maxAoe = opAoe;
             totalCostPerTick += entry.costPerTick();
             totalCostPerUse += entry.costPerUse();
@@ -112,12 +117,29 @@ public final class MeaningEngine {
             aoeMul *= mod.aoeMultiplier();
         }
 
+        // Repeated copies of the same element amplify power: ×(1 + (stack-1)*perExtra).
+        float sigilStackMul = 1.0f + (graph.sigilStack() - 1)
+                * Config.SIGIL_STACK_POWER_PER_EXTRA.get().floatValue();
+
         // Apply accumulated modifications
+        float finalPower = maxPower * powerMul * sigilStackMul;
         Magnitude finalMagnitude = new Magnitude(
-                maxPower * powerMul,
+                finalPower,
                 maxAoe * aoeMul,
                 quality,
                 size);
+
+        // ── Cost scales with power ───────────────────────────────────────────────
+        // The matrix cost is the BASE: a spell drawn at its reference power pays it
+        // unchanged. Amplifiers (quality, size, sign stacking, sign behaviours,
+        // repeated sigils) raise power above that baseline, and cost rides along by
+        // the same factor — scaled by COST_POWER_SCALING (0 = flat, 1 = 1:1 with
+        // power, >1 = a steeper toll on heavy casts).
+        float powerFactor = dominantBasePower > 1e-6f ? finalPower / dominantBasePower : 1f;
+        float costScaling = Config.COST_POWER_SCALING.get().floatValue();
+        float costMul = Math.max(0f, 1f + (powerFactor - 1f) * costScaling);
+        totalCostPerTick *= costMul;
+        totalCostPerUse *= costMul;
 
         Vector3f finalDirection = new Vector3f(direction).add(directionBias);
         if (finalDirection.lengthSquared() > 1e-6f) finalDirection.normalize();

@@ -69,20 +69,28 @@ public final class SpellGraphBuilder {
                     "[Compiler] Ignoring recognized but non-sigil/non-sign content '{}'.", r.spellName());
         }
 
-        // ── Rule: exactly one Sigil per ring ────────────────────────────────────
+        // ── Rule: one Sigil ELEMENT per ring; repeats of that element stack ──────
+        // Drawing the same element twice (e.g. fire + fire) is no longer an error:
+        // the copies amplify power. Two *different* elements still need nested rings.
         if (sigils.isEmpty()) {
             return CompileResult.rejected("No sigil recognized inside the ring");
         }
-        if (sigils.size() > 1) {
-            return CompileResult.rejected(sigils.size() + " sigils in one ring (only one allowed; combine via nested rings)");
-        }
+        SigilType element = sigils.getFirst().type();
         SigilNode core = sigils.getFirst();
+        for (SigilNode s : sigils) {
+            if (s.type() != element) {
+                return CompileResult.rejected("Mixed elements in one ring (" + element + " + " + s.type()
+                        + "); only one element per ring — combine different elements via nested rings");
+            }
+            if (s.quality() > core.quality()) core = s; // best-drawn copy represents the stack
+        }
+        int sigilStack = sigils.size(); // repeats of the same element amplify the spell's power
 
         RingNode ring = buildRing(trigger.ringStrokeIds(), ringStrokes);
         SymmetryReport symmetry = SymmetryAnalyzer.analyze(core.centre(), signs);
         SizeReport size = buildSize(clusters, ringStrokes);
 
-        return CompileResult.success(new SpellGraph(ring, core, List.copyOf(signs),
+        return CompileResult.success(new SpellGraph(ring, core, sigilStack, List.copyOf(signs),
                 Optional.empty(), symmetry, size));
     }
 
