@@ -25,6 +25,9 @@ import java.util.List;
  */
 public final class PillarEffects {
 
+    /** Column length (blocks) for a particle pillar whose instruction sets no {@code reach}. */
+    private static final float DEFAULT_PARTICLE_REACH = 4.0f;
+
     private PillarEffects() {}
 
     /**
@@ -79,6 +82,14 @@ public final class PillarEffects {
      * {@code spell} and {@code op} so the particles track the placed blocks exactly.
      * Cheap and stateless, so it's safe to call every tick of a channeled cast to
      * keep the flame alive.
+     *
+     * <p>The column length is read from whichever instruction the kind carries:
+     * {@link SpawnBlocksInstruction} pillars (stone/flame) scale by
+     * {@code blocks_per_magnitude} × quality; {@link SpawnParticlesInstruction}
+     * pillars (the blockless {@code wind_pillar}) scale by the instruction's
+     * {@code reach}. Either way the rendered particle is the one passed in, so a
+     * particle pillar looks just like the flame pillar's trail with a different
+     * particle.</p>
      */
     @SuppressWarnings("unchecked")
     public static void emitColumnTrail(ServerLevel level, ExecutableSpell spell, BehaviorOp op,
@@ -92,12 +103,20 @@ public final class PillarEffects {
         Vector3f origin = spell.originWorld();
         Vector3f grow = ColumnPlacer.growDirection(spell.surfaceNormal());
         int perBlock = Math.max(1, Math.round(size * 2f));
+        int count = Math.max(1, op.count());
 
         for (EffectInstruction ins : instructions) {
-            if (!(ins instanceof SpawnBlocksInstruction sb)) continue;
-            int count = Math.max(1, op.count());
-            int height = Math.max(1, Math.min(ColumnPlacer.MAX_HEIGHT,
-                    Math.round(sb.blocksPerMagnitude() * count * size * quality)));
+            int height;
+            if (ins instanceof SpawnBlocksInstruction sb) {
+                height = Math.max(1, Math.min(ColumnPlacer.MAX_HEIGHT,
+                        Math.round(sb.blocksPerMagnitude() * count * size * quality)));
+            } else if (ins instanceof SpawnParticlesInstruction sp) {
+                float reach = sp.reach() > 0f ? sp.reach() : DEFAULT_PARTICLE_REACH;
+                height = Math.max(1, Math.min(ColumnPlacer.MAX_HEIGHT,
+                        Math.round(reach * count * size)));
+            } else {
+                continue;
+            }
             // Emit along the continuous diagonal line so the trail follows the aim.
             for (int i = 0; i < height; i++) {
                 double px = origin.x + grow.x * (i + 0.5);

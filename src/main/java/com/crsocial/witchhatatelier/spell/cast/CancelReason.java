@@ -10,6 +10,8 @@ public enum CancelReason {
     LOGOUT,
     /** Player died or was removed. */
     DEATH,
+    /** The placed_paper block driving a surface cast was broken or unloaded. */
+    SOURCE_REMOVED,
     /** Superseded by a new cast or an internal error. */
     ERROR
 }

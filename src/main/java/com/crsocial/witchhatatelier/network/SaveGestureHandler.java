@@ -10,6 +10,7 @@ import com.crsocial.witchhatatelier.items.SpellPaperItem;
 import com.crsocial.witchhatatelier.spell.cluster.SigilCluster;
 import com.crsocial.witchhatatelier.spell.cluster.SigilClusterer;
 import com.crsocial.witchhatatelier.ModCommands;
+import com.crsocial.witchhatatelier.spell.cast.PlacedPaperCastManager;
 import com.crsocial.witchhatatelier.spell.cast.SpellCastManager;
 import com.crsocial.witchhatatelier.spell.compiler.CastingContext;
 import com.crsocial.witchhatatelier.spell.compiler.CompileResult;
@@ -398,8 +399,15 @@ public final class SaveGestureHandler {
                         // inscribed paper just produced. The paper is consumed when the
                         // channel finishes or is canceled, so we do NOT consume here.
                         SpellCastManager.get().start(sp, executable.get(), inscribed);
+                    } else if (payload.blockOrigin() != null
+                            && executable.get().totalCostPerTick() > 0f) {
+                        // Surface cast with a per-tick cost → sustained channel anchored to
+                        // the placed_paper, active until its fuel drains; the block is marked
+                        // spent by the manager when the cast ends (so we do NOT consume here).
+                        PlacedPaperCastManager.get().start(
+                                serverLevel, player, executable.get(), payload.blockOrigin());
                     } else {
-                        // Surface / placed-paper cast → instantaneous (unchanged).
+                        // Instantaneous surface cast (no per-tick cost) → fire once and spend.
                         boolean fired = SpellExecutor.run(serverLevel, player, executable.get());
                         if (fired) {
                             consumeMedium(payload, player, serverLevel);

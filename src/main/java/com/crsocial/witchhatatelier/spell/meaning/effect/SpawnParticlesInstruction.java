@@ -23,12 +23,16 @@ import org.jetbrains.annotations.Nullable;
  *                        (dx/dy/dz); larger = a looser cloud
  * @param speed           particle speed argument to {@code sendParticles}
  * @param verticalOffset  blocks to raise the emission point above the origin
+ * @param reach           column length in blocks for line-shaped effects (e.g.
+ *                        {@code wind_pillar}); {@code 0} = a single point emission,
+ *                        which is all the generic {@code particles} kind uses
  */
 public record SpawnParticlesInstruction(@Nullable ResourceLocation particleId,
                                         int count,
                                         float spread,
                                         float speed,
-                                        float verticalOffset) implements EffectInstruction {
+                                        float verticalOffset,
+                                        float reach) implements EffectInstruction {
 
     public static final String TYPE = "spawn_particles";
 
@@ -47,6 +51,8 @@ public record SpawnParticlesInstruction(@Nullable ResourceLocation particleId,
         float spread = o.has("spread") ? o.get("spread").getAsFloat() : 0.25f;
         float speed = o.has("speed") ? o.get("speed").getAsFloat() : 0.0f;
         float vOff = o.has("vertical_offset") ? o.get("vertical_offset").getAsFloat() : 0.0f;
-        return new SpawnParticlesInstruction(id, Math.max(0, count), Math.max(0f, spread), speed, vOff);
+        float reach = o.has("reach") ? o.get("reach").getAsFloat() : 0.0f;
+        return new SpawnParticlesInstruction(
+                id, Math.max(0, count), Math.max(0f, spread), speed, vOff, Math.max(0f, reach));
     }
 }

@@ -1,5 +1,6 @@
 package com.crsocial.witchhatatelier.spell.meaning.effect;
 
+import com.crsocial.witchhatatelier.spell.meaning.effect.air.WindPillarEffect;
 import com.crsocial.witchhatatelier.spell.meaning.effect.earth.StonePillarEffect;
 import com.crsocial.witchhatatelier.spell.meaning.effect.fire.FlamePillarEffect;
 import com.crsocial.witchhatatelier.spell.meaning.effect.fire.PyreballEffect;
@@ -35,6 +36,7 @@ public final class EffectRegistry {
         INSTANCE.register(new ParticleEffect());
         INSTANCE.register(new PyreballEffect());
         INSTANCE.register(new StonePillarEffect());
+        INSTANCE.register(new WindPillarEffect());
     }
 
     public synchronized void register(EffectKind kind) {

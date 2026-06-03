@@ -19,6 +19,7 @@ public final class SpellCastEvents {
     @SubscribeEvent
     public static void onServerTick(ServerTickEvent.Post event) {
         SpellCastManager.get().tickAll(event.getServer());
+        PlacedPaperCastManager.get().tickAll(event.getServer());
     }
 
     @SubscribeEvent

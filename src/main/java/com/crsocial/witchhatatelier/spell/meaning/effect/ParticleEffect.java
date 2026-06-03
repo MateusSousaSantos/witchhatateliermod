@@ -1,17 +1,12 @@
 package com.crsocial.witchhatatelier.spell.meaning.effect;
 
-import com.crsocial.witchhatatelier.WitchHatAtelierMod;
 import com.crsocial.witchhatatelier.spell.cast.CastContext;
 import com.crsocial.witchhatatelier.spell.meaning.BehaviorOp;
 import com.crsocial.witchhatatelier.spell.meaning.ExecutableSpell;
 import com.google.gson.JsonObject;
 import net.minecraft.core.particles.ParticleOptions;
-import net.minecraft.core.particles.ParticleType;
-import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.player.Player;
-import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
 
@@ -67,7 +62,7 @@ public final class ParticleEffect implements EffectKind {
 
             for (EffectInstruction ins : (List<EffectInstruction>) raw) {
                 if (!(ins instanceof SpawnParticlesInstruction sp)) continue;
-                ParticleOptions particle = resolveParticle(sp.particleId());
+                ParticleOptions particle = ParticleSupport.resolve(sp.particleId(), KEY);
                 if (particle == null) continue;
 
                 int count = Math.min(MAX_PARTICLES_PER_EMISSION,
@@ -77,24 +72,5 @@ public final class ParticleEffect implements EffectKind {
                         count, sp.spread(), sp.spread(), sp.spread(), sp.speed());
             }
         }
-    }
-
-    /**
-     * Resolves a particle id to {@link ParticleOptions}. Vanilla
-     * {@code SimpleParticleType}s are themselves {@code ParticleOptions}; particles
-     * that need extra config (dust, block) aren't supported yet and are skipped.
-     */
-    @Nullable
-    private static ParticleOptions resolveParticle(@Nullable ResourceLocation id) {
-        if (id == null) return null;
-        ParticleType<?> type = BuiltInRegistries.PARTICLE_TYPE.getOptional(id).orElse(null);
-        if (type instanceof ParticleOptions opts) return opts;
-        if (type != null) {
-            WitchHatAtelierMod.LOGGER.warn(
-                    "[{}] Particle '{}' needs extra options not supported yet; skipping.", KEY, id);
-        } else {
-            WitchHatAtelierMod.LOGGER.warn("[{}] Unknown particle id '{}'; skipping.", KEY, id);
-        }
-        return null;
     }
 }

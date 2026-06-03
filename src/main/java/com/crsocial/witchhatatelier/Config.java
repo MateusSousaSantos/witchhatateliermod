@@ -242,7 +242,7 @@ public class Config {
                     "start with this much fuel. A spell ends when fuel reaches zero.",
                     "Per-tick costs drain this each tick; per-use costs drain on trigger/event.",
                     "Range: 1.0 – 10000.0. Default: 100.0.")
-            .defineInRange("defaultSpellFuel", 600.0, 1.0, 10000.0);
+            .defineInRange("defaultSpellFuel", 1200.0, 1.0, 10000.0);
     public static final ModConfigSpec.DoubleValue COST_POWER_SCALING = BUILDER
             .comment("How strongly fuel cost tracks a spell's power. The matrix cost.per_tick/",
                     "per_use values are the BASE, paid in full by a spell drawn at its reference",
