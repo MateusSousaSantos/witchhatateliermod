@@ -1,4 +1,4 @@
-package com.crsocial.witchhatatelier.spell.meaning.effect;
+package com.crsocial.witchhatatelier.spell.meaning.effect.fire;
 
 import com.crsocial.witchhatatelier.WitchHatAtelierMod;
 import com.crsocial.witchhatatelier.entity.ModEntities;
@@ -7,6 +7,9 @@ import com.crsocial.witchhatatelier.entity.child.LightBlockChild;
 import com.crsocial.witchhatatelier.spell.cast.CastContext;
 import com.crsocial.witchhatatelier.spell.meaning.BehaviorOp;
 import com.crsocial.witchhatatelier.spell.meaning.ExecutableSpell;
+import com.crsocial.witchhatatelier.spell.meaning.effect.EffectInstruction;
+import com.crsocial.witchhatatelier.spell.meaning.effect.EffectKind;
+import com.crsocial.witchhatatelier.spell.meaning.effect.UniqueEntitySpawn;
 import com.google.gson.JsonObject;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;

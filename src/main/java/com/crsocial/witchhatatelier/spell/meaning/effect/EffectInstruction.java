@@ -15,7 +15,8 @@ import java.util.Locale;
  * <p>Phase 2 parses the shapes but execution stays a no-op — {@link EffectKind#execute}
  * will consume these instructions once Phase 3 wires runtime execution.</p>
  */
-public sealed interface EffectInstruction permits UniqueEntitySpawn, SpawnBlocksInstruction, RawInstruction {
+public sealed interface EffectInstruction
+        permits UniqueEntitySpawn, SpawnBlocksInstruction, SpawnParticlesInstruction, RawInstruction {
 
     /** The {@code type} string this instruction was parsed from. */
     String type();
@@ -33,6 +34,7 @@ public sealed interface EffectInstruction permits UniqueEntitySpawn, SpawnBlocks
         return switch (type) {
             case UniqueEntitySpawn.TYPE -> UniqueEntitySpawn.fromJson(o);
             case SpawnBlocksInstruction.TYPE -> SpawnBlocksInstruction.fromJson(o);
+            case SpawnParticlesInstruction.TYPE -> SpawnParticlesInstruction.fromJson(o);
             default -> new RawInstruction(type, o);
         };
     }

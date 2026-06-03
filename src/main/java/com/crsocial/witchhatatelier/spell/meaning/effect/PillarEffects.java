@@ -5,7 +5,7 @@ import com.crsocial.witchhatatelier.spell.meaning.BehaviorOp;
 import com.crsocial.witchhatatelier.spell.meaning.ExecutableSpell;
 import com.crsocial.witchhatatelier.spell.meaning.Magnitude;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.Direction;
+import net.minecraft.core.particles.ParticleOptions;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
@@ -19,10 +19,11 @@ import java.util.List;
  * Shared {@link EffectKind#execute} body for column-shaped block effects. The
  * stone-pillar and flame-pillar cells use identical placement semantics — only
  * the block id differs, and that comes from the matrix JSON. Centralizing the
- * math here keeps {@link StonePillarEffect} / {@link FlamePillarEffect} as thin
+ * math here keeps {@link com.crsocial.witchhatatelier.spell.meaning.effect.earth.StonePillarEffect}
+ * / {@link com.crsocial.witchhatatelier.spell.meaning.effect.fire.FlamePillarEffect} as thin
  * wrappers carrying just a fallback block id and a {@link #key()}.
  */
-final class PillarEffects {
+public final class PillarEffects {
 
     private PillarEffects() {}
 
@@ -32,7 +33,7 @@ final class PillarEffects {
      * world-space origin along its surface normal for each one.
      */
     @SuppressWarnings("unchecked")
-    static int executeColumn(ServerLevel level, ExecutableSpell spell, BehaviorOp op,
+    public static int executeColumn(ServerLevel level, ExecutableSpell spell, BehaviorOp op,
                              Block fallbackBlock, String kindKey) {
         if (!(op.payload() instanceof List<?> raw) || raw.isEmpty()) {
             WitchHatAtelierMod.LOGGER.debug(
@@ -44,10 +45,9 @@ final class PillarEffects {
         Magnitude m = spell.magnitude();
         float quality = Math.max(0.1f, m.quality());
         float size = Math.max(0.1f, m.sizeNormalized());
-        Vector3f normal = spell.surfaceNormal();
-        Direction grow = ColumnPlacer.directionFromNormal(normal);
-        BlockPos originBlock = BlockPos.containing(
-                spell.originWorld().x, spell.originWorld().y, spell.originWorld().z);
+        Vector3f origin = spell.originWorld();
+        Vector3f grow = ColumnPlacer.growDirection(spell.surfaceNormal());
+        BlockPos originBlock = BlockPos.containing(origin.x, origin.y, origin.z);
 
         int totalPlaced = 0;
         for (EffectInstruction ins : instructions) {
@@ -56,17 +56,56 @@ final class PillarEffects {
             Block block = resolveBlock(sb.block(), fallbackBlock);
             int count = Math.max(1, op.count());
             int height = Math.max(1, Math.round(sb.blocksPerMagnitude() * count * size * quality));
-            int placed = ColumnPlacer.placeColumn(level, originBlock, grow, height, block);
+            int placed = ColumnPlacer.placeColumn(level, origin, grow, height, block);
             totalPlaced += placed;
 
             WitchHatAtelierMod.LOGGER.info(
-                    "[{}] Placed {}/{} {} block(s) at {} growing {} (count={}, size={}, quality={}).",
+                    "[{}] Placed {}/{} {} block(s) at {} growing ({}, {}, {}) (count={}, size={}, quality={}).",
                     kindKey, placed, height,
-                    BuiltInRegistries.BLOCK.getKey(block), originBlock, grow, count,
+                    BuiltInRegistries.BLOCK.getKey(block), originBlock,
+                    String.format(java.util.Locale.ROOT, "%.2f", grow.x),
+                    String.format(java.util.Locale.ROOT, "%.2f", grow.y),
+                    String.format(java.util.Locale.ROOT, "%.2f", grow.z), count,
                     String.format(java.util.Locale.ROOT, "%.2f", size),
                     String.format(java.util.Locale.ROOT, "%.2f", quality));
         }
         return totalPlaced;
+    }
+
+    /**
+     * Emits a column of {@code particle}s along the very geometry
+     * {@link #executeColumn} places blocks on — a trail "forming" the pillar from
+     * its source up to its tip. Recomputes origin / grow direction / height from
+     * {@code spell} and {@code op} so the particles track the placed blocks exactly.
+     * Cheap and stateless, so it's safe to call every tick of a channeled cast to
+     * keep the flame alive.
+     */
+    @SuppressWarnings("unchecked")
+    public static void emitColumnTrail(ServerLevel level, ExecutableSpell spell, BehaviorOp op,
+                                       ParticleOptions particle) {
+        if (!(op.payload() instanceof List<?> raw) || raw.isEmpty()) return;
+        List<EffectInstruction> instructions = (List<EffectInstruction>) raw;
+
+        Magnitude m = spell.magnitude();
+        float quality = Math.max(0.1f, m.quality());
+        float size = Math.max(0.1f, m.sizeNormalized());
+        Vector3f origin = spell.originWorld();
+        Vector3f grow = ColumnPlacer.growDirection(spell.surfaceNormal());
+        int perBlock = Math.max(1, Math.round(size * 2f));
+
+        for (EffectInstruction ins : instructions) {
+            if (!(ins instanceof SpawnBlocksInstruction sb)) continue;
+            int count = Math.max(1, op.count());
+            int height = Math.max(1, Math.min(ColumnPlacer.MAX_HEIGHT,
+                    Math.round(sb.blocksPerMagnitude() * count * size * quality)));
+            // Emit along the continuous diagonal line so the trail follows the aim.
+            for (int i = 0; i < height; i++) {
+                double px = origin.x + grow.x * (i + 0.5);
+                double py = origin.y + grow.y * (i + 0.5);
+                double pz = origin.z + grow.z * (i + 0.5);
+                level.sendParticles(particle, px, py, pz, perBlock, 0.2, 0.2, 0.2, 0.01);
+            }
+        }
     }
 
     private static Block resolveBlock(ResourceLocation id, Block fallback) {

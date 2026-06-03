@@ -9,7 +9,7 @@ import java.util.List;
  * matrix JSON's {@code effects[]} entries into typed {@link EffectInstruction}
  * records so {@link EffectKind#execute} doesn't have to crack JSON at runtime.
  */
-abstract class AbstractPillarEffect implements EffectKind {
+public abstract class AbstractPillarEffect implements EffectKind {
 
     @Override
     public List<EffectInstruction> parsePayload(List<JsonObject> effects) {

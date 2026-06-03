@@ -153,6 +153,7 @@ public class PyreballEntity extends Entity implements GeoEntity {
         }
 
         children.followAll(server, position());
+        emitAmbientFlame(server);
         if (age == 0) {
             level().playSound(null, getX(), getY(), getZ(),
                     SPAWN_SOUND, SoundSource.PLAYERS, 1.2f, 0.9f);
@@ -165,6 +166,23 @@ public class PyreballEntity extends Entity implements GeoEntity {
         if (age >= getLifetimeTicks()) {
             discard();
         }
+    }
+
+    /** Server ticks between ambient flame puffs licking off the orb. */
+    private static final int FLAME_INTERVAL = 2;
+
+    /**
+     * A little flame flickering off the orb — a couple of {@link ParticleTypes#FLAME}
+     * particles within its current radius every few ticks, so the orb reads as a
+     * ball of fire. Radius and lift scale with {@link #getCurrentScale()} so the
+     * flame shrinks along with the orb as it ages.
+     */
+    private void emitAmbientFlame(ServerLevel level) {
+        if (age % FLAME_INTERVAL != 0) return;
+        float scale = getCurrentScale();
+        double r = 0.25 + 0.3 * scale;
+        level.sendParticles(ParticleTypes.FLAME, getX(), getY() + 0.1 * scale, getZ(),
+                2, r, r * 0.5, r, 0.01);
     }
 
     /**

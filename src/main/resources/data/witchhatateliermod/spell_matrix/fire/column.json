@@ -20,7 +20,7 @@
   "stacking_curve": "linear",
 
   "cost": {
-    "per_tick": 0.0,
+    "per_tick": 5.0,
     "per_use": 300.0
   },
 

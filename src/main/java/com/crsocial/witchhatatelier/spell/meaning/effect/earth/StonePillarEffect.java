@@ -1,7 +1,10 @@
-package com.crsocial.witchhatatelier.spell.meaning.effect;
+package com.crsocial.witchhatatelier.spell.meaning.effect.earth;
 
 import com.crsocial.witchhatatelier.spell.meaning.BehaviorOp;
 import com.crsocial.witchhatatelier.spell.meaning.ExecutableSpell;
+import com.crsocial.witchhatatelier.spell.meaning.effect.AbstractPillarEffect;
+import com.crsocial.witchhatatelier.spell.meaning.effect.ColumnPlacer;
+import com.crsocial.witchhatatelier.spell.meaning.effect.PillarEffects;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.block.Blocks;
