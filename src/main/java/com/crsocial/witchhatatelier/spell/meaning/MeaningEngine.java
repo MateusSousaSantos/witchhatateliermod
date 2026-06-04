@@ -72,7 +72,7 @@ public final class MeaningEngine {
             float magnitudeScalar = bundle.type().stackingMode() == SignType.StackingMode.MAGNITUDE
                     ? entry.stackingCurve().apply(magnitudeCount) : 1.0f;
 
-            float opPower = entry.basePower() * magnitudeScalar * quality * Math.max(0.1f, size);
+            float opPower = entry.basePower() * magnitudeScalar * quality * SizeScaling.powerMultiplier(size);
             float opAoe = entry.baseAoe() * magnitudeScalar;
 
             ops.add(new BehaviorOp(bundle.type(), magnitudeCount,

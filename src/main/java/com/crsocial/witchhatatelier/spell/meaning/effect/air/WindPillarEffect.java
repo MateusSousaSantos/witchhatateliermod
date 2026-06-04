@@ -3,6 +3,7 @@ package com.crsocial.witchhatatelier.spell.meaning.effect.air;
 import com.crsocial.witchhatatelier.spell.cast.CastContext;
 import com.crsocial.witchhatatelier.spell.meaning.BehaviorOp;
 import com.crsocial.witchhatatelier.spell.meaning.ExecutableSpell;
+import com.crsocial.witchhatatelier.spell.meaning.SizeScaling;
 import com.crsocial.witchhatatelier.spell.meaning.effect.*;
 import com.google.gson.JsonObject;
 import net.minecraft.core.particles.ParticleOptions;
@@ -92,7 +93,10 @@ public final class WindPillarEffect implements EffectKind {
     @SuppressWarnings("unchecked")
     private void push(ServerLevel level, ExecutableSpell spell, double baseStrength) {
         Vector3f o = spell.originWorld();
-        Vector3f dir = ColumnPlacer.growDirection(spell.surfaceNormal());
+        // Shove along the SAME axis the visual column grows on (Column-sign skew
+        // included) so the push and the rendered pillar stay aligned — a Column drawn
+        // off-centre flings diagonally rather than straight up the surface normal.
+        Vector3f dir = PillarEffects.columnGrow(spell);
         float size = Math.max(0.1f, spell.magnitude().sizeNormalized());
         float power = Math.max(0.1f, spell.magnitude().power());
         float aoe = Math.max(1f, spell.magnitude().aoe());
@@ -141,7 +145,8 @@ public final class WindPillarEffect implements EffectKind {
 
     private static int columnHeight(float reach, int count, float size) {
         double base = reach > 0f ? reach : DEFAULT_REACH;
-        return Math.max(1, Math.min(ColumnPlacer.MAX_HEIGHT, (int) Math.round(base * count * size)));
+        float reachScale = SizeScaling.powerMultiplier(size); // size→reach curve
+        return Math.max(1, Math.min(ColumnPlacer.MAX_HEIGHT, (int) Math.round(base * count * reachScale)));
     }
 
     /** Shortest distance from point {@code p} to the segment {@code a→b}. */

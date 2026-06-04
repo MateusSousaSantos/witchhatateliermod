@@ -234,6 +234,50 @@ public class Config {
                     "Range: 0.0 – 4.0. Default: 0.5 (each extra sigil = +50% power).")
             .defineInRange("sigilStackPowerPerExtra", 0.5, 0.0, 4.0);
 
+    public static final ModConfigSpec.DoubleValue SIZE_POWER_MAX = BUILDER
+            .comment("Power/reach multiplier a sigil reaches at FULL drawn size. Drawn size is",
+                    "the content bounding box as a fraction of the ring (0 = a dot, 1 = fills the",
+                    "ring). The curve is anchored (see sizePowerReference) so a reference-sized",
+                    "sigil = ×1.0 and a full-size one = this value, letting 'draw it big' amplify",
+                    "a spell instead of only ever shrinking it. Affects both the abstract power",
+                    "(Pyreball, Wind shove) and effect reach (pillar/column height).",
+                    "Example at 2.0: one full-size column ≈ two reference-size columns. Set 3.0",
+                    "to make one big column ≈ three small ones. Range: 1.0 – 8.0. Default: 2.0.")
+            .defineInRange("sizePowerMax", 2.0, 1.0, 8.0);
+    public static final ModConfigSpec.DoubleValue SIZE_POWER_REFERENCE = BUILDER
+            .comment("The drawn size that maps to ×1.0 power — the anchor of the size curve.",
+                    "Sigils drawn at this size are unaffected; larger ones amplify toward",
+                    "sizePowerMax, smaller ones fall toward a 0.1 floor. Lower it to make more",
+                    "drawings count as 'large', raise it to make amplification harder to reach.",
+                    "Range: 0.05 – 0.95. Default: 0.5.")
+            .defineInRange("sizePowerReference", 0.5, 0.05, 0.95);
+    public static final ModConfigSpec.DoubleValue SIZE_POWER_EXPONENT = BUILDER
+            .comment("Shape of the size→power curve on each side of the reference anchor.",
+                    "1.0 = linear ramp. >1.0 = big-heavy (size barely matters until near full,",
+                    "then ramps hard). <1.0 = front-loaded (small size gains matter most).",
+                    "Range: 0.25 – 4.0. Default: 1.0.")
+            .defineInRange("sizePowerExponent", 1.0, 0.25, 4.0);
+    public static final ModConfigSpec.DoubleValue DIRECTION_SIZE_EXPONENT = BUILDER
+            .comment("Extra weight size carries on a DIRECTIONAL cast's steering force (the",
+                    "Column sign's lean), over and above its effect on power. The steering skew",
+                    "uses the size→power multiplier raised to this exponent, so >1.0 makes a big",
+                    "off-centre sign steer much harder while a small one barely leans. 1.0 = the",
+                    "steering tracks size exactly like power does. Range: 0.5 – 4.0. Default: 1.5.")
+            .defineInRange("directionSizeExponent", 1.5, 0.5, 4.0);
+
+    public static final ModConfigSpec.DoubleValue SYMMETRY_CANCEL_DEADZONE = BUILDER
+            .comment("How close to balanced opposing signs must be before the spell's net",
+                    "direction cancels to zero. Each sign is a force vector — its displacement",
+                    "from the sigil centre, weighted by recognizer quality. The engine sums",
+                    "them and divides the net length by the total force length to get an",
+                    "imbalance in [0, 1]: 0 = forces perfectly cancel, 1 = all pull one way.",
+                    "When imbalance <= this value the residual is snapped to zero, so",
+                    "slightly-imperfect mirror placements still yield a balanced spell —",
+                    "making it easier to draw a directionless cast on purpose.",
+                    "0.0 = only exact cancellation balances (old behaviour). Higher = more",
+                    "forgiving. Range: 0.0 – 1.0. Default: 0.2.")
+            .defineInRange("symmetryCancelDeadzone", 0.2, 0.0, 1.0);
+
     // ── Spell casting & fuel system ─────────────────────────────────────────────
 
     public static final ModConfigSpec.DoubleValue DEFAULT_SPELL_FUEL = BUILDER

@@ -7,8 +7,10 @@ import org.joml.Vector2f;
  *
  * @param radialScore   {@code 1.0} = perfectly balanced placement, {@code 0.0} = all on one side
  * @param bilateralScore mirror symmetry score; not computed in Phase 1 (left {@code 0})
- * @param netDirection  mean sign displacement from the sigil centre; zero = balanced,
- *                      nonzero points toward the sign cluster (canvas-space pixels)
+ * @param netDirection  quality-weighted net of the sign force vectors (each = displacement
+ *                      from the sigil centre × quality); zero = balanced (forces cancel or
+ *                      fell inside the cancel deadzone), nonzero points toward the dominant
+ *                      side. Only its direction is consumed downstream (it is re-normalized).
  * @param stable        whether placement is symmetric enough to be a stable spell
  */
 public record SymmetryReport(float radialScore,

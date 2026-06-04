@@ -6,6 +6,7 @@ import com.crsocial.witchhatatelier.spell.compiler.SignBundle;
 import com.crsocial.witchhatatelier.spell.compiler.SignNode;
 import com.crsocial.witchhatatelier.spell.compiler.SpellGraph;
 import com.crsocial.witchhatatelier.spell.meaning.Magnitude;
+import com.crsocial.witchhatatelier.spell.meaning.SizeScaling;
 import org.joml.Vector2f;
 
 /**
@@ -17,8 +18,9 @@ import org.joml.Vector2f;
  *
  * <p>The skew direction comes from the sign's placement relative to the sigil
  * centre (mean of the Column occurrences − {@code graph.core().centre()}); its
- * magnitude is {@code signQuality × size} — this sign's own recognizer confidence
- * (averaged over its occurrences) times the overall inscription size. Canvas axes
+ * magnitude is {@code signQuality × steer(size)} — this sign's own recognizer confidence
+ * (averaged over its occurrences) times a size-steer curve ({@code SizeScaling.steerMultiplier},
+ * which weights size more steeply than power so big drawings lean much harder). Canvas axes
  * map to world space as {@code canvas.x → world.x}, {@code canvas.y → world.z}
  * (the same convention as {@code MeaningEngine.resolveDirection}).</p>
  *
@@ -67,9 +69,12 @@ public final class ColumnSignBehavior implements SignBehavior {
 
         float size = magnitude.sizeNormalized();
 
-        // ── Direction skew: side from placement, magnitude = quality × size ──
+        // ── Direction skew: side from placement, magnitude = quality × size-steer curve ──
+        // Size feeds through SizeScaling.steerMultiplier (the size→power curve raised to
+        // DIRECTION_SIZE_EXPONENT) so a big off-centre Column leans hard while a small one
+        // barely steers — size carries more weight here than it does on raw power.
         float invLen = 1f / dist;                 // normalize d
-        float skew = signQuality * size * MAX_SKEW;
+        float skew = signQuality * MAX_SKEW * SizeScaling.steerMultiplier(size);
         float biasX = d.x * invLen * skew;        // canvas.x → world.x
         float biasZ = d.y * invLen * skew;        // canvas.y → world.z
 

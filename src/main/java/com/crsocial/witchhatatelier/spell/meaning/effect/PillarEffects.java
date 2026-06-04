@@ -5,6 +5,7 @@ import com.crsocial.witchhatatelier.spell.meaning.BehaviorOp;
 import com.crsocial.witchhatatelier.spell.meaning.ExecutableSpell;
 import com.crsocial.witchhatatelier.spell.meaning.Magnitude;
 import com.crsocial.witchhatatelier.spell.meaning.Origin;
+import com.crsocial.witchhatatelier.spell.meaning.SizeScaling;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.particles.ParticleOptions;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -39,7 +40,7 @@ public final class PillarEffects {
      * that so an off-centre Column skews the pillar; a centred/undirected cast leaves
      * {@code direction} zero and we fall back to the straight surface normal.
      */
-    private static Vector3f columnGrow(ExecutableSpell spell) {
+    public static Vector3f columnGrow(ExecutableSpell spell) {
         // Direction-based skew is a surface-cast feature. Hand casts re-aim to the
         // crosshair each tick, so they grow straight along the (live-aim) surface
         // normal and ignore the canvas-derived lean.
@@ -68,6 +69,7 @@ public final class PillarEffects {
         Magnitude m = spell.magnitude();
         float quality = Math.max(0.1f, m.quality());
         float size = Math.max(0.1f, m.sizeNormalized());
+        float reachScale = SizeScaling.powerMultiplier(m.sizeNormalized()); // size→reach curve
         Vector3f origin = spell.originWorld();
         Vector3f grow = columnGrow(spell);
         BlockPos originBlock = BlockPos.containing(origin.x, origin.y, origin.z);
@@ -78,7 +80,7 @@ public final class PillarEffects {
 
             Block block = resolveBlock(sb.block(), fallbackBlock);
             int count = Math.max(1, op.count());
-            int height = Math.max(1, Math.round(sb.blocksPerMagnitude() * count * size * quality));
+            int height = Math.max(1, Math.round(sb.blocksPerMagnitude() * count * reachScale * quality));
             int placed = ColumnPlacer.placeColumn(level, origin, grow, height, block);
             totalPlaced += placed;
 
@@ -120,6 +122,7 @@ public final class PillarEffects {
         Magnitude m = spell.magnitude();
         float quality = Math.max(0.1f, m.quality());
         float size = Math.max(0.1f, m.sizeNormalized());
+        float reachScale = SizeScaling.powerMultiplier(m.sizeNormalized()); // size→reach curve
         Vector3f origin = spell.originWorld();
         Vector3f grow = columnGrow(spell);
         int perBlock = Math.max(1, Math.round(size * 2f));
@@ -129,11 +132,11 @@ public final class PillarEffects {
             int height;
             if (ins instanceof SpawnBlocksInstruction sb) {
                 height = Math.max(1, Math.min(ColumnPlacer.MAX_HEIGHT,
-                        Math.round(sb.blocksPerMagnitude() * count * size * quality)));
+                        Math.round(sb.blocksPerMagnitude() * count * reachScale * quality)));
             } else if (ins instanceof SpawnParticlesInstruction sp) {
                 float reach = sp.reach() > 0f ? sp.reach() : DEFAULT_PARTICLE_REACH;
                 height = Math.max(1, Math.min(ColumnPlacer.MAX_HEIGHT,
-                        Math.round(reach * count * size)));
+                        Math.round(reach * count * reachScale)));
             } else {
                 continue;
             }
