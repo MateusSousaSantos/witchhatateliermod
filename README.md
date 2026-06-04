@@ -172,3 +172,11 @@ cost scaling) live in `Config.java`, heavily commented with ranges and defaults.
 - [`docs/recognizer.md`](docs/recognizer.md) — the gesture recognizer, in depth.
 - [`docs/spell_pipeline.md`](docs/spell_pipeline.md) — compilation, meaning, and casting.
 - [`scripts/README.md`](scripts/README.md) — the offline recognizer-tuning workflow.
+
+## License
+
+WitchHatAtelierMod is licensed under the BSD 3-Clause License.
+
+Copyright (c) 2026 Mateus de Sousa Santos.
+
+See the LICENSE file for details.
