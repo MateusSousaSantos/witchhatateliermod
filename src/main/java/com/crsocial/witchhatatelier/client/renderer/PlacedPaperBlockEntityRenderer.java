@@ -14,6 +14,7 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.RotationSegment;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.api.distmarker.OnlyIn;
 import org.jetbrains.annotations.NotNull;
@@ -127,6 +128,16 @@ public class PlacedPaperBlockEntityRenderer implements BlockEntityRenderer<Place
         Matrix4f mat = poseStack.last().pose();
         VertexConsumer vc = bufferSource.getBuffer(ModRenderTypes.INK_STROKE);
 
+        // In-plane rotation (floor/ceiling): rotate the drawing so its top edge follows the
+        // player's facing at placement time. Applied in canvas UV space before projection.
+        int rotSeg = be.getRotationSegment();
+        float rotCos = 1f, rotSin = 0f;
+        if (rotSeg != 0) {
+            float theta = (float) Math.toRadians(RotationSegment.convertToDegrees(rotSeg));
+            rotCos = (float) Math.cos(theta);
+            rotSin = (float) Math.sin(theta);
+        }
+
         final float fr2 = circleR2;
         for (int cy = 0; cy < gridSize; cy++) {
             for (int cx = 0; cx < gridSize; cx++) {
@@ -144,10 +155,10 @@ public class PlacedPaperBlockEntityRenderer implements BlockEntityRenderer<Place
                 float vMin = cv - dotHalf, vMax = cv + dotHalf;
 
                 // CCW winding seen from the outward face normal: TL, BL, BR, TR
-                emitVertex(vc, mat, ft.project(uMin, vMin));
-                emitVertex(vc, mat, ft.project(uMin, vMax));
-                emitVertex(vc, mat, ft.project(uMax, vMax));
-                emitVertex(vc, mat, ft.project(uMax, vMin));
+                emitVertex(vc, mat, ft.project(rotU(uMin, vMin, rotCos, rotSin), rotV(uMin, vMin, rotCos, rotSin)));
+                emitVertex(vc, mat, ft.project(rotU(uMin, vMax, rotCos, rotSin), rotV(uMin, vMax, rotCos, rotSin)));
+                emitVertex(vc, mat, ft.project(rotU(uMax, vMax, rotCos, rotSin), rotV(uMax, vMax, rotCos, rotSin)));
+                emitVertex(vc, mat, ft.project(rotU(uMax, vMin, rotCos, rotSin), rotV(uMax, vMin, rotCos, rotSin)));
             }
         }
     }
@@ -187,6 +198,16 @@ public class PlacedPaperBlockEntityRenderer implements BlockEntityRenderer<Place
     // inside the margin-inset area on the block face instead of being clipped at the edges.
     private static int uvToCell(float uv, int gridSize) {
         return Math.clamp((int) (uv * gridSize), 0, gridSize - 1);
+    }
+
+    // Rotate a canvas UV coordinate around the paper centre (0.5, 0.5) by the precomputed
+    // cos/sin. Used to spin the whole drawing in-plane for floor/ceiling placements.
+    private static float rotU(float u, float v, float cos, float sin) {
+        return 0.5f + (u - 0.5f) * cos - (v - 0.5f) * sin;
+    }
+
+    private static float rotV(float u, float v, float cos, float sin) {
+        return 0.5f + (u - 0.5f) * sin + (v - 0.5f) * cos;
     }
 
     private static void markCell(boolean[][] grid, int cx, int cy, int size) {

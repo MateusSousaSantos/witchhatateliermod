@@ -24,6 +24,7 @@ import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.world.item.context.UseOnContext;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.RotationSegment;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.api.distmarker.OnlyIn;
 import org.jetbrains.annotations.NotNull;
@@ -81,6 +82,7 @@ public class SpellPaperItem extends Item {
 
             if (level.getBlockEntity(placePos) instanceof PlacedPaperBlockEntity be) {
                 be.setPaperType(paperType);
+                be.setRotationSegment(rotationSegmentFor(paperState, player));
                 if (!blank) {
                     CustomData customData = context.getItemInHand().get(DataComponents.CUSTOM_DATA);
                     if (customData != null) {
@@ -94,6 +96,19 @@ public class SpellPaperItem extends Item {
             context.getItemInHand().shrink(1);
         }
         return InteractionResult.sidedSuccess(level.isClientSide);
+    }
+
+    /**
+     * In-plane drawing rotation (0–15, {@code RotationSegment} convention) so the drawing's
+     * top edge points in the player's horizontal look direction. Only floor ({@code UP}) and
+     * ceiling ({@code DOWN}) placements rotate; wall papers stay upright (segment 0).
+     */
+    private static int rotationSegmentFor(BlockState state, Player player) {
+        return switch (state.getValue(PlacedPaper.FACING)) {
+            case UP   -> RotationSegment.convertToSegment(player.getYRot() + 180f);
+            case DOWN -> RotationSegment.convertToSegment(-player.getYRot());
+            default   -> 0;
+        };
     }
 
     // ── Canvas drawing ───────────────────────────────────────────────────────────

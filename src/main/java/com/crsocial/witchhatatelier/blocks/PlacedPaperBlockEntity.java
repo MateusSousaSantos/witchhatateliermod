@@ -26,6 +26,8 @@ public class PlacedPaperBlockEntity extends BlockEntity {
     private PaperType paperType = PaperType.MEDIUM_SQUARE;
     private CompoundTag gestureData = new CompoundTag();
     private boolean spent = false;
+    /** In-plane drawing rotation (0–15, {@code RotationSegment} convention). Floor/ceiling only. */
+    private int rotationSegment = 0;
 
     public PlacedPaperBlockEntity(BlockPos pos, BlockState state) {
         super(ModBlockEntities.PLACED_PAPER.get(), pos, state);
@@ -45,6 +47,14 @@ public class PlacedPaperBlockEntity extends BlockEntity {
 
     public void setGestureData(CompoundTag gestureData) {
         this.gestureData = gestureData;
+        setChanged();
+        syncToClient();
+    }
+
+    public int getRotationSegment() { return rotationSegment; }
+
+    public void setRotationSegment(int rotationSegment) {
+        this.rotationSegment = rotationSegment;
         setChanged();
         syncToClient();
     }
@@ -84,6 +94,7 @@ public class PlacedPaperBlockEntity extends BlockEntity {
         tag.putString("paperType", paperType.getId());
         tag.put("gestureData", gestureData.copy());
         tag.putBoolean("spent", spent);
+        tag.putInt("rotation", rotationSegment);
     }
 
     @Override
@@ -97,5 +108,6 @@ public class PlacedPaperBlockEntity extends BlockEntity {
             gestureData = tag.getCompound("gestureData");
         }
         spent = tag.getBoolean("spent");
+        rotationSegment = tag.getInt("rotation");
     }
 }

@@ -3,7 +3,6 @@ package com.crsocial.witchhatatelier.spell.meaning.sign;
 import com.crsocial.witchhatatelier.spell.compiler.CastingContext;
 import com.crsocial.witchhatatelier.spell.compiler.SigilType;
 import com.crsocial.witchhatatelier.spell.compiler.SignBundle;
-import com.crsocial.witchhatatelier.spell.compiler.SignNode;
 import com.crsocial.witchhatatelier.spell.compiler.SpellGraph;
 import com.crsocial.witchhatatelier.spell.meaning.Magnitude;
 import org.joml.Vector2f;
@@ -18,9 +17,10 @@ import org.joml.Vector2f;
  * size} ("strength"): placement distance is normalized against the ring radius so
  * it is independent of canvas scale, {@code signQuality} is this sign's own
  * recognizer confidence (averaged over its occurrences), and {@code size} is the
- * overall inscription size. Canvas axes map to world space as
- * {@code canvas.x → world.x}, {@code canvas.y → world.z} (the same convention as
- * {@code MeaningEngine.resolveDirection}).</p>
+ * overall inscription size. The placement direction is rotated by the paper's in-plane rotation
+ * and mapped to world space via {@link SignPlacement} ({@code canvas.x → world.x},
+ * {@code canvas.y → world.z}), so the shift follows the rendered drawing — the same convention as
+ * {@code MeaningEngine.resolveDirection} and {@link ColumnSignBehavior}.</p>
  *
  * <p>A vertical lift (+Y) is always added so the cast still "levitates" even when
  * the sign sits on the sigil centre; the lift scales with {@code signQuality ×
@@ -41,46 +41,25 @@ public final class LevitationSignBehavior implements SignBehavior {
     public SpellModification modify(SigilType sigil, SignBundle bundle,
                                     SpellGraph graph, CastingContext ctx,
                                     Magnitude magnitude) {
-        // ── Placement displacement: mean sign position − sigil centre (canvas [0,1]) ──
-        Vector2f meanPos = new Vector2f();
-        for (SignNode occ : bundle.occurrences()) {
-            meanPos.add(occ.position());
-        }
-        if (!bundle.occurrences().isEmpty()) {
-            meanPos.div(bundle.occurrences().size());
-        }
-        Vector2f sigilCentre = graph.core().centre();
-        Vector2f d = new Vector2f(meanPos.x - sigilCentre.x, meanPos.y - sigilCentre.y);
+        // Shared placement read (displacement, quality, paper-rotation-aware direction).
+        SignPlacement p = SignPlacement.from(bundle, graph);
 
         // ── Distance factor: normalize against the ring radius, bounded to [0,1] ──
         float ringRadius = Math.max(graph.root().radius(), EPSILON);
-        float dist = d.length();
-        float distNorm = clamp01(dist / ringRadius);
-
-        // ── Sign quality: average recognizer confidence over this sign's occurrences ──
-        float signQuality = 0f;
-        for (SignNode occ : bundle.occurrences()) {
-            signQuality += occ.quality();
-        }
-        if (!bundle.occurrences().isEmpty()) {
-            signQuality /= bundle.occurrences().size();
-        }
+        float distNorm = clamp01(p.distance() / ringRadius);
 
         float size = magnitude.sizeNormalized();
 
         // ── Horizontal shift: direction from placement, magnitude = distance × quality × size ──
-        float strength = distNorm * signQuality * size;
-        float horizX = 0f;
-        float horizZ = 0f;
-        if (dist > EPSILON) {
-            float invLen = 1f / dist;            // normalize d
-            float reach = strength * MAX_HORIZONTAL_REACH;
-            horizX = d.x * invLen * reach;       // canvas.x → world.x
-            horizZ = d.y * invLen * reach;       // canvas.y → world.z
-        }
+        // The placement direction is rotated to follow the placed paper (zero when on-centre).
+        float strength = distNorm * p.signQuality() * size;
+        float reach = strength * MAX_HORIZONTAL_REACH;
+        Vector2f dir = p.worldDirectionXZ(ctx);
+        float horizX = dir.x * reach;
+        float horizZ = dir.y * reach;
 
         // ── Vertical lift: always present, scales with quality × size (not distance) ──
-        float lift = signQuality * size * MAX_LIFT;
+        float lift = p.signQuality() * size * MAX_LIFT;
 
         return SpellModification.builder()
                 .originOffset(horizX, lift, horizZ)

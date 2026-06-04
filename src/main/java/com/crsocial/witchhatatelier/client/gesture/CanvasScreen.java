@@ -1,14 +1,19 @@
 package com.crsocial.witchhatatelier.client.gesture;
 
 import com.mojang.blaze3d.platform.NativeImage;
+import com.mojang.math.Axis;
 import com.crsocial.witchhatatelier.Config;
+import com.crsocial.witchhatatelier.blocks.PlacedPaper;
+import com.crsocial.witchhatatelier.blocks.PlacedPaperBlockEntity;
 import com.crsocial.witchhatatelier.spell.trigger.TriggerEvaluator;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.level.block.state.properties.RotationSegment;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.api.distmarker.OnlyIn;
 import org.jetbrains.annotations.NotNull;
@@ -76,6 +81,15 @@ public class CanvasScreen extends Screen {
     private final boolean readOnly;
     private final BiConsumer<List<GesturePoint>, List<Integer>> saveHandler;
 
+    /** Placed-paper block this canvas edits, or {@code null} for in-hand drawing. */
+    private final BlockPos sourceBlock;
+
+    // ── World-match rotation (set in init) ───────────────────────────────────────
+    // For a placed paper on a horizontal face the canvas is spun so it matches the
+    // physical paper as the player currently sees it. 0 = axis-aligned (in-hand, walls).
+    private float canvasRotationDeg = 0f;
+    private float rotCos = 1f, rotSin = 0f;
+
     /** True after the trigger phase fires an activation ring. Input is rejected but save still runs. */
     private boolean inputLocked = false;
     private List<Integer> activationRingStrokeIds = List.of();
@@ -124,12 +138,13 @@ public class CanvasScreen extends Screen {
                         List<GesturePoint> preloadedPoints,
                         boolean editable,
                         BiConsumer<List<GesturePoint>, List<Integer>> saveHandler,
-                        @SuppressWarnings("unused") BlockPos sourceBlock) {
+                        BlockPos sourceBlock) {
         super(Component.translatable(profile.titleKey()));
         this.profile         = profile;
         this.readOnly        = !editable;
         this.saveHandler     = saveHandler;
         this.preloadedPoints = preloadedPoints;
+        this.sourceBlock     = sourceBlock;
     }
 
     // ════════════════════════════════════════════════════════════════════════════
@@ -163,7 +178,49 @@ public class CanvasScreen extends Screen {
         panX = 0f;
         panY = 0f;
 
+        computeWorldMatchRotation();
+
         loadPoints(preloadedPoints);
+    }
+
+    /**
+     * Spins the canvas so a placed paper on a horizontal face matches the physical paper
+     * as the player currently sees it. Leaves rotation at 0 for in-hand drawing, wall
+     * papers, or anything that isn't a {@link PlacedPaperBlockEntity}.
+     */
+    private void computeWorldMatchRotation() {
+        canvasRotationDeg = 0f;
+        rotCos = 1f;
+        rotSin = 0f;
+
+        Minecraft mc = Minecraft.getInstance();
+        if (sourceBlock == null || mc.level == null || mc.player == null) return;
+        if (!(mc.level.getBlockEntity(sourceBlock) instanceof PlacedPaperBlockEntity be)) return;
+
+        Direction facing = be.getBlockState().getValue(PlacedPaper.FACING);
+        if (facing != Direction.UP && facing != Direction.DOWN) return; // walls stay upright
+
+        float segRad = (float) Math.toRadians(RotationSegment.convertToDegrees(be.getRotationSegment()));
+        float sinSeg = (float) Math.sin(segRad), cosSeg = (float) Math.cos(segRad);
+
+        // World-space drawing-top direction in the XZ plane (mirrors the BER FaceTransform).
+        float tx, tz;
+        if (facing == Direction.UP) { tx = sinSeg; tz = -cosSeg; }
+        else                        { tx = sinSeg; tz =  cosSeg; }
+
+        // Player's on-screen frame when looking at the horizontal surface.
+        float yawRad = (float) Math.toRadians(mc.player.getYRot());
+        float sinYaw = (float) Math.sin(yawRad), cosYaw = (float) Math.cos(yawRad);
+        float ux = -sinYaw, uz = cosYaw;                 // screen-up = player forward (horizontal)
+        float rx, rz;
+        if (facing == Direction.UP) { rx = -cosYaw; rz = -sinYaw; }  // floor (looking down)
+        else                        { rx =  cosYaw; rz = -sinYaw; }  // ceiling mirror (looking up)
+
+        // On-screen angle of the world drawing-top.
+        canvasRotationDeg = (float) Math.toDegrees(Math.atan2(tx * rx + tz * rz, tx * ux + tz * uz));
+        float rad = (float) Math.toRadians(canvasRotationDeg);
+        rotCos = (float) Math.cos(rad);
+        rotSin = (float) Math.sin(rad);
     }
 
     @Override
@@ -206,6 +263,21 @@ public class CanvasScreen extends Screen {
     private float logX(double sx) { return (float)((sx - displayX) / (displayScale * zoom) + panX); }
     /** Screen → canvas Y. */
     private float logY(double sy) { return (float)((sy - displayY) / (displayScale * zoom) + panY); }
+
+    /**
+     * Maps a raw screen point into the un-rotated screen frame that {@link #scrX}/{@link #logX}
+     * operate in, undoing the world-match canvas spin. No-op when the canvas isn't rotated.
+     */
+    private double[] unrotateMouse(double sx, double sy) {
+        if (canvasRotationDeg == 0f) return new double[]{ sx, sy };
+        float pcx = scrX(canvasSize.width()  / 2f);
+        float pcy = scrY(canvasSize.height() / 2f);
+        double dx = sx - pcx, dy = sy - pcy;
+        // Inverse of the +canvasRotationDeg render rotation (rotCos/rotSin are for +angle).
+        double ux =  rotCos * dx + rotSin * dy;
+        double uy = -rotSin * dx + rotCos * dy;
+        return new double[]{ pcx + ux, pcy + uy };
+    }
 
     private void clampPan() {
         float visW = canvasSize.width()  / zoom;
@@ -255,6 +327,16 @@ public class CanvasScreen extends Screen {
     // ── Canvas composite ────────────────────────────────────────────────────────
 
     private void renderCanvas(GuiGraphics gui) {
+        boolean rotated = canvasRotationDeg != 0f;
+        if (rotated) {
+            float pcx = scrX(canvasSize.width()  / 2f);
+            float pcy = scrY(canvasSize.height() / 2f);
+            gui.pose().pushPose();
+            gui.pose().translate(pcx, pcy, 0f);
+            gui.pose().mulPose(Axis.ZP.rotationDegrees(canvasRotationDeg));
+            gui.pose().translate(-pcx, -pcy, 0f);
+        }
+
         drawScreenSprite(gui);
 
         int bg = readOnly ? profile.canvasBgReadOnlyColor() : profile.canvasBgColor();
@@ -273,6 +355,8 @@ public class CanvasScreen extends Screen {
             int inkTipColor = snapActive ? 0xFFFFFFFF : profile.activeStrokeColor();
             drawInkTipIndicator(gui, smoothedX, smoothedY, inkTipColor, sw);
         }
+
+        if (rotated) gui.pose().popPose();
     }
 
     // ════════════════════════════════════════════════════════════════════════════
@@ -290,8 +374,9 @@ public class CanvasScreen extends Screen {
 
         if (readOnly || inputLocked) return super.mouseClicked(mouseX, mouseY, button);
 
-        if (button == 0 && isInsideCanvas(mouseX, mouseY)) {
-            Vector2f start = clampToShape(logX(mouseX), logY(mouseY));
+        double[] m = unrotateMouse(mouseX, mouseY);
+        if (button == 0 && isInsideCanvas(m[0], m[1])) {
+            Vector2f start = clampToShape(logX(m[0]), logY(m[1]));
             smoothedX = start.x;
             smoothedY = start.y;
             resetSnapState(start.x, start.y);
@@ -315,7 +400,8 @@ public class CanvasScreen extends Screen {
         if (readOnly || inputLocked) return super.mouseDragged(mouseX, mouseY, button, dragX, dragY);
 
         if (button == 0 && pointStore.isDrawing()) {
-            Vector2f raw = clampToShape(logX(mouseX), logY(mouseY));
+            double[] m = unrotateMouse(mouseX, mouseY);
+            Vector2f raw = clampToShape(logX(m[0]), logY(m[1]));
 
             // ── Lazy-Mouse smoothing (canvas space) ─────────────────────────
             float factor = profile.strokeSmoothingFactor();
@@ -351,7 +437,8 @@ public class CanvasScreen extends Screen {
             return true;
         }
         if (button == 0 && pointStore.isDrawing()) {
-            Vector2f release = clampToShape(logX(mouseX), logY(mouseY));
+            double[] m = unrotateMouse(mouseX, mouseY);
+            Vector2f release = clampToShape(logX(m[0]), logY(m[1]));
             smoothedX = release.x;
             smoothedY = release.y;
             pointStore.addPoint(release);
@@ -384,21 +471,23 @@ public class CanvasScreen extends Screen {
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
-        if (isInsideDisplay(mouseX, mouseY)) return super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
+        double[] m = unrotateMouse(mouseX, mouseY);
+        if (isInsideDisplay(m[0], m[1])) return super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
         // Record the canvas point under the cursor before zooming.
-        float cx = logX(mouseX);
-        float cy = logY(mouseY);
+        float cx = logX(m[0]);
+        float cy = logY(m[1]);
         zoom = Math.clamp(zoom + (scrollY > 0 ? 1f : -1f), ZOOM_MIN, ZOOM_MAX);
         // Adjust pan so the canvas point under the cursor stays fixed on screen.
-        panX = cx - (float)(mouseX - displayX) / (displayScale * zoom);
-        panY = cy - (float)(mouseY - displayY) / (displayScale * zoom);
+        panX = cx - (float)(m[0] - displayX) / (displayScale * zoom);
+        panY = cy - (float)(m[1] - displayY) / (displayScale * zoom);
         clampPan();
         return true;
     }
 
     @Override
     public void mouseMoved(double mouseX, double mouseY) {
-        if (isInsideCanvas(mouseX, mouseY) && !readOnly && !inputLocked) {
+        double[] m = unrotateMouse(mouseX, mouseY);
+        if (isInsideCanvas(m[0], m[1]) && !readOnly && !inputLocked) {
             ResourceLocation customCursor = profile.cursorSprite();
             if (customCursor != null) {
                 setCursorFromSprite(customCursor, profile.cursorHotspotX(), profile.cursorHotspotY());

@@ -15,7 +15,8 @@ public record CastingContext(@Nullable InkId ink,
                              MediumKind medium,
                              Vector3f originWorld,
                              Vector3f surfaceNormal,
-                             @Nullable BlockPos sourceBlock) {
+                             @Nullable BlockPos sourceBlock,
+                             float drawRotationDeg) {
 
     /** Where the inscription lives — affects origin/direction, never spell content. */
     public enum MediumKind { PAPER_ITEM, PLACED_PAPER, INSCRIBED_BLOCK }
@@ -29,11 +30,14 @@ public record CastingContext(@Nullable InkId ink,
     /**
      * Builds a context with the reserved ink/wand slots left null.
      *
-     * @param sourceBlock the placed-paper block the cast emerges from, or {@code null}
-     *                    for hand casts — used to anchor summoned entities to their fuel.
+     * @param sourceBlock     the placed-paper block the cast emerges from, or {@code null}
+     *                        for hand casts — used to anchor summoned entities to their fuel.
+     * @param drawRotationDeg the paper's in-plane drawing rotation in degrees (0 for hand casts
+     *                        and walls) — rotates the canvas→world direction mapping so spell
+     *                        direction/skew follow the rendered drawing.
      */
     public static CastingContext of(MediumKind medium, Vector3f originWorld, Vector3f surfaceNormal,
-                                    @Nullable BlockPos sourceBlock) {
-        return new CastingContext(null, null, medium, originWorld, surfaceNormal, sourceBlock);
+                                    @Nullable BlockPos sourceBlock, float drawRotationDeg) {
+        return new CastingContext(null, null, medium, originWorld, surfaceNormal, sourceBlock, drawRotationDeg);
     }
 }

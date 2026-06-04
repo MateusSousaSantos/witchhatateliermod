@@ -178,6 +178,9 @@ public final class MeaningEngine {
         if (net.lengthSquared() < 1e-6f) return new Vector3f();
         Vector3f normal = new Vector3f(ctx.surfaceNormal());
         if (normal.lengthSquared() < 1e-6f) normal.set(0f, 1f, 0f);
-        return new Vector3f(net.x, normal.y, net.y).normalize();
+        // Rotate the canvas direction by the paper's in-plane rotation so it follows the
+        // rendered drawing (matches ColumnSignBehavior); keep the surface-normal vertical term.
+        var world = CanvasDirection.toWorldXZ(net.x, net.y, ctx.drawRotationDeg());
+        return new Vector3f(world.x, normal.y, world.y).normalize();
     }
 }

@@ -45,6 +45,7 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.item.component.CustomData;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.state.properties.RotationSegment;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 import org.jetbrains.annotations.NotNull;
 import org.joml.Vector3f;
@@ -479,6 +480,7 @@ public final class SaveGestureHandler {
 
         Vector3f originWorld;
         Vector3f surfaceNormal;
+        float drawRotationDeg = 0f;
 
         if (origin != null) {
             // Surface cast — anchor to the paper's outward face.
@@ -489,6 +491,8 @@ public final class SaveGestureHandler {
                 if (state.hasProperty(com.crsocial.witchhatatelier.blocks.PlacedPaper.FACING)) {
                     facing = state.getValue(com.crsocial.witchhatatelier.blocks.PlacedPaper.FACING);
                 }
+                // In-plane drawing rotation so the spell direction/skew follow the rendered drawing.
+                drawRotationDeg = RotationSegment.convertToDegrees(be.getRotationSegment());
             }
             surfaceNormal = new Vector3f(
                     facing.getStepX(), facing.getStepY(), facing.getStepZ());
@@ -511,7 +515,7 @@ public final class SaveGestureHandler {
             surfaceNormal = new Vector3f(0f, 1f, 0f);
         }
 
-        return CastingContext.of(medium, originWorld, surfaceNormal, origin);
+        return CastingContext.of(medium, originWorld, surfaceNormal, origin, drawRotationDeg);
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────────
