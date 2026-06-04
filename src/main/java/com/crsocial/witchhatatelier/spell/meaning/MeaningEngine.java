@@ -105,7 +105,14 @@ public final class MeaningEngine {
         float powerMul = 1.0f;
         float aoeMul = 1.0f;
 
+        // Sign-placement behaviours (Levitation origin shift, Column direction skew)
+        // are surface-cast features. Hand casts (PAPER_ITEM) re-aim every tick to the
+        // caster's crosshair, so a fixed canvas-derived offset/skew fights the aim —
+        // skip them entirely for hand casts until that's designed properly.
+        boolean applySignBehaviors = ctx.medium() != CastingContext.MediumKind.PAPER_ITEM;
+
         for (SignBundle bundle : graph.signsByType()) {
+            if (!applySignBehaviors) break;
             Optional<SignBehavior> custom = SignBehaviorRegistry.get().find(bundle.type());
             if (custom.isEmpty()) continue; // no custom impl — matrix system handles it fully
 

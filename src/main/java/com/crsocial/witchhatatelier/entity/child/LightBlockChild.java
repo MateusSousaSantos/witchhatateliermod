@@ -41,7 +41,11 @@ public final class LightBlockChild implements SpellChild {
         BlockState here = level.getBlockState(target);
         if (here.isAir()) {
             BlockState lit = Blocks.LIGHT.defaultBlockState().setValue(LightBlock.LEVEL, lightLevel);
-            level.setBlock(target, lit, Block.UPDATE_ALL);
+            // UPDATE_CLIENTS only (no UPDATE_NEIGHBORS): the orb re-places this block as it
+            // hops cell-to-cell following the caster's aim, and it's purely cosmetic — we must
+            // not fire neighbor/shape updates (redstone, observers, fluid flow) each move. The
+            // lighting engine relights from the blockstate change regardless of this flag.
+            level.setBlock(target, lit, Block.UPDATE_CLIENTS);
             current = target.immutable();
         }
     }
@@ -54,7 +58,7 @@ public final class LightBlockChild implements SpellChild {
     private void clear(ServerLevel level) {
         if (current == null) return;
         if (level.getBlockState(current).is(Blocks.LIGHT)) {
-            level.setBlock(current, Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL);
+            level.setBlock(current, Blocks.AIR.defaultBlockState(), Block.UPDATE_CLIENTS);
         }
         current = null;
     }

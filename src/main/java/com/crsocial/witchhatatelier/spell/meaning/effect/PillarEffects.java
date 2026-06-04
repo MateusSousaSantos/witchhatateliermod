@@ -4,6 +4,7 @@ import com.crsocial.witchhatatelier.WitchHatAtelierMod;
 import com.crsocial.witchhatatelier.spell.meaning.BehaviorOp;
 import com.crsocial.witchhatatelier.spell.meaning.ExecutableSpell;
 import com.crsocial.witchhatatelier.spell.meaning.Magnitude;
+import com.crsocial.witchhatatelier.spell.meaning.Origin;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.particles.ParticleOptions;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -31,6 +32,25 @@ public final class PillarEffects {
     private PillarEffects() {}
 
     /**
+     * Direction the pillar grows. The spell's {@code direction} is the authoritative
+     * aim — {@code MeaningEngine.resolveDirection} builds it from the surface normal's
+     * vertical plus the sign-placement net, and the Column sign's {@code directionBias}
+     * leans it toward the side it was drawn (scaled by quality × size). We grow along
+     * that so an off-centre Column skews the pillar; a centred/undirected cast leaves
+     * {@code direction} zero and we fall back to the straight surface normal.
+     */
+    private static Vector3f columnGrow(ExecutableSpell spell) {
+        // Direction-based skew is a surface-cast feature. Hand casts re-aim to the
+        // crosshair each tick, so they grow straight along the (live-aim) surface
+        // normal and ignore the canvas-derived lean.
+        Vector3f dir = spell.direction();
+        if (spell.origin() != Origin.HAND && dir != null && dir.lengthSquared() > 1e-6f) {
+            return new Vector3f(dir).normalize();
+        }
+        return ColumnPlacer.growDirection(spell.surfaceNormal());
+    }
+
+    /**
      * Pillar-placement workhorse. Loops over the parsed {@code spawn_blocks}
      * instructions on {@code op} and extrudes a column from the spell's
      * world-space origin along its surface normal for each one.
@@ -49,7 +69,7 @@ public final class PillarEffects {
         float quality = Math.max(0.1f, m.quality());
         float size = Math.max(0.1f, m.sizeNormalized());
         Vector3f origin = spell.originWorld();
-        Vector3f grow = ColumnPlacer.growDirection(spell.surfaceNormal());
+        Vector3f grow = columnGrow(spell);
         BlockPos originBlock = BlockPos.containing(origin.x, origin.y, origin.z);
 
         int totalPlaced = 0;
@@ -101,7 +121,7 @@ public final class PillarEffects {
         float quality = Math.max(0.1f, m.quality());
         float size = Math.max(0.1f, m.sizeNormalized());
         Vector3f origin = spell.originWorld();
-        Vector3f grow = ColumnPlacer.growDirection(spell.surfaceNormal());
+        Vector3f grow = columnGrow(spell);
         int perBlock = Math.max(1, Math.round(size * 2f));
         int count = Math.max(1, op.count());
 

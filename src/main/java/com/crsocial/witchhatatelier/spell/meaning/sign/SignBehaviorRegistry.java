@@ -34,6 +34,7 @@ public final class SignBehaviorRegistry {
         // Only signs with unique implementations register here.
         // Signs not listed use the matrix system exclusively.
         INSTANCE.register(SignType.LEVITATION, new LevitationSignBehavior());
+        INSTANCE.register(SignType.COLUMN, new ColumnSignBehavior());
     }
 
     public void register(SignType type, SignBehavior behavior) {

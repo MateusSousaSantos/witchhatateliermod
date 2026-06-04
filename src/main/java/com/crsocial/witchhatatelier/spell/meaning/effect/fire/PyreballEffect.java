@@ -35,7 +35,7 @@ public final class PyreballEffect implements EffectKind {
     public static final String KEY = "pyreball";
 
     /** Light level the orb's light-block child emits (0-15). */
-    private static final int LIGHT_LEVEL = 15;
+    private static final int LIGHT_LEVEL = 7;
 
     @Override
     public String key() {

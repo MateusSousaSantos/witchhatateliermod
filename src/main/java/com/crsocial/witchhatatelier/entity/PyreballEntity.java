@@ -169,7 +169,7 @@ public class PyreballEntity extends Entity implements GeoEntity {
     }
 
     /** Server ticks between ambient flame puffs licking off the orb. */
-    private static final int FLAME_INTERVAL = 2;
+    private static final int FLAME_INTERVAL = 4;
 
     /**
      * A little flame flickering off the orb — a couple of {@link ParticleTypes#FLAME}
