@@ -455,7 +455,6 @@ public class CanvasScreen extends Screen {
                 Optional<TriggerEvaluator.TriggerResult> trig = TriggerEvaluator.evaluate(
                         pointStore.strokes(),
                         Config.SNAP_EPSILON_PIXELS.get().floatValue(),
-                        Config.CLOSURE_EPSILON_PIXELS.get().floatValue(),
                         canvasSize.width(),
                         canvasSize.height());
                 if (trig.isPresent() && trig.get().ringStrokeIds().contains(justReleasedStrokeId)) {

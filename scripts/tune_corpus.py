@@ -9,9 +9,16 @@ those params over the whole corpus in milliseconds.
 
 Faithfully mirrors PDollarPlusRecognizer.matchInternal for the decision stage:
   effDist  = mean + WEIGHT * max(0, worst - FREE)
-  rawScore = max(0, 1 - effDist/sqrt(3))
+  rawScore = clamp((distZero - effDist) / (distZero - distFull), 0, 1)   # Phase-1 ramp
   score    = rawScore * gridMult   (only if rawScore > gridCheckThr and gridSim known)
   winner   = max score; reject if < minScore; consensus rescue; ambiguity margin.
+
+The Phase-1 two-pin score map (distFull→1, distZero→0) replaced the old fixed
+1−d/sqrt(3). Records logged before Phase-1 carry no pins; for them the replay falls
+back to distFull=0, distZero=sqrt(3) (i.e. exactly 1−d/sqrt(3)), so the FIDELITY
+check stays faithful to how they were actually scored. The SWEEP/EVAL instead apply
+the NEW pins (--distFull/--distZero, default 0.054/0.085) to the logged geometry, so
+you can re-derive minScore for the de-compressed scale without redrawing.
 
 Only tunes DECISION params (minScore, worstPairFree/weight, ambiguityMargin,
 consensus, gridMinSimilarity). Preprocessing/prefilter params are baked into the
@@ -31,9 +38,22 @@ REF = 3 ** 0.5
 CORPUS = "dataset/spell_corpus.jsonl"
 GARBAGE = "garbage"
 
+# Phase-1 score de-compression pins (mirror Config.RECOGNITION_DIST_AT_*_SCORE).
+# Distances at/below DIST_FULL score 1.0; at/above DIST_ZERO score 0.0.
+DIST_FULL_DEFAULT = 0.054
+DIST_ZERO_DEFAULT = 0.085
+
 
 def load(path):
     return [json.loads(l) for l in open(path, encoding="utf-8") if l.strip()]
+
+
+def score_raw(eff, dist_full, dist_zero):
+    """Phase-1 two-pin linear ramp: clamp((distZero - eff)/(distZero - distFull), 0, 1)."""
+    denom = dist_zero - dist_full
+    if denom <= 1e-6:
+        return 1.0 if eff <= dist_full else 0.0
+    return max(0.0, min(1.0, (dist_zero - eff) / denom))
 
 
 def gmult(grid_sim, grid_min):
@@ -50,11 +70,14 @@ def replay(rec, P):
     best = None            # (spell, score, worst)
     best_per_spell = {}
     survivors = []         # (spell, score)
+    drop = P.get("drop")   # ablation: exclude templates by 'spell' or 'spell:variant'
     for t in d["templates"]:
+        if drop and (t["spell"] in drop or t["spell"] + ":" + t.get("variant", "") in drop):
+            continue       # ablated template — invisible to the matcher
         if not t.get("pre"):
             continue       # prefiltered out — excluded from winner selection
         eff = t["dist"] + P["weight"] * max(0.0, t["worst"] - P["free"])
-        raw = max(0.0, 1 - eff / REF)
+        raw = score_raw(eff, P["distFull"], P["distZero"])
         s = raw
         if raw > P["gridCheckThr"]:
             s *= gmult(t.get("gridSim"), P["gridMinSim"])
@@ -91,6 +114,9 @@ def params_from_record(rec):
         "gridMinSim": thr["gridMinSimilarity"],
         "free": d.get("worstPairFree", 0.0),
         "weight": d.get("worstPairWeight", 0.0),
+        # Pre-Phase-1 records lack pins → distFull=0, distZero=√3 == old 1−d/√3.
+        "distFull": thr.get("distAtFullScore", 0.0),
+        "distZero": thr.get("distAtZeroScore", REF),
     }
 
 
@@ -121,6 +147,12 @@ def main():
     ap.add_argument("--minScore", type=float)
     ap.add_argument("--margin", type=float)
     ap.add_argument("--gridMinSim", type=float)
+    ap.add_argument("--distFull", type=float, help="Phase-1 lower pin (score=1 at/below)")
+    ap.add_argument("--distZero", type=float, help="Phase-1 upper pin (score=0 at/above)")
+    ap.add_argument("--drop", action="append", default=[],
+                    help="ablate a template from the matcher: 'pull:variant_7' (one variant) "
+                         "or 'pull' (whole spell). Repeatable. Faithful because removing a "
+                         "template never changes any other template's logged geometry.")
     args = ap.parse_args()
 
     if not os.path.exists(args.corpus):
@@ -147,18 +179,26 @@ def main():
     if ok < len(recs):
         print("  (mismatches usually mean params drifted between draws, or grid re-applied)")
 
-    # baseline params for sweeps: take from the most recent record, allow CLI override
+    # baseline params for sweeps: take from the most recent record, allow CLI override.
+    # The score pins always default to the NEW Phase-1 values (not the record's), so the
+    # sweep re-derives thresholds for the de-compressed scale over the logged geometry.
     base = params_from_record(recs[-1])
+    base["distFull"] = args.distFull if args.distFull is not None else DIST_FULL_DEFAULT
+    base["distZero"] = args.distZero if args.distZero is not None else DIST_ZERO_DEFAULT
+    base["drop"] = set(args.drop)
     for k, v in (("free", args.free), ("weight", args.weight), ("minScore", args.minScore),
                  ("margin", args.margin), ("gridMinSim", args.gridMinSim)):
         if v is not None:
             base[k] = v
 
-    # 2. If the user pinned any param, just evaluate that single config.
-    if any(x is not None for x in (args.free, args.weight, args.minScore, args.margin, args.gridMinSim)):
+    # 2. If the user pinned any param (or ablated a template), evaluate that single config.
+    if args.drop or any(x is not None for x in (args.free, args.weight, args.minScore, args.margin,
+                                   args.gridMinSim, args.distFull, args.distZero)):
         rc, nr, gr, ng, conf = evaluate(recs, base)
-        print("\nEVAL  free={free} weight={weight} minScore={minScore} margin={margin} gridMinSim={gridMinSim}"
-              .format(**base))
+        print("\nEVAL  free={free} weight={weight} minScore={minScore} margin={margin} "
+              "gridMinSim={gridMinSim} distFull={distFull} distZero={distZero}".format(**base))
+        if base["drop"]:
+            print("  dropped templates: " + ", ".join(sorted(base["drop"])))
         print("  real correct : {}/{} ({:.0%})".format(rc, nr, rc / nr if nr else 0))
         print("  garbage rejct: {}/{} ({:.0%})".format(gr, ng, gr / ng if ng else 0))
         print("  confusion:")
@@ -166,13 +206,17 @@ def main():
             print("    {:<12} -> ".format(i) + "  ".join("{}:{}".format(k, n) for k, n in conf[i].most_common()))
         return
 
-    # 3. Sweep free / weight / minScore; hold the rest at base.
-    print("\nSWEEP (margin={:.3f} gridMinSim={:.2f} consensusBonus={:.3f} topN={})".format(
-        base["margin"], base["gridMinSim"], base["consensusBonus"], base["consensusTopN"]))
+    # 3. Sweep free / weight / minScore; hold the rest at base. The minScore range is
+    #    wide (0.30–1.0) because the Phase-1 ramp moves the valid/garbage crossover well
+    #    below the old ~0.90 band.
+    print("\nSWEEP (margin={:.3f} gridMinSim={:.2f} consensusBonus={:.3f} topN={} "
+          "distFull={:.3f} distZero={:.3f})".format(
+              base["margin"], base["gridMinSim"], base["consensusBonus"], base["consensusTopN"],
+              base["distFull"], base["distZero"]))
     best = best90 = None
     for free in [0.15, 0.20, 0.25, 0.30, 0.35]:
         for weight in [0.0, 0.2, 0.4, 0.6, 0.8, 1.0, 1.5]:
-            for ms in [round(0.80 + 0.005 * k, 3) for k in range(0, 40)]:
+            for ms in [round(0.30 + 0.01 * k, 3) for k in range(0, 71)]:
                 P = dict(base, free=free, weight=weight, minScore=ms)
                 rc, nr, gr, ng, _ = evaluate(recs, P)
                 vk = rc / nr if nr else 0

@@ -52,10 +52,33 @@ public class Config {
                     "Range: 1 – 30. Default: 8.")
             .defineInRange("snapEpsilonPixels", 8.0, 1.0, 30.0);
     public static final ModConfigSpec.DoubleValue CLOSURE_EPSILON_PIXELS = BUILDER
-            .comment("Closure radius (canvas pixels). Distance between the ultimate head and tail",
-                    "of a stroke chain that counts as 'closed' and may trigger an activation ring.",
+            .comment("Closure radius (canvas pixels). NOTE: ring closure is now decided by the",
+                    "geometric winding/gap/roundness test below (ringMinWindingDegrees etc.), not",
+                    "by this absolute pixel gap. Kept for back-compat / endpoint-stitching reasoning.",
                     "Range: 1 – 30. Default: 10.")
             .defineInRange("closureEpsilonPixels", 10.0, 1.0, 30.0);
+
+    // ── Geometric ring closure (winding-angle test; replaces $P+ ring validation) ────
+
+    public static final ModConfigSpec.DoubleValue RING_MIN_WINDING_DEGREES = BUILDER
+            .comment("Total winding angle (degrees) the ring path must sweep around its own centroid",
+                    "to count as a closed loop. A full circle sweeps 360°; lowering this accepts",
+                    "rings whose ends don't quite meet, while a C-shape/open arc stays below it.",
+                    "This is the primary 'did it go all the way around' signal.",
+                    "Range: 180 – 360. Default: 300.")
+            .defineInRange("ringMinWindingDegrees", 300.0, 180.0, 360.0);
+    public static final ModConfigSpec.DoubleValue RING_CLOSURE_GAP_FRACTION = BUILDER
+            .comment("Maximum gap between the ring path's first and last point, as a fraction of the",
+                    "ring's bounding-box diagonal. Size-independent replacement for the absolute",
+                    "closureEpsilonPixels gap: a big ring may leave a proportionally bigger gap.",
+                    "Range: 0.05 – 0.6. Default: 0.25.")
+            .defineInRange("ringClosureGapFraction", 0.25, 0.05, 0.6);
+    public static final ModConfigSpec.DoubleValue RING_MAX_RADIAL_DEVIATION = BUILDER
+            .comment("Lenient roundness ceiling: max radial deviation (stdev/mean of point distance",
+                    "to the centroid) for a path to count as a ring. Rejects degenerate near-line",
+                    "'loops' while still passing ellipses and even square rings. Set high to disable.",
+                    "Range: 0.1 – 1.5. Default: 0.6.")
+            .defineInRange("ringMaxRadialDeviation", 0.6, 0.1, 1.5);
 
     // ── Sigil clustering (server-side; normalized [0,1] space) ──────────────────
 
@@ -80,11 +103,40 @@ public class Config {
     public static final ModConfigSpec.DoubleValue RECOGNITION_MIN_SCORE = BUILDER
             .comment("Minimum confidence score for a recognized spell.",
                     "Below this, the result is reported as 'unknown'.",
-                    "Tuned (2026-06) on a 119-sample labeled corpus together with the",
-                    "worst-pair soft-demote: 0.90 gives ~85% valid recall and rejects",
-                    "~89% of garbage. Lower re-admits garbage; higher rejects real casts.",
-                    "Range: 0.0 – 1.0. Default: 0.90.")
-            .defineInRange("recognitionMinScore", 0.90, 0.0, 1.0);
+                    "NOTE: this lives on the Phase-1 DE-COMPRESSED scale set by",
+                    "RECOGNITION_DIST_AT_FULL/ZERO_SCORE — a typical good draw now scores",
+                    "~0.9 and a typical non-match ~0.2, so the crossover is far below the",
+                    "old compressed ~0.90 band. Re-tuned (2026-06) on the Tier-2 corpus",
+                    "replay (current 75-variant template set, /spell replay-corpus): 0.30 is",
+                    "the knee of the curve — ~87% valid recall, and the lowest floor that",
+                    "still rejects all garbage (with ambiguityMargin 0.10). Below 0.30 garbage",
+                    "leaks in without recovering any valid draws (the rejected ones sit inside",
+                    "the valid/garbage distance overlap); higher rejects real casts.",
+                    "Range: 0.0 – 1.0. Default: 0.30.")
+            .defineInRange("recognitionMinScore", 0.30, 0.0, 1.0);
+    public static final ModConfigSpec.DoubleValue RECOGNITION_DIST_AT_FULL_SCORE = BUILDER
+            .comment("Phase-1 score de-compression — LOWER pin. Effective chamfer distance",
+                    "at or below which a match scores a full 1.0. With",
+                    "RECOGNITION_DIST_AT_ZERO_SCORE this replaces the old fixed 1−d/√3 map,",
+                    "which crushed every score into a ~0.94–0.98 band and left valid and",
+                    "garbage inseparable by any threshold. The score is a linear ramp:",
+                    "  score = clamp((distAtZero − effDist) / (distAtZero − distAtFull), 0, 1)",
+                    "Set near the MEDIAN effective distance of VALID draws, so a typical good",
+                    "draw lands ~0.9. Derived offline by analyze_recognition_log.py's Phase-1",
+                    "recommendation; re-derive as the corpus grows.",
+                    "Tuned (2026-06) on a 119-sample labeled corpus: 0.054.",
+                    "Range: 0.0 – 0.30. Default: 0.054.")
+            .defineInRange("recognitionDistAtFullScore", 0.054, 0.0, 0.30);
+    public static final ModConfigSpec.DoubleValue RECOGNITION_DIST_AT_ZERO_SCORE = BUILDER
+            .comment("Phase-1 score de-compression — UPPER pin. Effective chamfer distance",
+                    "at or above which a match scores 0.0. Must be greater than",
+                    "distAtFullScore. Set near the MEDIAN effective distance of",
+                    "NON-MATCH/garbage draws, so a typical non-match lands ~0.2 and falls",
+                    "below recognitionMinScore. Derived offline by analyze_recognition_log.py;",
+                    "re-derive as the corpus grows.",
+                    "Tuned (2026-06) on a 119-sample labeled corpus: 0.085.",
+                    "Range: 0.0 – 0.60. Default: 0.085.")
+            .defineInRange("recognitionDistAtZeroScore", 0.085, 0.0, 0.60);
     public static final ModConfigSpec.DoubleValue RECOGNITION_AMBIGUITY_MARGIN = BUILDER
             .comment("Minimum score gap between the best template and the runner-up of a",
                     "DIFFERENT spell. If the winner beats the second-best by less than this",
@@ -92,8 +144,14 @@ public class Config {
                     "confident misclassification. Variants of the same spell never trigger",
                     "this gate against each other.",
                     "Lower values are permissive; higher values demand a clear winner.",
+                    "Re-tuned (2026-06) on the Tier-2 corpus replay: 0.10 lifts garbage",
+                    "rejection from ~94% to 100% (catches the one ambiguous-garbage draw)",
+                    "with no loss of valid recall — correct draws and even the residual",
+                    "confident misclassification win by far larger gaps, so they're untouched.",
+                    "0.10 is the conservative end of the winning plateau (0.08–0.20 all score",
+                    "the same here), leaving headroom before real cross-spell near-ties gate.",
                     "Range: 0.00 – 0.30. Default: 0.10.")
-            .defineInRange("recognitionAmbiguityMargin", 0.01, 0.0, 0.30);
+            .defineInRange("recognitionAmbiguityMargin", 0.10, 0.0, 0.30);
     public static final ModConfigSpec.DoubleValue RECOGNITION_CONSENSUS_BONUS = BUILDER
             .comment("Consensus tie-breaker bonus. When the winning sigil fails the",
                     "ambiguity margin against a DIFFERENT spell, the recognizer counts how",
@@ -201,13 +259,17 @@ public class Config {
     public static final ModConfigSpec.DoubleValue WORST_PAIR_WEIGHT = BUILDER
             .comment("Phase-2 worst-pair SOFT-demote: weight on the excess worst-pair",
                     "distance above the free allowance. effectiveDistance = meanDistance +",
-                    "WORST_PAIR_WEIGHT * max(0, worstPair - WORST_PAIR_FREE_ALLOWANCE). The",
-                    "score is then 1 - effectiveDistance/sqrt(3) as usual. Garbage that",
-                    "strands points far away is pushed below RECOGNITION_MIN_SCORE while a",
-                    "strong mean match survives one outlier. 0.0 disables the demote.",
-                    "Tuned (2026-06) on a 119-sample labeled corpus: 0.50.",
-                    "Range: 0.00 – 2.00. Default: 0.50.")
-            .defineInRange("worstPairWeight", 0.50, 0.00, 2.00);
+                    "WORST_PAIR_WEIGHT * max(0, worstPair - WORST_PAIR_FREE_ALLOWANCE); the",
+                    "score map (Phase-1 ramp) then runs on that effective distance.",
+                    "DISABLED (0.0) since Phase-1 de-compression (2026-06): on the new scale",
+                    "a plain RECOGNITION_MIN_SCORE on the mean distance already rejects ~94%",
+                    "of garbage — the demote was compensating for the old COMPRESSED scale.",
+                    "With the tight Phase-1 pins any weight>0 pushes effDist past",
+                    "distAtZeroScore and over-rejects valid draws (recall collapses). Re-",
+                    "enable only alongside a wider RECOGNITION_DIST_AT_ZERO_SCORE if logs show",
+                    "garbage with a low mean but a stranded far point.",
+                    "Range: 0.00 – 2.00. Default: 0.00.")
+            .defineInRange("worstPairWeight", 0.00, 0.00, 2.00);
     public static final ModConfigSpec.DoubleValue DOT_INJECTION_RADIUS = BUILDER
             .comment("Radius (in normalized [0,1] canvas coordinates) used both to",
                     "detect dot-strokes (path length < radius) and to size the",

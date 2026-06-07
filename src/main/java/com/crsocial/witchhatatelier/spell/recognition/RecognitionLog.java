@@ -63,6 +63,28 @@ public final class RecognitionLog {
         return Config.RECOGNITION_LOGGING_ENABLED.get();
     }
 
+    /**
+     * Writes {@code entries} as JSONL to {@code out}, truncating any existing file —
+     * the Tier-2 corpus-replay path. Unlike {@link #log}, this is <b>not</b> gated on
+     * {@link Config#RECOGNITION_LOGGING_ENABLED} (the caller is an explicit dev tool,
+     * not live play) and targets an arbitrary path rather than the fixed live log.
+     * Reuses {@link #toJson} so the output schema is identical to the live log and the
+     * offline Python tools consume it unchanged.
+     *
+     * @throws IOException if the file cannot be written (surfaced to the command caller)
+     */
+    public static void writeRecords(Path out, List<Entry> entries) throws IOException {
+        StringBuilder sb = new StringBuilder();
+        for (Entry e : entries) {
+            sb.append(GSON.toJson(toJson(e))).append(System.lineSeparator());
+        }
+        synchronized (LOCK) {
+            Files.createDirectories(out.getParent());
+            Files.writeString(out, sb.toString(), StandardCharsets.UTF_8,
+                    StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+        }
+    }
+
     /** Appends one JSONL record. No-op (apart from the enabled check) when disabled. */
     public static void log(Entry e) {
         if (!isEnabled()) return;
@@ -111,6 +133,8 @@ public final class RecognitionLog {
         // Active thresholds — every later phase re-derives these, so pin what was live.
         JsonObject thr = new JsonObject();
         thr.addProperty("minScore", Config.RECOGNITION_MIN_SCORE.get());
+        thr.addProperty("distAtFullScore", Config.RECOGNITION_DIST_AT_FULL_SCORE.get());
+        thr.addProperty("distAtZeroScore", Config.RECOGNITION_DIST_AT_ZERO_SCORE.get());
         thr.addProperty("ambiguityMargin", Config.RECOGNITION_AMBIGUITY_MARGIN.get());
         thr.addProperty("consensusBonus", Config.RECOGNITION_CONSENSUS_BONUS.get());
         thr.addProperty("consensusTopN", Config.RECOGNITION_CONSENSUS_TOP_N.get());

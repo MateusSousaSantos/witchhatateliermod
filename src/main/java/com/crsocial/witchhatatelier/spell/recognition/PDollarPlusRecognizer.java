@@ -20,7 +20,9 @@ import java.util.Map;
  * accumulates the three-channel NN distance {@code √(Δx²+Δy²+Δα²)} for every
  * point in the first cloud, then adds the NN distance for each unmatched point
  * in the second cloud. The result is averaged over total terms and converted to
- * a {@code [0,1]} score via {@code 1 − avg_d / √3}.</p>
+ * a {@code [0,1]} score by {@link #scoreFromDistance} — a Phase-1 two-pin linear
+ * ramp (distAtFull → 1, distAtZero → 0) that replaces the original {@code 1 − d/√3}
+ * map, which compressed all scores into a narrow high band.</p>
  *
  * <p>Meta-level rejection gates (min score, ambiguity margin) are kept from our
  * framework — the reference classifier returns the closest class unconditionally.</p>
@@ -160,6 +162,8 @@ public final class PDollarPlusRecognizer {
         float gridMinSimilarity  = Config.GRID_MIN_SIMILARITY.get().floatValue();
         float worstPairFree      = Config.WORST_PAIR_FREE_ALLOWANCE.get().floatValue();
         float worstPairWeight    = Config.WORST_PAIR_WEIGHT.get().floatValue();
+        float distAtFull         = Config.RECOGNITION_DIST_AT_FULL_SCORE.get().floatValue();
+        float distAtZero         = Config.RECOGNITION_DIST_AT_ZERO_SCORE.get().floatValue();
 
         // Per-spell best score, overall best template, and the full ranked list of
         // survivors (templates that cleared the pre-filters) for consensus scoring.
@@ -195,7 +199,7 @@ public final class PDollarPlusRecognizer {
             ChamferStats cs = chamferStats(cloud, t.processedCloud());
             float d = cs.mean();
             float effDist = d + worstPairWeight * Math.max(0f, cs.worstPair() - worstPairFree);
-            float rawScore = scoreFromDistance(effDist);
+            float rawScore = scoreFromDistance(effDist, distAtFull, distAtZero);
             float s = rawScore;
 
             // Stage 3 — spatial agreement as a SOFT penalty (not a hard reject). On
@@ -310,10 +314,12 @@ public final class PDollarPlusRecognizer {
     public List<Scored> matchVerbose(PointCloudPreprocessor.Processed candidate,
                                      List<Template> templates) {
         PointCloud cloud = candidate.cloud();
+        float distAtFull = Config.RECOGNITION_DIST_AT_FULL_SCORE.get().floatValue();
+        float distAtZero = Config.RECOGNITION_DIST_AT_ZERO_SCORE.get().floatValue();
         List<Scored> out = new ArrayList<>(templates.size());
         for (Template t : templates) {
             ChamferStats cs = chamferStats(cloud, t.processedCloud());
-            float s = scoreFromDistance(cs.mean());
+            float s = scoreFromDistance(cs.mean(), distAtFull, distAtZero);
             out.add(new Scored(t.spellName(), t.variantName(), s, cs.mean(), cs.worstPair(), cs.p90Pair()));
         }
         out.sort((x, y) -> Float.compare(y.score(), x.score()));
@@ -339,9 +345,19 @@ public final class PDollarPlusRecognizer {
         return a.mean() <= b.mean() ? a : b;
     }
 
-    /** Normalizes a raw chamfer distance into a {@code [0,1]} score via {@code 1 − d/√3}. */
-    private static float scoreFromDistance(float d) {
-        return Math.max(0f, 1f - d / REFERENCE_SIZE);
+    /**
+     * Phase-1 de-compression: maps an (effective) chamfer distance to a {@code [0,1]}
+     * score via a two-pin linear ramp instead of the old fixed {@code 1 − d/√3}. At or
+     * below {@code distAtFull} the score is {@code 1}; at or above {@code distAtZero} it
+     * is {@code 0}; in between it ramps linearly:
+     * {@code (distAtZero − d) / (distAtZero − distAtFull)}. Pinning the two ends near the
+     * valid and non-match distance medians spreads the previously-compressed
+     * (~0.94–0.98) band across the full range, so the score-space gates separate again.
+     */
+    private static float scoreFromDistance(float d, float distAtFull, float distAtZero) {
+        float denom = distAtZero - distAtFull;
+        if (denom <= 1e-6f) return d <= distAtFull ? 1f : 0f;
+        return Math.clamp((distAtZero - d) / denom, 0f, 1f);
     }
 
     // ── Two-phase chamfer (original $P+ CloudDistance) ────────────────────────────
