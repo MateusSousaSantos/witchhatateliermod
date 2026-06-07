@@ -1,0 +1,23 @@
+{
+  "sigil": "water",
+  "sign": "column",
+  "behavior_kind": "stone_pillar",
+  "base": {
+    "power": 1,
+    "aoe": 1
+  },
+  "effects": [
+    {
+      "type": "spawn_blocks",
+      "block": "minecraft:water",
+      "shape": "vertical_column",
+      "blocks_per_magnitude": 3
+    }
+  ],
+  "stacking_curve": "linear",
+  "cost": {
+    "per_tick": 20,
+    "per_use": 250
+  },
+  "_comment": "Water + Column -> a pillar of water erupting upward from the glyph. Reuses the stone_pillar placement (PillarEffects.executeColumn reads the block from this effect, not the behavior_kind); height scales with SignBundle.count x Quality x Size."
+}
