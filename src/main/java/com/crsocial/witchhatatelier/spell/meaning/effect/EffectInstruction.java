@@ -16,7 +16,8 @@ import java.util.Locale;
  * will consume these instructions once Phase 3 wires runtime execution.</p>
  */
 public sealed interface EffectInstruction
-        permits UniqueEntitySpawn, SpawnBlocksInstruction, SpawnParticlesInstruction, RawInstruction {
+        permits UniqueEntitySpawn, SpawnBlocksInstruction, SpawnParticlesInstruction,
+                BreakBlocksInstruction, RawInstruction {
 
     /** The {@code type} string this instruction was parsed from. */
     String type();
@@ -35,6 +36,7 @@ public sealed interface EffectInstruction
             case UniqueEntitySpawn.TYPE -> UniqueEntitySpawn.fromJson(o);
             case SpawnBlocksInstruction.TYPE -> SpawnBlocksInstruction.fromJson(o);
             case SpawnParticlesInstruction.TYPE -> SpawnParticlesInstruction.fromJson(o);
+            case BreakBlocksInstruction.TYPE -> BreakBlocksInstruction.fromJson(o);
             default -> new RawInstruction(type, o);
         };
     }

@@ -327,6 +327,28 @@ public class Config {
                     "steering tracks size exactly like power does. Range: 0.5 – 4.0. Default: 1.5.")
             .defineInRange("directionSizeExponent", 1.5, 0.5, 4.0);
 
+    public static final ModConfigSpec.DoubleValue COLUMN_STEER_DEADZONE = BUILDER
+            .comment("How far off the sigil centre a Column sign must be drawn before it steers",
+                    "the pillar at all, in canvas units (the displacement of the Column from the",
+                    "sigil centre; the whole canvas is 1.0 wide). Inside this radius the pillar",
+                    "goes STRAIGHT UP — raise it to make 'straight up' easier to hit by hand,",
+                    "lower it toward 0 to let even a slightly off-centre Column lean.",
+                    "Range: 0.0 – 0.5. Default: 0.10.")
+            .defineInRange("columnSteerDeadzone", 0.10, 0.0, 0.5);
+    public static final ModConfigSpec.DoubleValue COLUMN_STEER_FULL_DISTANCE = BUILDER
+            .comment("The off-centre distance (canvas units) at which a Column reaches its FULL",
+                    "lean (columnSteerMaxSkew). Between columnSteerDeadzone and this, the lean",
+                    "ramps up linearly, so the further you draw the Column to one side the harder",
+                    "the pillar tilts. Must be above the deadzone. Range: 0.05 – 0.71. Default: 0.40.")
+            .defineInRange("columnSteerFullDistance", 0.40, 0.05, 0.71);
+    public static final ModConfigSpec.DoubleValue COLUMN_STEER_MAX_SKEW = BUILDER
+            .comment("Strength of a Column sign's lean at full off-centre distance and quality.",
+                    "It is the length of the horizontal steering bias added to the pillar's",
+                    "(unit-length) upward direction before re-normalizing: 1.0 = a 45-degree lean",
+                    "at most, higher = closer to horizontal. Lower this to keep pillars more",
+                    "upright even when steered. Range: 0.0 – 8.0. Default: 2.5.")
+            .defineInRange("columnSteerMaxSkew", 2.5, 0.0, 8.0);
+
     public static final ModConfigSpec.DoubleValue SYMMETRY_CANCEL_DEADZONE = BUILDER
             .comment("How close to balanced opposing signs must be before the spell's net",
                     "direction cancels to zero. Each sign is a force vector — its displacement",
