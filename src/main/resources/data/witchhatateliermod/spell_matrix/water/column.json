@@ -1,7 +1,7 @@
 {
   "sigil": "water",
   "sign": "column",
-  "behavior_kind": "stone_pillar",
+  "behavior_kind": "water_pillar",
   "base": {
     "power": 1,
     "aoe": 1
@@ -19,5 +19,5 @@
     "per_tick": 20,
     "per_use": 250
   },
-  "_comment": "Water + Column -> a pillar of water erupting upward from the glyph. Reuses the stone_pillar placement (PillarEffects.executeColumn reads the block from this effect, not the behavior_kind); height scales with SignBundle.count x Quality x Size."
+  "_comment": "Water + Column -> a blockless column of bubble particles rising from the glyph (WaterPillarEffect places no water; the spawn_blocks entry's blocks_per_magnitude only sets the column length / drain depth, and its 'block' field is unused). Length scales with SignBundle.count x Quality x Size. Add a Crush sign to invert it into draining the water along the column instead."
 }

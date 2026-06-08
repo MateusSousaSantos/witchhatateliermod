@@ -18,12 +18,11 @@ import org.joml.Vector3f;
 import java.util.List;
 
 /**
- * Shared {@link EffectKind#execute} body for column-shaped block effects. The
- * stone-pillar and flame-pillar cells use identical placement semantics — only
- * the block id differs, and that comes from the matrix JSON. Centralizing the
- * math here keeps {@link com.crsocial.witchhatatelier.spell.meaning.effect.earth.StonePillarEffect}
- * / {@link com.crsocial.witchhatatelier.spell.meaning.effect.fire.FlamePillarEffect} as thin
- * wrappers carrying just a fallback block id and a {@link #key()}.
+ * Shared geometry helpers for the column-shaped {@link PillarEffect}s. Every
+ * element's pillar uses identical placement/trail semantics — only the block id
+ * and particle differ, and those come from the {@link PillarEffect} subclass.
+ * Centralizing the math here keeps {@link PillarEffect} and its element subclasses
+ * (earth/water/fire/air) thin.
  */
 public final class PillarEffects {
 

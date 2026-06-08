@@ -1,10 +1,10 @@
 package com.crsocial.witchhatatelier.spell.meaning.effect;
 
-import com.crsocial.witchhatatelier.spell.meaning.effect.air.WindPillarEffect;
-import com.crsocial.witchhatatelier.spell.meaning.effect.earth.ExcavateEffect;
-import com.crsocial.witchhatatelier.spell.meaning.effect.earth.StonePillarEffect;
-import com.crsocial.witchhatatelier.spell.meaning.effect.fire.FlamePillarEffect;
+import com.crsocial.witchhatatelier.spell.meaning.effect.air.AirPillarEffect;
+import com.crsocial.witchhatatelier.spell.meaning.effect.earth.EarthPillarEffect;
+import com.crsocial.witchhatatelier.spell.meaning.effect.fire.FirePillarEffect;
 import com.crsocial.witchhatatelier.spell.meaning.effect.fire.PyreballEffect;
+import com.crsocial.witchhatatelier.spell.meaning.effect.water.WaterPillarEffect;
 
 import java.util.HashMap;
 import java.util.Locale;
@@ -33,12 +33,12 @@ public final class EffectRegistry {
     }
 
     private static void bootstrap() {
-        INSTANCE.register(new ExcavateEffect());
-        INSTANCE.register(new FlamePillarEffect());
+        INSTANCE.register(new EarthPillarEffect());
+        INSTANCE.register(new WaterPillarEffect());
+        INSTANCE.register(new FirePillarEffect());
+        INSTANCE.register(new AirPillarEffect());
         INSTANCE.register(new ParticleEffect());
         INSTANCE.register(new PyreballEffect());
-        INSTANCE.register(new StonePillarEffect());
-        INSTANCE.register(new WindPillarEffect());
     }
 
     public synchronized void register(EffectKind kind) {

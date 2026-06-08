@@ -1,7 +1,7 @@
 {
   "sigil": "air",
   "sign": "column",
-  "behavior_kind": "wind_pillar",
+  "behavior_kind": "air_pillar",
   "base": {
     "power": 1.0,
     "aoe": 1.2
@@ -18,5 +18,5 @@
     "per_tick": 2.0,
     "per_use": 0.0
   },
-  "_comment": "Air + Column -> a pillar of wind, rendered like the flame pillar's column trail but with the particle set in WindPillarEffect.PILLAR_PARTICLE (cloud). Only 'reach' (column length) is read here; the trail's particle/density are code-side. Shoves entities caught in it along the casting axis. Length/strength scale with SignBundle.count x Size x Power."
+  "_comment": "Air + Column -> a pillar of wind, rendered like the fire pillar's column trail but with the particle set in AirPillarEffect.trailParticle() (cloud) and no placed blocks. Only 'reach' (column length) is read here; the trail's particle/density are code-side. Shoves entities caught in it along the casting axis. Length/strength scale with SignBundle.count x Size x Power."
 }

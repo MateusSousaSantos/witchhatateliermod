@@ -1,7 +1,7 @@
 {
   "sigil": "fire",
   "sign":  "column",
-  "behavior_kind": "flame_pillar",
+  "behavior_kind": "fire_pillar",
 
   "base": {
     "power": 1.5,

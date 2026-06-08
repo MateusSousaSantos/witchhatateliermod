@@ -15,7 +15,9 @@ import com.crsocial.witchhatatelier.spell.meaning.sign.SpellModification;
 import org.joml.Vector3f;
 
 import java.util.ArrayList;
+import java.util.EnumMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -49,8 +51,22 @@ public final class MeaningEngine {
         float totalCostPerTick = 0f;
         float totalCostPerUse = 0f;
 
+        // ── Collect Force-tier signs as modifiers, not ops ───────────────────────
+        // A Force sign (CRUSH, …) produces no op of its own — it retargets the
+        // carrier ops (Column, Dispersion). We gather the Force bundles here and
+        // attach the same modifier map to every carrier op below, so the effect
+        // kind can branch (e.g. a pillar carving instead of placing under CRUSH).
+        // With no carrier, a Force sign alone yields no ops → Prepared (see below).
+        Map<SignType, Integer> forceModifiers = new EnumMap<>(SignType.class);
+        for (SignBundle bundle : graph.signsByType()) {
+            if (bundle.type().tier() == SignType.Tier.FORCE) {
+                forceModifiers.merge(bundle.type(), bundle.count(), Integer::sum);
+            }
+        }
+
         // ── One op per sign bundle that has a matrix cell ────────────────────────
         for (SignBundle bundle : graph.signsByType()) {
+            if (bundle.type().tier() == SignType.Tier.FORCE) continue; // modifier, handled above
             Optional<MatrixEntry> cell = MatrixRegistry.get().find(element, bundle.type());
             if (cell.isEmpty()) {
                 WitchHatAtelierMod.LOGGER.info(
@@ -77,7 +93,7 @@ public final class MeaningEngine {
 
             ops.add(new BehaviorOp(bundle.type(), magnitudeCount,
                     entry.behaviorKind(), kind.get().parsePayload(entry.effects()),
-                    entry.costPerTick(), entry.costPerUse()));
+                    entry.costPerTick(), entry.costPerUse(), forceModifiers));
 
             if (opPower > maxPower) {
                 maxPower = opPower;

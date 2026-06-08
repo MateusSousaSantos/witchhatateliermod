@@ -1,7 +1,7 @@
 {
   "sigil": "earth",
   "sign":  "column",
-  "behavior_kind": "stone_pillar",
+  "behavior_kind": "earth_pillar",
 
   "base": {
     "power": 1.0,
@@ -24,5 +24,5 @@
     "per_use": 300.0
   },
 
-  "_comment": "Stone pillar erupts upward from the glyph. Height scales with SignBundle.count x Quality x Size."
+  "_comment": "Stone pillar erupts upward from the glyph (EarthPillarEffect). Height scales with SignBundle.count x Quality x Size. Add a Crush sign to invert it into carving a tunnel (the old standalone 'excavate') along the column instead of placing stone."
 }

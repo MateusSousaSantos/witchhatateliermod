@@ -14,7 +14,7 @@ import java.util.List;
  * @param sigil         element domain
  * @param sign          behaviour modifier
  * @param behaviorKind  identifier the engine maps to an effect implementation
- *                      (e.g. {@code "stone_pillar"} → {@code StonePillarEffect})
+ *                      (e.g. {@code "earth_pillar"} → {@code EarthPillarEffect})
  * @param basePower     baseline power before scaling
  * @param baseAoe       baseline area-of-effect multiplier
  * @param effects       raw effect-list payloads, interpreted by the effect kind
