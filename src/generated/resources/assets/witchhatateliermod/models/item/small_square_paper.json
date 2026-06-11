@@ -1,0 +1,6 @@
+{
+  "parent": "minecraft:item/generated",
+  "textures": {
+    "layer0": "witchhatateliermod:item/small_square_paper"
+  }
+}

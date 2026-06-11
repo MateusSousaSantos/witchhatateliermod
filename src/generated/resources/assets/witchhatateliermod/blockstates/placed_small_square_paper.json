@@ -1,0 +1,30 @@
+{
+  "variants": {
+    "facing=down": {
+      "model": "witchhatateliermod:block/placed_small_square_paper",
+      "x": 180
+    },
+    "facing=east": {
+      "model": "witchhatateliermod:block/placed_small_square_paper",
+      "x": 90,
+      "y": 90
+    },
+    "facing=north": {
+      "model": "witchhatateliermod:block/placed_small_square_paper",
+      "x": 90
+    },
+    "facing=south": {
+      "model": "witchhatateliermod:block/placed_small_square_paper",
+      "x": 90,
+      "y": 180
+    },
+    "facing=up": {
+      "model": "witchhatateliermod:block/placed_small_square_paper"
+    },
+    "facing=west": {
+      "model": "witchhatateliermod:block/placed_small_square_paper",
+      "x": 90,
+      "y": 270
+    }
+  }
+}
