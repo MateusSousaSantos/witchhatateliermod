@@ -78,6 +78,10 @@ per-label counts.
 python scripts/promote_to_templates.py fire              # add all clean fire draws
 python scripts/promote_to_templates.py crush --count 6   # cap how many
 python scripts/promote_to_templates.py fire --dry-run    # preview only
+# web-drawer coverage: read the REPLAY log (corpus rows for web draws have no result),
+# filter to one drawer, hand-pick cells after a render_draws.py review:
+python scripts/promote_to_templates.py fire --corpus run/logs/corpus_replay.jsonl `
+    --drawer sopas --select 5,7,9,11,13,14
 ```
 
 The other lever besides decision-param tuning: when a sigil fails because of thin
@@ -121,6 +125,50 @@ python scripts/tune_corpus.py            run/logs/corpus_replay.jsonl   # re-tun
 
 Implemented by `CorpusReplay.java` (harness core) + `RecognitionLog.writeRecords` (the
 shared, path-parameterized writer) + the `replay-corpus` branch in `ModCommands.java`.
+
+### Headless harness runner (no client, no typing in a console)
+
+```powershell
+.\gradlew runServer --console=plain    # ~70s: builds, boots, replays, crossvals, stops itself
+```
+
+`run/world/datapacks/replay_trigger/` contains a `#minecraft:load` datapack function
+that runs `spell replay-corpus` + `spell crossval` and then `stop` every time the dev
+server boots (`run/server.properties` sets `function-permission-level=4` so the
+function may issue `stop`). So one Gradle command produces fresh
+`run/logs/corpus_replay.jsonl` + `corpus_crossval.jsonl` against the current code,
+config defaults, and templates — the whole recall-first loop without launching a
+client. Delete the datapack folder to get a normal interactive dev server back.
+
+### `render_draws.py` — PNG contact sheets for visual curation
+
+```bash
+python scripts/render_draws.py fire --corpus run/logs/corpus_replay.jsonl --drawer sopas
+python scripts/render_draws.py fire --templates     # the shipped variants instead
+# writes run/render/<label>_{draws,templates}.png + a stdout legend per cell
+```
+
+Promotion requires eyeballing draws first (one malformed draw widens a sigil's accept
+region permanently). This renders any label's draws — or its current template
+variants — as a grid, strokes colored in drawing order, no deps (stdlib PNG writer).
+The legend marks each cell OK/WRONG/UNK with the drawer and the recognizer's answer;
+cell numbers are exactly the indices `promote_to_templates.py --select` takes, so the
+workflow is: render → pick cells → `--select 5,7,9`.
+
+### `audit_replay.py` — per-drawer accuracy + win-stealing templates
+
+```bash
+python scripts/audit_replay.py [replay.jsonl] [corpus.jsonl]
+# defaults: run/logs/corpus_replay.jsonl, dataset/spell_corpus.jsonl
+```
+
+The first thing to read after a replay. Prints per-drawer real accuracy with each
+drawer's confusion cells (whose drawing style the templates miss — the coverage
+signal), the table of template variants that win draws labeled as something else
+(ablation candidates for `tune_corpus.py --drop`), and the rejection stage behind
+every `unknown`. Joins replay lines back to corpus lines by order to recover the
+drawer id (CorpusReplay doesn't carry `player` through yet) and fails loudly on a
+stale/misaligned replay log.
 
 ### `/spell crossval` — Tier-2 cross-validation (generalization, not in-sample)
 

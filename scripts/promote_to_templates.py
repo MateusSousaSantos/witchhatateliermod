@@ -23,13 +23,19 @@ template (which would widen the accept region and let false matches in). Pass
   python scripts/promote_to_templates.py crush --count 6      # cap how many are added
   python scripts/promote_to_templates.py fire --dry-run       # preview, write nothing
   python scripts/promote_to_templates.py crush --include-misrecognized
+  python scripts/promote_to_templates.py water --corpus run/logs/corpus_replay.jsonl \
+      --drawer sopas --include-misrecognized   # web-drawer coverage (see below)
 
-IMPORTANT — validation is IN-GAME, not offline. tune_corpus.py replays the LOGGED
-chamfer geometry, which does NOT contain these new templates, so it cannot measure
-their effect. After promoting, relaunch (or /reload) and verify with F9 / the
-gametests / actual casting that recall improved and garbage rejection held. (A faithful
-offline check would need the not-yet-built Tier-2 harness that re-runs the real Java
-pipeline on rawStrokes — the corpus preserves rawStrokes for exactly that day.)
+INPUT for web-collected draws: point --corpus at run/logs/corpus_replay.jsonl (the
+Tier-2 replay output), NOT the corpus. Website records carry no `result` field in the
+corpus, so the conservative already-recognized filter can only work against the replay
+log, which re-scored every record on the live pipeline. --drawer limits promotion to
+one drawer's draws (coverage is per-hand; promoting the already-covered drawer mostly
+adds redundancy).
+
+VALIDATION is the Tier-2 loop: rebuild/relaunch (the headless runner in
+scripts/README.md does this in one command), then audit run/logs/corpus_replay.jsonl.
+tune_corpus.py alone CANNOT see new templates — its geometry is baked at log time.
 """
 import argparse
 import json
@@ -67,8 +73,15 @@ def main():
     ap.add_argument("--count", type=int, default=None, help="max variants to add (default: all eligible)")
     ap.add_argument("--include-misrecognized", action="store_true",
                     help="also promote samples the recognizer got wrong (covers hard cases, riskier)")
+    ap.add_argument("--drawer", default=None,
+                    help="only promote draws whose `player` field matches (e.g. a web contributor)")
+    ap.add_argument("--select", default=None,
+                    help="comma-separated indices into the filtered record list (same order as "
+                         "render_draws.py cells for the same label/--corpus/--drawer). Explicit "
+                         "selection IS the curation, so it bypasses the misrecognized filter.")
     ap.add_argument("--dry-run", action="store_true", help="report what would change; write nothing")
     args = ap.parse_args()
+    selected = None if args.select is None else {int(i) for i in args.select.split(",")}
 
     if not os.path.exists(args.corpus):
         print("No corpus at", args.corpus, "- run build_corpus.py first.")
@@ -81,8 +94,11 @@ def main():
         return
 
     recs = [r for r in load_corpus(args.corpus) if r.get("intended") == args.label]
+    if args.drawer:
+        recs = [r for r in recs if r.get("player") == args.drawer]
     if not recs:
-        print(f"No corpus samples labeled '{args.label}'.")
+        print(f"No corpus samples labeled '{args.label}'"
+              + (f" from drawer '{args.drawer}'" if args.drawer else "") + ".")
         return
 
     tpl = json.load(open(template_path, encoding="utf-8"))
@@ -99,9 +115,11 @@ def main():
     added, skipped_dup, skipped_mis = 0, 0, 0
     next_idx = 1
     used = {v.get("name") for v in variants}
-    for r in recs:
+    for i, r in enumerate(recs):
+        if selected is not None and i not in selected:
+            continue
         result_spell = (r.get("result") or {}).get("spell")
-        if not args.include_misrecognized and result_spell != args.label:
+        if selected is None and not args.include_misrecognized and result_spell != args.label:
             skipped_mis += 1
             continue
         raw = r.get("rawStrokes")
@@ -136,8 +154,8 @@ def main():
         json.dump(tpl, f, indent=2)
         f.write("\n")
     print(f"  wrote {template_path}")
-    print("  NEXT: relaunch or /reload, then validate in-game (F9 / gametests) — the")
-    print("        offline tuner cannot see new templates.")
+    print("  NEXT: .\\gradlew runServer --console=plain  (headless replay+crossval), then")
+    print("        python scripts/audit_replay.py — the offline tuner cannot see new templates.")
 
 
 if __name__ == "__main__":

@@ -64,6 +64,10 @@ public final class CorpusReplay {
 
             String intended = (rec.has("intended") && !rec.get("intended").isJsonNull())
                     ? rec.get("intended").getAsString() : null;
+            // Carry the drawer id through so per-drawer analysis works directly on the
+            // replay log (the corpus stamps `player` via build_corpus.normalize_drawer).
+            String player = (rec.has("player") && !rec.get("player").isJsonNull())
+                    ? rec.get("player").getAsString() : "replay";
 
             List<List<Point>> rawStrokes = parseRawStrokes(rec.getAsJsonArray("rawStrokes"));
             if (rawStrokes.isEmpty()) continue;
@@ -80,7 +84,7 @@ public final class CorpusReplay {
                     recognizer.matchVerbose(processed, contentTemplates);
 
             out.add(new RecognitionLog.Entry(
-                    "replay", "<replay>", intended, "REPLAY", null, false,
+                    player, "<replay>", intended, "REPLAY", null, false,
                     0, 1, registry.size(),
                     rawStrokes, processed.cloud(), processed.indicativeAngle(),
                     result, ranked, traced.trace()));

@@ -16,9 +16,14 @@ Faithfully mirrors PDollarPlusRecognizer.matchInternal for the decision stage:
 The Phase-1 two-pin score map (distFull→1, distZero→0) replaced the old fixed
 1−d/sqrt(3). Records logged before Phase-1 carry no pins; for them the replay falls
 back to distFull=0, distZero=sqrt(3) (i.e. exactly 1−d/sqrt(3)), so the FIDELITY
-check stays faithful to how they were actually scored. The SWEEP/EVAL instead apply
-the NEW pins (--distFull/--distZero, default 0.054/0.085) to the logged geometry, so
-you can re-derive minScore for the de-compressed scale without redrawing.
+check stays faithful to how they were actually scored. The SWEEP/EVAL pins default
+to the LOG'S OWN thresholds (so evaluating a recall-first log doesn't silently use
+stale pins); legacy logs without pins fall back to 0.054/0.085. --distFull/--distZero
+override either way.
+
+The SWEEP covers minScore x margin x (worst-pair weight/free) and reports three
+operating points: best balance (recall + garbage rejection), the RECALL-FIRST point
+(max garbage rejection subject to recall >= 0.90), and max recall outright.
 
 Only tunes DECISION params (minScore, worstPairFree/weight, ambiguityMargin,
 consensus, gridMinSimilarity). Preprocessing/prefilter params are baked into the
@@ -180,11 +185,16 @@ def main():
         print("  (mismatches usually mean params drifted between draws, or grid re-applied)")
 
     # baseline params for sweeps: take from the most recent record, allow CLI override.
-    # The score pins always default to the NEW Phase-1 values (not the record's), so the
-    # sweep re-derives thresholds for the de-compressed scale over the logged geometry.
+    # Pins come from the log's own thresholds when present (a Phase-1+ log knows what
+    # ramp it was scored on); only legacy logs without pins (distZero == sqrt(3)) fall
+    # back to the constants. CLI flags override either source.
     base = params_from_record(recs[-1])
-    base["distFull"] = args.distFull if args.distFull is not None else DIST_FULL_DEFAULT
-    base["distZero"] = args.distZero if args.distZero is not None else DIST_ZERO_DEFAULT
+    if base["distZero"] >= REF:  # legacy record without Phase-1 pins
+        base["distFull"], base["distZero"] = DIST_FULL_DEFAULT, DIST_ZERO_DEFAULT
+    if args.distFull is not None:
+        base["distFull"] = args.distFull
+    if args.distZero is not None:
+        base["distZero"] = args.distZero
     base["drop"] = set(args.drop)
     for k, v in (("free", args.free), ("weight", args.weight), ("minScore", args.minScore),
                  ("margin", args.margin), ("gridMinSim", args.gridMinSim)):
@@ -206,33 +216,45 @@ def main():
             print("    {:<12} -> ".format(i) + "  ".join("{}:{}".format(k, n) for k, n in conf[i].most_common()))
         return
 
-    # 3. Sweep free / weight / minScore; hold the rest at base. The minScore range is
-    #    wide (0.30–1.0) because the Phase-1 ramp moves the valid/garbage crossover well
-    #    below the old ~0.90 band.
-    print("\nSWEEP (margin={:.3f} gridMinSim={:.2f} consensusBonus={:.3f} topN={} "
+    # 3. Sweep minScore x margin x (weight, free); hold the rest at base. minScore goes
+    #    down to 0.05 because the recall-first floor lives well below the old 0.30+
+    #    band; margin is swept because it is now the only gate producing false rejects.
+    print("\nSWEEP (gridMinSim={:.2f} consensusBonus={:.3f} topN={} "
           "distFull={:.3f} distZero={:.3f})".format(
-              base["margin"], base["gridMinSim"], base["consensusBonus"], base["consensusTopN"],
+              base["gridMinSim"], base["consensusBonus"], base["consensusTopN"],
               base["distFull"], base["distZero"]))
-    best = best90 = None
-    for free in [0.15, 0.20, 0.25, 0.30, 0.35]:
-        for weight in [0.0, 0.2, 0.4, 0.6, 0.8, 1.0, 1.5]:
-            for ms in [round(0.30 + 0.01 * k, 3) for k in range(0, 71)]:
-                P = dict(base, free=free, weight=weight, minScore=ms)
-                rc, nr, gr, ng, _ = evaluate(recs, P)
-                vk = rc / nr if nr else 0
-                gj = gr / ng if ng else 0
-                if best is None or (vk + gj) > best[0]:
-                    best = (vk + gj, free, weight, ms, vk, gj)
-                if vk >= 0.90 and (best90 is None or gj > best90[0]):
-                    best90 = (gj, free, weight, ms, vk)
-    _, free, weight, ms, vk, gj = best
-    print("  best balance : free={} weight={} minScore={} -> {:.0%} valid, {:.0%} garbage rejected"
-          .format(free, weight, ms, vk, gj))
+    best = best90 = bestrec = None
+    margins = [0.0, 0.02, 0.04, 0.06, 0.08]
+    minscores = [round(0.05 + 0.01 * k, 3) for k in range(0, 56)]  # 0.05 .. 0.60
+    for weight in [0.0, 0.4, 0.8]:
+        # free only matters when the worst-pair demote is active.
+        for free in ([0.20] if weight == 0.0 else [0.15, 0.25]):
+            for margin in margins:
+                for ms in minscores:
+                    P = dict(base, free=free, weight=weight, minScore=ms, margin=margin)
+                    rc, nr, gr, ng, _ = evaluate(recs, P)
+                    vk = rc / nr if nr else 0
+                    gj = gr / ng if ng else 0
+                    if best is None or (vk + gj) > best[0]:
+                        best = (vk + gj, free, weight, ms, margin, vk, gj)
+                    if vk >= 0.90 and (best90 is None or gj > best90[0]):
+                        best90 = (gj, free, weight, ms, margin, vk)
+                    if bestrec is None or (vk, gj) > (bestrec[0], bestrec[1]):
+                        bestrec = (vk, gj, free, weight, ms, margin)
+    _, free, weight, ms, margin, vk, gj = best
+    print("  best balance : free={} weight={} minScore={} margin={} -> {:.0%} valid, {:.0%} garbage rejected"
+          .format(free, weight, ms, margin, vk, gj))
     if best90:
-        gj, free, weight, ms, vk = best90
-        print("  @>=90% valid : free={} weight={} minScore={} -> {:.0%} garbage rejected ({:.0%} valid)"
-              .format(free, weight, ms, gj, vk))
-    print("\nApply with: set worstPairFreeAllowance / worstPairWeight / recognitionMinScore in the config.")
+        gj, free, weight, ms, margin, vk = best90
+        print("  RECALL-FIRST : free={} weight={} minScore={} margin={} -> {:.0%} garbage rejected ({:.0%} valid)"
+              .format(free, weight, ms, margin, gj, vk))
+    else:
+        vk, gj, free, weight, ms, margin = bestrec
+        print("  RECALL-FIRST : no setting reaches 90% valid — decision params can't close the gap")
+        print("    (coverage/curation problem; see docs/plan_to_improve_recognizer.md)")
+        print("  max recall   : free={} weight={} minScore={} margin={} -> {:.0%} valid, {:.0%} garbage rejected"
+              .format(free, weight, ms, margin, vk, gj))
+    print("\nApply with: recognitionMinScore / recognitionAmbiguityMargin / worstPair* in the config.")
 
 
 if __name__ == "__main__":

@@ -112,8 +112,16 @@ public class Config {
                     "still rejects all garbage (with ambiguityMargin 0.10). Below 0.30 garbage",
                     "leaks in without recovering any valid draws (the rejected ones sit inside",
                     "the valid/garbage distance overlap); higher rejects real casts.",
-                    "Range: 0.0 – 1.0. Default: 0.30.")
-            .defineInRange("recognitionMinScore", 0.30, 0.0, 1.0);
+                    "RECALL-FIRST retune (2026-06): lowered 0.30 → 0.15. This floor lives on",
+                    "the wider distAtZero=0.12 scale, so the weak draws that distAtZero now",
+                    "rescues need a lower floor to actually pass. Coupled with that ramp —",
+                    "do not move one without the other.",
+                    "FINAL (2026-06-11, R4 retune on the 123-variant set, 275-sample 2-drawer",
+                    "corpus): 0.12. The floor is inert across 0.08–0.14 here — residual errors",
+                    "are confusions/near-ties, not weak scores — so it sits mid-plateau.",
+                    "Operating point: 96% recall, 17% garbage rejected (accepted trade).",
+                    "Range: 0.0 – 1.0. Default: 0.12.")
+            .defineInRange("recognitionMinScore", 0.12, 0.0, 1.0);
     public static final ModConfigSpec.DoubleValue RECOGNITION_DIST_AT_FULL_SCORE = BUILDER
             .comment("Phase-1 score de-compression — LOWER pin. Effective chamfer distance",
                     "at or below which a match scores a full 1.0. With",
@@ -125,8 +133,14 @@ public class Config {
                     "draw lands ~0.9. Derived offline by analyze_recognition_log.py's Phase-1",
                     "recommendation; re-derive as the corpus grows.",
                     "Tuned (2026-06) on a 119-sample labeled corpus: 0.054.",
-                    "Range: 0.0 – 0.30. Default: 0.054.")
-            .defineInRange("recognitionDistAtFullScore", 0.054, 0.0, 0.30);
+                    "FINAL (2026-06-11): lowered 0.054 → 0.03 to DE-SATURATE the ramp's top.",
+                    "With dense template coverage (123 variants) several classes' best match",
+                    "fell below 0.054, pinning multiple scores at exactly 1.0 — and the",
+                    "ambiguity margin cannot separate saturated ties (observed: column 1.000",
+                    "vs dispersion 0.999 → false 'unknown'). The lower pin restores ordering",
+                    "at the top; recall +2 and garbage rejection improved at the same time.",
+                    "Range: 0.0 – 0.30. Default: 0.03.")
+            .defineInRange("recognitionDistAtFullScore", 0.03, 0.0, 0.30);
     public static final ModConfigSpec.DoubleValue RECOGNITION_DIST_AT_ZERO_SCORE = BUILDER
             .comment("Phase-1 score de-compression — UPPER pin. Effective chamfer distance",
                     "at or above which a match scores 0.0. Must be greater than",
@@ -135,8 +149,17 @@ public class Config {
                     "below recognitionMinScore. Derived offline by analyze_recognition_log.py;",
                     "re-derive as the corpus grows.",
                     "Tuned (2026-06) on a 119-sample labeled corpus: 0.085.",
-                    "Range: 0.0 – 0.60. Default: 0.085.")
-            .defineInRange("recognitionDistAtZeroScore", 0.085, 0.0, 0.60);
+                    "RECALL-FIRST retune (2026-06): widened 0.085 → 0.12. The old 0.085 pin",
+                    "scored any draw past 0.085 distance as exactly 0, so ~12 weak but valid",
+                    "column/dispersion/levitation draws were unrecoverable by any floor.",
+                    "Widening the ramp gives them a nonzero score so a lowered minScore can",
+                    "admit them — at the cost of more garbage scoring nonzero too (accepted",
+                    "trade). Dial in via /spell replay-corpus.",
+                    "FINAL (2026-06-11, R4): 0.12 confirmed — 0.11/0.13 measure the same;",
+                    "garbage rejection at the shipped operating point is 17% (4/23), the",
+                    "recorded cost of the recall-first objective (96% recall).",
+                    "Range: 0.0 – 0.60. Default: 0.12.")
+            .defineInRange("recognitionDistAtZeroScore", 0.12, 0.0, 0.60);
     public static final ModConfigSpec.DoubleValue RECOGNITION_AMBIGUITY_MARGIN = BUILDER
             .comment("Minimum score gap between the best template and the runner-up of a",
                     "DIFFERENT spell. If the winner beats the second-best by less than this",
@@ -150,8 +173,15 @@ public class Config {
                     "confident misclassification win by far larger gaps, so they're untouched.",
                     "0.10 is the conservative end of the winning plateau (0.08–0.20 all score",
                     "the same here), leaving headroom before real cross-spell near-ties gate.",
-                    "Range: 0.00 – 0.30. Default: 0.10.")
-            .defineInRange("recognitionAmbiguityMargin", 0.10, 0.0, 0.30);
+                    "RECALL-FIRST retune (2026-06): lowered 0.10 → 0.04. The 0.10 margin",
+                    "rejected near-ties as 'unknown' (recall loss); a lower margin lets the",
+                    "top pick win more often. Accepts more cross-spell confusion, which the",
+                    "recall-first objective tolerates.",
+                    "FINAL (2026-06-11, R4): 0.03, paired with distAtFullScore 0.03 — once",
+                    "the ramp top is de-saturated, real winners separate by more than 0.03",
+                    "while saturated false ties no longer occur.",
+                    "Range: 0.00 – 0.30. Default: 0.03.")
+            .defineInRange("recognitionAmbiguityMargin", 0.03, 0.0, 0.30);
     public static final ModConfigSpec.DoubleValue RECOGNITION_CONSENSUS_BONUS = BUILDER
             .comment("Consensus tie-breaker bonus. When the winning sigil fails the",
                     "ambiguity margin against a DIFFERENT spell, the recognizer counts how",
@@ -182,22 +212,29 @@ public class Config {
                     "'tall'. A candidate classified tall will be rejected against any",
                     "template classified wide (and vice versa) before the chamfer runs,",
                     "regardless of magnitude.",
-                    "Range: 0.50 – 1.00. Default: 0.85.")
-            .defineInRange("aspectRatioTallThreshold", 0.85, 0.50, 1.00);
+                    "RECALL-FIRST retune (2026-06): lowered 0.85 → 0.75 to widen the",
+                    "permissive 'square' band, so fewer valid draws are hard-rejected by",
+                    "this prefilter before the chamfer even runs.",
+                    "Range: 0.50 – 1.00. Default: 0.75.")
+            .defineInRange("aspectRatioTallThreshold", 0.75, 0.50, 1.00);
     public static final ModConfigSpec.DoubleValue ASPECT_RATIO_WIDE_THRESHOLD = BUILDER
             .comment("Aspect ratio (width / height) above which a sigil is classified as",
                     "'wide'. Paired with the tall threshold to form a direction-aware",
                     "pre-filter: tall vs. wide cross-matches are rejected, square↔tall",
                     "and square↔wide are allowed (chamfer decides).",
-                    "Range: 1.00 – 2.00. Default: 1.18.")
-            .defineInRange("aspectRatioWideThreshold", 1.18, 1.00, 2.00);
+                    "RECALL-FIRST retune (2026-06): raised 1.18 → 1.30 (upper side of the",
+                    "same widened 'square' band as aspectRatioTallThreshold).",
+                    "Range: 1.00 – 2.00. Default: 1.30.")
+            .defineInRange("aspectRatioWideThreshold", 1.30, 1.00, 2.00);
     public static final ModConfigSpec.IntValue DOT_COUNT_TOLERANCE = BUILDER
             .comment("Allowed |candidate.dotCount − template.dotCount|. Dot count is the",
                     "number of zero-length 'tap' strokes detected before dot injection.",
                     "Templates with dots (Earth, Cross-hair) need at least one dot in",
                     "the candidate; this tolerance permits one missing or spurious dot.",
-                    "Range: 0 – 5. Default: 1.")
-            .defineInRange("dotCountTolerance", 1, 0, 5);
+                    "RECALL-FIRST retune (2026-06): loosened 1 → 2 so an extra/missing tap",
+                    "no longer hard-rejects an otherwise-valid draw.",
+                    "Range: 0 – 5. Default: 2.")
+            .defineInRange("dotCountTolerance", 2, 0, 5);
     public static final ModConfigSpec.IntValue LOOP_COUNT_TOLERANCE = BUILDER
             .comment("Allowed |candidate.closedLoopCount − template.closedLoopCount|.",
                     "Loop count is computed via Euler's formula on the stroke-endpoint",
@@ -205,8 +242,10 @@ public class Config {
                     "the bounding-box diagonal are stitched into the same vertex.",
                     "Templates with N closed loops (Fire=1, Collection=2, …) need the",
                     "candidate to land within this tolerance.",
-                    "Range: 0 – 3. Default: 1.")
-            .defineInRange("loopCountTolerance", 1, 0, 3);
+                    "RECALL-FIRST retune (2026-06): loosened 1 → 2 so a stray/missed loop",
+                    "closure no longer hard-rejects an otherwise-valid draw.",
+                    "Range: 0 – 3. Default: 2.")
+            .defineInRange("loopCountTolerance", 2, 0, 3);
     public static final ModConfigSpec.DoubleValue LOOP_CLOSURE_FRACTION = BUILDER
             .comment("Endpoint stitching radius for closed-loop counting, expressed as",
                     "a fraction of the bounding-box diagonal. Stroke endpoints within",
@@ -228,8 +267,11 @@ public class Config {
                     "measuring how much path is drawn per unit of shape extent.",
                     "A simple cross has density ≈ 1.4; a detailed starburst is 7+.",
                     "0.25 means accept candidates whose density is within ±25% of the template's.",
-                    "Range: 0.05 – 1.00. Default: 0.25.")
-            .defineInRange("inkDensityMaxRelDiff", 0.50, 0.05, 1.0);
+                    "RECALL-FIRST retune (2026-06): loosened 0.50 → 0.80. This is a HARD",
+                    "prefilter — a mis-proportioned valid draw is deleted before the chamfer,",
+                    "so a wider tolerance directly recovers recall.",
+                    "Range: 0.05 – 1.00. Default: 0.80.")
+            .defineInRange("inkDensityMaxRelDiff", 0.80, 0.05, 1.0);
     public static final ModConfigSpec.DoubleValue GRID_CHECK_SCORE_THRESHOLD = BUILDER
             .comment("Chamfer-score threshold above which the 3×3 spatial histogram",
                     "post-filter activates. The post-filter is a sanity check on",
@@ -244,8 +286,10 @@ public class Config {
                     "scaled down proportionally (soft penalty = gridSim / gridMinSimilarity),",
                     "ramping to 0 as the spatial mass distribution diverges — a near-miss is",
                     "demoted, not deleted. Lower = permissive, higher = strict.",
-                    "Range: 0.30 – 0.95. Default: 0.70.")
-            .defineInRange("gridMinSimilarity", 0.70, 0.30, 0.95);
+                    "RECALL-FIRST retune (2026-06): lowered 0.70 → 0.55 so a spatially-off",
+                    "but valid draw keeps more of its chamfer score (softer demote).",
+                    "Range: 0.30 – 0.95. Default: 0.55.")
+            .defineInRange("gridMinSimilarity", 0.55, 0.30, 0.95);
     public static final ModConfigSpec.DoubleValue WORST_PAIR_FREE_ALLOWANCE = BUILDER
             .comment("Phase-2 worst-pair SOFT-demote: free allowance. Worst-pair distance",
                     "up to this value adds nothing to the effective chamfer distance — a",
