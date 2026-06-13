@@ -18,6 +18,7 @@ import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
+import net.neoforged.fml.loading.FMLLoader;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.client.gui.ConfigurationScreen;
 import net.neoforged.neoforge.client.gui.IConfigScreenFactory;
@@ -37,6 +38,8 @@ public class WitchHatAtelierModClient {
             if (mc.screen == null) mc.setScreen(new DebugTemplateScreen());
         }
         while (ModKeybindings.OPEN_DEBUG_RECOGNITION.consumeClick()) {
+            // Recognition debug screen is a dev-only tool — never openable in a production install.
+            if (FMLLoader.isProduction()) continue;
             Minecraft mc = Minecraft.getInstance();
             if (mc.screen == null) mc.setScreen(new RecognitionDebugScreen());
         }

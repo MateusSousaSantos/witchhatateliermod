@@ -1,0 +1,59 @@
+{
+  "witchhatateliermod.configuration.title": "Configurações do WitchHatAtelierMod",
+  "witchhatateliermod.configuration.section.witchhatateliermod.common.toml": "Configurações do WitchHatAtelierMod",
+  "witchhatateliermod.configuration.section.witchhatateliermod.common.toml.title": "Configurações do WitchHatAtelierMod",
+
+  "creativetab.witchhatatelier.tab": "Witch Hat Atelier",
+  "item.witchhatateliermod.wand": "Varinha",
+  "item.witchhatateliermod.nib": "Pena",
+
+  "item.witchhatateliermod.small_square_paper": "Papel Quadrado Pequeno",
+  "item.witchhatateliermod.medium_square_paper": "Papel Quadrado Médio",
+  "item.witchhatateliermod.large_square_paper": "Papel Quadrado Grande",
+
+  "item.witchhatateliermod.small_square_spell_paper": "Papel de Feitiço Quadrado Pequeno",
+  "item.witchhatateliermod.medium_square_spell_paper": "Papel de Feitiço Quadrado Médio",
+  "item.witchhatateliermod.large_square_spell_paper": "Papel de Feitiço Quadrado Grande",
+
+  "item.witchhatateliermod.small_round_paper": "Papel Redondo Pequeno",
+  "item.witchhatateliermod.medium_round_paper": "Papel Redondo Médio",
+  "item.witchhatateliermod.large_round_paper": "Papel Redondo Grande",
+
+  "item.witchhatateliermod.small_round_spell_paper": "Papel de Feitiço Redondo Pequeno",
+  "item.witchhatateliermod.medium_round_spell_paper": "Papel de Feitiço Redondo Médio",
+  "item.witchhatateliermod.large_round_spell_paper": "Papel de Feitiço Redondo Grande",
+
+  "item.witchhatateliermod.spell_binder": "Encadernador de Feitiços",
+
+  "block.witchhatateliermod.round_paper_block": "Bloco de Papel Redondo",
+  "block.witchhatateliermod.placed_small_square_paper": "Papel Quadrado Pequeno",
+  "block.witchhatateliermod.placed_medium_square_paper": "Papel Quadrado Médio",
+  "block.witchhatateliermod.placed_large_square_paper": "Papel Quadrado Grande",
+  "block.witchhatateliermod.placed_small_round_paper": "Papel Redondo Pequeno",
+  "block.witchhatateliermod.placed_medium_round_paper": "Papel Redondo Médio",
+  "block.witchhatateliermod.placed_large_round_paper": "Papel Redondo Grande",
+
+  "screen.witchhatatelier.gesture_canvas": "Tela de Sigilos",
+  "screen.witchhatatelier.gesture_canvas.read_only": "✦ Apenas visualização — equipe uma Varinha para editar ✦",
+  "screen.witchhatatelier.gesture_canvas.small_square": "Tela de Papel Pequena",
+  "screen.witchhatatelier.gesture_canvas.medium_square": "Tela de Papel",
+  "screen.witchhatatelier.gesture_canvas.large_square": "Tela de Papel Grande",
+  "screen.witchhatatelier.gesture_canvas.small_round": "Tela de Papel Pequena",
+  "screen.witchhatatelier.gesture_canvas.medium_round": "Tela de Papel",
+  "screen.witchhatatelier.gesture_canvas.large_round": "Tela de Papel Grande",
+
+
+  "screen.witchhatatelier.gesture_canvas.button.save": "Salvar",
+  "screen.witchhatatelier.gesture_canvas.button.cancel": "Cancelar",
+  "screen.witchhatatelier.gesture_canvas.button.clear": "Limpar",
+  "screen.witchhatatelier.gesture_canvas.button.reset": "Redefinir",
+
+  "screen.witchhatatelier.gesture_canvas.label.smoothing": "Suavização do traço",
+  "screen.witchhatatelier.gesture_canvas.label.dead_zone": "Zona morta do ponto",
+  "screen.witchhatatelier.gesture_canvas.label.angle_snap": "Limite de encaixe de ângulo",
+  "screen.witchhatatelier.gesture_canvas.label.size": "Tamanho da tela",
+
+  "screen.witchhatatelier.gesture_canvas.tooltip.wand_required": "Equipe uma Varinha para editar este papel.",
+  "screen.witchhatatelier.gesture_canvas.tooltip.read_only": "Apenas visualização",
+  "item.witchhatateliermod.spell_paper.spent": "Gasto"
+}

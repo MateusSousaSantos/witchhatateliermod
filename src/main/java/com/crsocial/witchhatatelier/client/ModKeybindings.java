@@ -3,6 +3,7 @@ package com.crsocial.witchhatatelier.client;
 import net.minecraft.client.KeyMapping;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.api.distmarker.OnlyIn;
+import net.neoforged.fml.loading.FMLLoader;
 import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
 import org.lwjgl.glfw.GLFW;
 
@@ -23,6 +24,9 @@ public final class ModKeybindings {
 
     public static void register(RegisterKeyMappingsEvent event) {
         event.register(OPEN_DEBUG_TEMPLATE);
-        event.register(OPEN_DEBUG_RECOGNITION);
+        // Recognition debug (F9) is a dev-only tool — don't even expose the binding in production.
+        if (!FMLLoader.isProduction()) {
+            event.register(OPEN_DEBUG_RECOGNITION);
+        }
     }
 }
