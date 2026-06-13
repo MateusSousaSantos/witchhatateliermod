@@ -36,7 +36,9 @@ import java.util.function.BiConsumer;
  * <h2>Coordinate spaces</h2>
  * <ul>
  *   <li><b>Canvas space</b> — logical grid {@code [0, canvasSize.width] × [0, canvasSize.height]}.
- *       All stroke data, dead-zone checks, and smoothing operate here. Never changes with zoom/pan.</li>
+ *       Stroke data and smoothing operate here and never change with zoom/pan. The point dead-zone
+ *       is the one exception: defined in screen pixels ({@link Config#POINT_DEAD_ZONE_PIXELS}) and
+ *       converted into this space per-canvas, so point spacing stays uniform across paper sizes.</li>
  *   <li><b>Screen space</b> — monitor pixels. Derived via {@link #scrX}/{@link #scrY} or
  *       their inverses {@link #logX}/{@link #logY}.</li>
  * </ul>
@@ -425,13 +427,17 @@ public class CanvasScreen extends Screen {
                 pt = applyAngleSnap(active.getLast(), pt);
             }
 
-            // ── Dead Zone (canvas pixels) ───────────────────────────────────
+            // ── Dead Zone (screen pixels → canvas space) ────────────────────
+            // The threshold is a fixed screen-pixel distance, converted per-canvas via the
+            // current scale+zoom. The same wrist movement then yields the same point spacing
+            // on every paper size, zoom level, and GUI scale — keeping drawing feel and
+            // SaveGesturePayload point counts uniform instead of scaling with canvas resolution.
             if (active != null && !active.isEmpty()) {
                 Vector2f last = active.getLast();
                 float ddx = pt.x - last.x;
                 float ddy = pt.y - last.y;
-                float dz  = Config.POINT_DEAD_ZONE_PIXELS.get().floatValue();
-                if (ddx * ddx + ddy * ddy >= dz * dz) {
+                float dzCanvas = Config.POINT_DEAD_ZONE_PIXELS.get().floatValue() / (displayScale * zoom);
+                if (ddx * ddx + ddy * ddy >= dzCanvas * dzCanvas) {
                     pointStore.addPoint(pt);
                 }
             }
@@ -671,17 +677,21 @@ public class CanvasScreen extends Screen {
         int color     = profile.canvasBorderColor();
 
         if (profile.inputShape() == CanvasProfile.Shape.CIRCLE) {
-            int cx = (int) scrX(canvasSize.width()  / 2f);
-            int cy = (int) scrY(canvasSize.height() / 2f);
-            int r  = (int)(Math.min(canvasSize.width(), canvasSize.height()) / 2.0f * displayScale * zoom);
-            for (int ring = 0; ring < thickness; ring++) {
-                int rr = r - ring;
-                if (rr < 0) break;
-                for (int i = 0; i < 360; i++) {
-                    double rad = Math.toRadians(i);
-                    int px = cx + (int) Math.round(rr * Math.cos(rad));
-                    int py = cy + (int) Math.round(rr * Math.sin(rad));
-                    gui.fill(px, py, px + 1, py + 1, color);
+            int cx   = (int) scrX(canvasSize.width()  / 2f);
+            int cy   = (int) scrY(canvasSize.height() / 2f);
+            int rOut = (int)(Math.min(canvasSize.width(), canvasSize.height()) / 2.0f * displayScale * zoom);
+            int rIn  = Math.max(0, rOut - thickness);
+            // Scanline annulus (mirrors drawCanvasBackground's disk fill): one or two horizontal
+            // fills per row instead of sampling 360° around every ring. Gap-free at any radius
+            // — 1° steps dotted the ring past ~115 px — and ~2·rOut fills instead of 360·thickness.
+            for (int dy = -rOut; dy <= rOut; dy++) {
+                int xo = (int) Math.sqrt((double) rOut * rOut - (double) dy * dy);
+                if (Math.abs(dy) <= rIn) {
+                    int xi = (int) Math.sqrt((double) rIn * rIn - (double) dy * dy);
+                    gui.fill(cx - xo,     cy + dy, cx - xi,     cy + dy + 1, color);  // left band
+                    gui.fill(cx + xi + 1, cy + dy, cx + xo + 1, cy + dy + 1, color);  // right band
+                } else {
+                    gui.fill(cx - xo, cy + dy, cx + xo + 1, cy + dy + 1, color);      // solid cap row
                 }
             }
             return;

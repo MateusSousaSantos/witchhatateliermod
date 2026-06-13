@@ -22,7 +22,9 @@ public class Config {
                     "Recommended range: 0.15 – 0.7")
             .defineInRange("strokeSmoothingFactor", 0.5, 0.0, 1.0);
     public static final ModConfigSpec.DoubleValue POINT_DEAD_ZONE_PIXELS = BUILDER
-            .comment("Minimum pixel distance the ink tip must travel before a new stroke point is recorded.",
+            .comment("Minimum SCREEN-pixel distance the ink tip must travel before a new stroke point is recorded.",
+                    "Converted to canvas space per paper at capture time, so point spacing (and payload size)",
+                    "stays uniform across paper sizes, zoom, and GUI scale rather than scaling with canvas resolution.",
                     "Prevents point blobs on hesitation and evenly spaces points for better gesture recognition.",
                     "Range: 1 – 20. Default: 4.")
             .defineInRange("pointDeadZonePixels", 4.0, 1.0, 20.0);
