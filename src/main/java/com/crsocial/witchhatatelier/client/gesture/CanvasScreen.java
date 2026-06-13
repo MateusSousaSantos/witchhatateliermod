@@ -97,6 +97,12 @@ public class CanvasScreen extends Screen {
     // ── Stroke data ─────────────────────────────────────────────────────────────
     private final CanvasPointStore pointStore = new CanvasPointStore();
     private final List<GesturePoint> preloadedPoints;
+    /**
+     * Guards the one-time stroke load + viewport reset. A window resize / GUI-scale change /
+     * fullscreen toggle re-runs {@link #init()} (vanilla {@code resize() → rebuildWidgets()}),
+     * which must repeat only the layout — never wipe the player's in-progress strokes or pan/zoom.
+     */
+    private boolean contentInitialized = false;
 
     // ── Canvas logical dimensions (set in init) ──────────────────────────────────
     private CanvasSize canvasSize;
@@ -153,6 +159,7 @@ public class CanvasScreen extends Screen {
 
     @Override
     protected void init() {
+        // ── Layout (size-dependent) — re-runs on every init, including window resize. ──
         canvasSize = profile.canvasSize();
 
         // Allocate display area: fraction of screen grows with canvas size so that
@@ -174,13 +181,16 @@ public class CanvasScreen extends Screen {
         displayY = (height - displayH) / 2;
         displayScale = (float) displayW / canvasSize.width();
 
-        zoom = 1.0f;
-        panX = 0f;
-        panY = 0f;
-
         computeWorldMatchRotation();
 
-        loadPoints(preloadedPoints);
+        // ── One-time content load — skipped on resize so strokes and pan/zoom survive. ──
+        if (!contentInitialized) {
+            zoom = 1.0f;
+            panX = 0f;
+            panY = 0f;
+            loadPoints(preloadedPoints);
+            contentInitialized = true;
+        }
     }
 
     /**
@@ -630,9 +640,9 @@ public class CanvasScreen extends Screen {
         int sy = (int) scrY(0) - pad;
         int sw = (int)(canvasSize.width()  * displayScale * zoom) + pad * 2;
         int sh = (int)(canvasSize.height() * displayScale * zoom) + pad * 2;
-        gui.blit(sprite, sx, sy, 0, 0, sw, sh,
-                Math.max(1, profile.screenSpriteWidth()),
-                Math.max(1, profile.screenSpriteHeight()));
+        // GUI sprite atlas: the sprite's .mcmeta scaling (nine_slice) keeps borders crisp
+        // as the canvas scales, instead of stretching a small source image edge-to-edge.
+        gui.blitSprite(sprite, sx, sy, sw, sh);
     }
 
     private void drawCanvasBackground(GuiGraphics gui, int color) {
@@ -770,12 +780,19 @@ public class CanvasScreen extends Screen {
     public enum CursorPattern { CROSSHAIR_WHITE, CROSSHAIR_RED, CROSSHAIR_BLUE, PAINTBRUSH, PENCIL }
 
     private void setSystemCursor(int glfwShape) {
+        String key = "std#" + glfwShape;
+        if (key.equals(activeCursorKey)) return;
+
         long window = Minecraft.getInstance().getWindow().getWindow();
         if (window == 0L) return;
-        long cursor = GLFW.glfwCreateStandardCursor(glfwShape);
+
+        // Cached like the sprite cursors: create each standard shape once and reuse it,
+        // instead of allocating (and leaking) a fresh GLFW cursor on every mouse-move event.
+        long cursor = CURSOR_CACHE.computeIfAbsent(key, k -> GLFW.glfwCreateStandardCursor(glfwShape));
+
         if (cursor != 0L) {
             GLFW.glfwSetCursor(window, cursor);
-            activeCursorKey = null;
+            activeCursorKey = key;
         }
     }
 

@@ -87,16 +87,13 @@ public interface CanvasProfile {
     default int strokeWidth() { return 2; }
 
     /**
-     * Background sprite drawn behind the canvas, or {@code null} for none.
-     * Typically, the parchment / paper texture.
+     * GUI sprite id for the parchment/paper texture drawn behind the canvas, or {@code null}
+     * for none. Resolved against the GUI sprite atlas ({@code assets/<ns>/textures/gui/sprites/});
+     * a sibling {@code .mcmeta} controls scaling, so {@code nine_slice} keeps the border crisp as
+     * the canvas grows. Drawn with {@code GuiGraphics.blitSprite}, which derives the size from the
+     * atlas — no source width/height needed.
      */
     @Nullable ResourceLocation screenSprite();
-
-    /** Pixel width of the {@link #screenSprite()} source image. */
-    int screenSpriteWidth();
-
-    /** Pixel height of the {@link #screenSprite()} source image. */
-    int screenSpriteHeight();
 
     /**
      * ResourceLocation of the custom cursor PNG drawn over the canvas.
@@ -125,7 +122,7 @@ public interface CanvasProfile {
      */
     record PaperTypeProfile(PaperType paperType) implements CanvasProfile {
         private static final ResourceLocation SPRITE =
-                ResourceLocation.fromNamespaceAndPath(WitchHatAtelierMod.MODID, "textures/gui/blank.png");
+                ResourceLocation.fromNamespaceAndPath(WitchHatAtelierMod.MODID, "canvas/paper");
         private static final ResourceLocation CURSOR =
                 ResourceLocation.fromNamespaceAndPath(WitchHatAtelierMod.MODID, "textures/gui/cursor.png");
 
@@ -142,8 +139,6 @@ public interface CanvasProfile {
         @Override public float      strokeSmoothingFactor(){ return 1f; }
         @Override public boolean    angleSnapEnabled()    { return false; }
         @Override public ResourceLocation screenSprite()  { return SPRITE; }
-        @Override public int        screenSpriteWidth()   { return 16; }
-        @Override public int        screenSpriteHeight()  { return 16; }
         @Override public ResourceLocation cursorSprite()  { return CURSOR; }
         @Override public int        cursorHotspotX()      { return -1; }
         @Override public int        cursorHotspotY()      { return -1; }
@@ -167,8 +162,6 @@ public interface CanvasProfile {
         @Override public float      strokeSmoothingFactor(){ return Config.STROKE_SMOOTHING_FACTOR.get().floatValue(); }
         @Override public boolean    angleSnapEnabled()    { return Config.ANGLE_SNAP_ENABLED.get(); }
         @Override public @Nullable ResourceLocation screenSprite() { return null; }
-        @Override public int        screenSpriteWidth()  { return 16; }
-        @Override public int        screenSpriteHeight() { return 16; }
     }
 
     /**
@@ -190,7 +183,5 @@ public interface CanvasProfile {
         @Override public float      strokeSmoothingFactor(){ return 1f; }
         @Override public boolean    angleSnapEnabled()     { return false; }
         @Override public @Nullable ResourceLocation screenSprite() { return null; }
-        @Override public int        screenSpriteWidth()   { return 16; }
-        @Override public int        screenSpriteHeight()  { return 16; }
     }
 }

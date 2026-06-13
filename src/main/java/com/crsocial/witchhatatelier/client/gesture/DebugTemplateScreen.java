@@ -55,6 +55,8 @@ public final class DebugTemplateScreen extends CanvasScreen {
     @Override
     protected void init() {
         super.init();
+        // Window resize rebuilds widgets; carry the typed sigil name over.
+        String preservedName = spellNameBox != null ? spellNameBox.getValue() : "";
 
         int boxW = Math.min(200, displayW);
         int boxX = displayX + (displayW - boxW) / 2;
@@ -64,6 +66,7 @@ public final class DebugTemplateScreen extends CanvasScreen {
                 Component.literal("Sigil Name"));
         spellNameBox.setHint(Component.literal("sigil_name..."));
         spellNameBox.setMaxLength(64);
+        spellNameBox.setValue(preservedName);
         addRenderableWidget(spellNameBox);
         setFocused(spellNameBox);
 
