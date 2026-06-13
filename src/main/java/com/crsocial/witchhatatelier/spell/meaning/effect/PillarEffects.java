@@ -11,8 +11,10 @@ import net.minecraft.core.particles.ParticleOptions;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.util.Mth;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.phys.Vec3;
 import org.joml.Vector3f;
 
 import java.util.List;
@@ -147,6 +149,19 @@ public final class PillarEffects {
                 level.sendParticles(particle, px, py, pz, perBlock, 0.2, 0.2, 0.2, 0.01);
             }
         }
+    }
+
+    /**
+     * Shortest distance from point {@code p} to the segment {@code a→b} — the
+     * "is this entity inside the column?" test shared by the pillars that act on
+     * entities along their length (fire burns, air pushes).
+     */
+    public static double distanceToSegment(Vec3 p, Vec3 a, Vec3 b) {
+        Vec3 ab = b.subtract(a);
+        double len2 = ab.lengthSqr();
+        if (len2 < 1e-6) return p.distanceTo(a);
+        double t = Mth.clamp(p.subtract(a).dot(ab) / len2, 0.0, 1.0);
+        return p.distanceTo(a.add(ab.scale(t)));
     }
 
     private static Block resolveBlock(ResourceLocation id, Block fallback) {

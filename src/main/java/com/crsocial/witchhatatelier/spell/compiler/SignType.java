@@ -16,12 +16,24 @@ public enum SignType {
     CRUSH(Tier.FORCE, StackingMode.MAGNITUDE, ManifestationRole.NONE),
     CONVERGENCE(Tier.FORCE, StackingMode.MAGNITUDE, ManifestationRole.NONE),
     COLLECTION(Tier.META, StackingMode.MAGNITUDE, ManifestationRole.NONE),
-    LEVITATION(Tier.META, StackingMode.MAGNITUDE, ManifestationRole.NONE),
+    LEVITATION(Tier.META, StackingMode.MODIFIER, ManifestationRole.NONE),
     CROSSHAIR(Tier.META, StackingMode.MAGNITUDE, ManifestationRole.NONE);
 
     public enum Tier { MANIFESTATION, FORCE, META }
 
-    public enum StackingMode { MAGNITUDE, REPETITION }
+    /**
+     * How a sign's occurrence {@code count} feeds the meaning engine.
+     * <ul>
+     *   <li>{@code MAGNITUDE} — count folds into a power/aoe scalar via the cell's
+     *       {@code stacking_curve} (drawing it bigger/again = stronger).</li>
+     *   <li>{@code REPETITION} — count loops the effect that many times (Bolt → N impacts).</li>
+     *   <li>{@code MODIFIER} — count affects <b>neither</b> power nor repetition; the sign's
+     *       influence is purely positional/meta, applied through its {@code SignBehavior}
+     *       (e.g. Levitation only shifts the origin and lifts the cast). Extra copies do
+     *       not amplify the spell.</li>
+     * </ul>
+     */
+    public enum StackingMode { MAGNITUDE, REPETITION, MODIFIER }
 
     /**
      * Role of a Manifestation sign when several combine in one ring.

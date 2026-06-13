@@ -44,13 +44,13 @@ public final class AirPillarEffect extends PillarEffect {
     /** Base distance an entity may be from the column line and still be pushed. */
     private static final double PUSH_RADIUS = 1.0;
     /** Velocity (blocks/tick) added by a one-shot (surface) cast, before power scaling. */
-    private static final double ONE_SHOT_PUSH = 0.7;
+    private static final double ONE_SHOT_PUSH = 0.3;
     /** Velocity added per channel tick — small so a sustained channel lifts rather than flings. */
-    private static final double PER_TICK_PUSH = 0.12;
+    private static final double PER_TICK_PUSH = 0.10;
     /** Hard cap on the per-application velocity add, so heavy casts can't launch to the void. */
-    private static final double MAX_PUSH = 2.5;
+    private static final double MAX_PUSH = 2.0;
     /** Terminal speed along the column axis — sustained channels lift toward this, not past it. */
-    private static final double TERMINAL_ALONG_AXIS = 2.5;
+    private static final double TERMINAL_ALONG_AXIS = 1.5;
 
     @Override
     public String key() {

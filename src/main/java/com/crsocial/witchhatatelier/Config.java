@@ -349,9 +349,10 @@ public class Config {
                     "sigil = ×1.0 and a full-size one = this value, letting 'draw it big' amplify",
                     "a spell instead of only ever shrinking it. Affects both the abstract power",
                     "(Pyreball, Wind shove) and effect reach (pillar/column height).",
-                    "Example at 2.0: one full-size column ≈ two reference-size columns. Set 3.0",
-                    "to make one big column ≈ three small ones. Range: 1.0 – 8.0. Default: 2.0.")
-            .defineInRange("sizePowerMax", 2.0, 1.0, 8.0);
+                    "Example at 3.5: one full-size column ≈ three-to-four reference-size",
+                    "columns. Set 2.0 to make one big column ≈ two small ones. Range: 1.0 – 8.0.",
+                    "Default: 3.5.")
+            .defineInRange("sizePowerMax", 3.5, 1.0, 8.0);
     public static final ModConfigSpec.DoubleValue SIZE_POWER_REFERENCE = BUILDER
             .comment("The drawn size that maps to ×1.0 power — the anchor of the size curve.",
                     "Sigils drawn at this size are unaffected; larger ones amplify toward",

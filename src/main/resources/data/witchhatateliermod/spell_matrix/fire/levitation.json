@@ -24,5 +24,5 @@
     "per_use": 0.0
   },
 
-  "_comment": "A pyreball - a hovering orb of fire that levitates above the glyph, scorching nearby entities. Burn radius and lifetime scale with SignBundle.count x Quality x Size."
+  "_comment": "A pyreball - a hovering orb of fire that levitates above the glyph, scorching nearby entities. Power (burn radius, lifetime, scale) comes from the fire sigil: its drawn size and the number of stacked fire sigils. Levitation is a MODIFIER sign - extra copies only reposition/lift the orb, they do NOT amplify it (stacking_curve is unused here)."
 }

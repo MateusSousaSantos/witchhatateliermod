@@ -1,21 +1,49 @@
 package com.crsocial.witchhatatelier.spell.meaning.effect.fire;
 
+import com.crsocial.witchhatatelier.spell.meaning.BehaviorOp;
+import com.crsocial.witchhatatelier.spell.meaning.ExecutableSpell;
+import com.crsocial.witchhatatelier.spell.meaning.SizeScaling;
+import com.crsocial.witchhatatelier.spell.meaning.effect.ColumnPlacer;
+import com.crsocial.witchhatatelier.spell.meaning.effect.EffectInstruction;
 import com.crsocial.witchhatatelier.spell.meaning.effect.PillarEffect;
+import com.crsocial.witchhatatelier.spell.meaning.effect.PillarEffects;
+import com.crsocial.witchhatatelier.spell.meaning.effect.SpawnBlocksInstruction;
 import net.minecraft.core.particles.ParticleOptions;
 import net.minecraft.core.particles.ParticleTypes;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.util.Mth;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
+import org.joml.Vector3f;
+
+import java.util.List;
 
 /**
  * Fire + Column → a roaring pillar of flame erupting from the glyph along the
  * casting-surface normal, with a {@link ParticleTypes#FLAME} trail the base
- * re-emits each channel tick. Has no Crush behaviour yet — under a Crush sign it
+ * re-emits each channel tick. Beyond placing fire blocks, the column actively
+ * <b>ignites and scorches</b> any entity caught along its length (see
+ * {@link #affectEntities}). Has no Crush behaviour yet — under a Crush sign it
  * falls back to the base no-op rather than placing fire.
  */
 public final class FirePillarEffect extends PillarEffect {
 
     public static final String KEY = "fire_pillar";
+
+    /** Base distance an entity may be from the column line and still catch fire (× aoe). */
+    private static final double BURN_RADIUS = 1.0;
+    /** Seconds of burning applied at reference power; scales up with power, refreshed each tick. */
+    private static final float BURN_SECONDS_BASE = 3.0f;
+    /** Hardest burn a heavy cast can apply, in seconds. */
+    private static final float BURN_SECONDS_MAX = 10.0f;
+    /** Direct damage of a one-shot (surface) cast at reference power, before power scaling. */
+    private static final float ONE_SHOT_DAMAGE = 4.0f;
+    /** Direct damage per channel tick; vanilla i-frames throttle this to a steady burn. */
+    private static final float PER_TICK_DAMAGE = 1.0f;
 
     @Override
     public String key() {
@@ -30,5 +58,53 @@ public final class FirePillarEffect extends PillarEffect {
     @Override
     protected @Nullable ParticleOptions trailParticle() {
         return ParticleTypes.FLAME;
+    }
+
+    /** Ignite and scorch entities standing in the column; a one-shot cast hits harder than a channel tick. */
+    @Override
+    @SuppressWarnings("unchecked")
+    protected void affectEntities(ServerLevel level, ExecutableSpell spell, BehaviorOp op, boolean oneShot) {
+        if (!(op.payload() instanceof List<?> raw) || raw.isEmpty()) return;
+
+        Vector3f o = spell.originWorld();
+        // Burn along the SAME axis the visual column grows on (Column-sign skew
+        // included) so the flame and the rendered pillar stay aligned.
+        Vector3f dir = PillarEffects.columnGrow(spell);
+        float size = Math.max(0.1f, spell.magnitude().sizeNormalized());
+        float quality = Math.max(0.1f, spell.magnitude().quality());
+        float power = Math.max(0.1f, spell.magnitude().power());
+        float aoe = Math.max(1f, spell.magnitude().aoe());
+        int count = Math.max(1, op.count());
+        float reachScale = SizeScaling.powerMultiplier(size); // size→reach curve
+
+        // Reach the longest block-column among this op's instructions — matches the
+        // height PillarEffects.executeColumn places fire blocks along.
+        int height = 0;
+        for (EffectInstruction ins : (List<EffectInstruction>) raw) {
+            if (ins instanceof SpawnBlocksInstruction sb) {
+                int h = Math.round(sb.blocksPerMagnitude() * count * reachScale * quality);
+                height = Math.max(height, Math.min(ColumnPlacer.MAX_HEIGHT, h));
+            }
+        }
+        if (height <= 0) return;
+
+        Vec3 start = new Vec3(o.x, o.y, o.z);
+        Vec3 d = new Vec3(dir.x, dir.y, dir.z); // unit (growDirection normalizes)
+        Vec3 end = start.add(d.scale(height));
+        double radius = BURN_RADIUS * aoe;
+
+        float powerScale = Mth.clamp(power, 0.5f, 3.0f);
+        float burnSeconds = Mth.clamp(BURN_SECONDS_BASE + power, BURN_SECONDS_BASE, BURN_SECONDS_MAX);
+        float damage = (oneShot ? ONE_SHOT_DAMAGE : PER_TICK_DAMAGE) * powerScale;
+
+        AABB box = new AABB(start, end).inflate(radius);
+        for (Entity e : level.getEntities((Entity) null, box,
+                ent -> ent.isAlive() && !ent.isSpectator())) {
+            if (PillarEffects.distanceToSegment(e.getBoundingBox().getCenter(), start, end) > radius) continue;
+            // Refresh the burn each application so a sustained channel keeps the
+            // target alight; the vanilla fire tick carries the damage-over-time.
+            e.igniteForSeconds(burnSeconds);
+            e.hurt(level.damageSources().inFire(), damage);
+        }
     }
 }
