@@ -58,12 +58,14 @@ public class CanvasScreen extends Screen {
     // Constants
     // ════════════════════════════════════════════════════════════════════════════
 
-    // Display sizing: smaller canvases get a smaller portion of the screen so you
-    // can feel the size difference. Base fraction for a 512px canvas = 0.75;
-    // scales down linearly toward 0.30 for tiny canvases.
-    private static final float DISPLAY_FRACTION_MIN  = 0.30f;
-    private static final float DISPLAY_FRACTION_RANGE = 0.45f; // added on top of MIN at canvas=512px
-    private static final int   DISPLAY_REF_PX        = 512;    // reference canvas size for max fraction
+    // Display sizing: a paper's on-screen size ramps with its canvas resolution so you can feel
+    // the size difference — budgetFrac = MIN + min(1, shortDim/REF)·RANGE. REF is the largest
+    // paper (1024px), which earns the full 0.75; smaller papers render proportionally smaller
+    // (a 512px canvas lands at 0.525). If a larger paper tier is added (see PaperType.isLarge),
+    // raise DISPLAY_REF_PX to it so the ramp keeps spanning the whole roster.
+    private static final float DISPLAY_FRACTION_MIN   = 0.30f;  // floor fraction (canvas → 0)
+    private static final float DISPLAY_FRACTION_RANGE = 0.45f;  // added on top of MIN at canvas = DISPLAY_REF_PX
+    private static final int   DISPLAY_REF_PX         = 1024;   // canvas size that earns the full (MIN+RANGE) fraction
 
     private static final float ZOOM_MIN = 1.0f;
     private static final float ZOOM_MAX = 8.0f;
