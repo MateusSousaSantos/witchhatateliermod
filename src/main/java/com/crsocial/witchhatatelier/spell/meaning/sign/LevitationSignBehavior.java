@@ -31,9 +31,9 @@ public final class LevitationSignBehavior implements SignBehavior {
     // ── Tuning constants ─────────────────────────────────────────────────────
 
     /** World blocks of horizontal shift at full strength. */
-    private static final float MAX_HORIZONTAL_REACH = 1.0f;
+    private static final float MAX_HORIZONTAL_REACH = 2.0f;
     /** World blocks of upward lift at full quality×size. */
-    private static final float MAX_LIFT = 1.0f;
+    private static final float MAX_LIFT = 2.0f;
     /** Below this displacement length the placement direction is treated as undefined. */
     private static final float EPSILON = 1e-4f;
 

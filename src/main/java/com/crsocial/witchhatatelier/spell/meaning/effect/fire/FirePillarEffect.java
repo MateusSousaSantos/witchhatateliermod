@@ -12,7 +12,10 @@ import net.minecraft.core.particles.ParticleOptions;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.Mth;
+import net.minecraft.world.damagesource.DamageSource;
+import net.minecraft.world.damagesource.DamageTypes;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.AABB;
@@ -63,7 +66,8 @@ public final class FirePillarEffect extends PillarEffect {
     /** Ignite and scorch entities standing in the column; a one-shot cast hits harder than a channel tick. */
     @Override
     @SuppressWarnings("unchecked")
-    protected void affectEntities(ServerLevel level, ExecutableSpell spell, BehaviorOp op, boolean oneShot) {
+    protected void affectEntities(ServerLevel level, @Nullable Player caster,
+                                  ExecutableSpell spell, BehaviorOp op, boolean oneShot) {
         if (!(op.payload() instanceof List<?> raw) || raw.isEmpty()) return;
 
         Vector3f o = spell.originWorld();
@@ -97,14 +101,21 @@ public final class FirePillarEffect extends PillarEffect {
         float burnSeconds = Mth.clamp(BURN_SECONDS_BASE + power, BURN_SECONDS_BASE, BURN_SECONDS_MAX);
         float damage = (oneShot ? ONE_SHOT_DAMAGE : PER_TICK_DAMAGE) * powerScale;
 
+        // Attribute the burn to the caster so kills are credited (and PvP rules apply);
+        // fall back to an unattributed fire source when there's no live caster.
+        DamageSource fire = caster != null
+                ? level.damageSources().source(DamageTypes.ON_FIRE, caster)
+                : level.damageSources().inFire();
+
         AABB box = new AABB(start, end).inflate(radius);
         for (Entity e : level.getEntities((Entity) null, box,
                 ent -> ent.isAlive() && !ent.isSpectator())) {
+            if (e == caster) continue; // don't burn yourself with your own column
             if (PillarEffects.distanceToSegment(e.getBoundingBox().getCenter(), start, end) > radius) continue;
             // Refresh the burn each application so a sustained channel keeps the
             // target alight; the vanilla fire tick carries the damage-over-time.
             e.igniteForSeconds(burnSeconds);
-            e.hurt(level.damageSources().inFire(), damage);
+            e.hurt(fire, damage);
         }
     }
 }

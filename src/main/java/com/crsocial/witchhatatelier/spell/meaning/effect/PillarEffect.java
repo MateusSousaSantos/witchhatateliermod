@@ -44,8 +44,11 @@ public abstract class PillarEffect extends AbstractPillarEffect {
      * Per-element effect on entities in the column (create-mode only). Default
      * no-op. {@code oneShot} is {@code true} for an instantaneous surface cast and
      * {@code false} for a per-tick channel tick, letting a subclass scale strength.
+     * {@code caster} is the player who cast the spell (for damage attribution); it
+     * may be {@code null} when the cast has no live caster.
      */
-    protected void affectEntities(ServerLevel level, ExecutableSpell spell, BehaviorOp op, boolean oneShot) {
+    protected void affectEntities(ServerLevel level, @Nullable Player caster,
+                                  ExecutableSpell spell, BehaviorOp op, boolean oneShot) {
         // No-op by default.
     }
 
@@ -76,7 +79,7 @@ public abstract class PillarEffect extends AbstractPillarEffect {
             if (block != null) PillarEffects.executeColumn(level, spell, op, block, key());
             ParticleOptions particle = trailParticle();
             if (particle != null) PillarEffects.emitColumnTrail(level, spell, op, particle);
-            affectEntities(level, spell, op, true);
+            affectEntities(level, caster, spell, op, true);
         }
     }
 
@@ -93,7 +96,7 @@ public abstract class PillarEffect extends AbstractPillarEffect {
             if (isCrush(op)) continue; // one-shot on begin
             ParticleOptions particle = trailParticle();
             if (particle != null) PillarEffects.emitColumnTrail(ctx.level(), ctx.spell(), op, particle);
-            affectEntities(ctx.level(), ctx.spell(), op, false);
+            affectEntities(ctx.level(), ctx.caster(), ctx.spell(), op, false);
         }
     }
 }

@@ -15,6 +15,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
@@ -69,7 +70,8 @@ public final class AirPillarEffect extends PillarEffect {
 
     /** Shove entities along the column axis; stronger for a one-shot surface cast than a channel tick. */
     @Override
-    protected void affectEntities(ServerLevel level, ExecutableSpell spell, BehaviorOp op, boolean oneShot) {
+    protected void affectEntities(ServerLevel level, @Nullable Player caster,
+                                  ExecutableSpell spell, BehaviorOp op, boolean oneShot) {
         push(level, spell, op, oneShot ? ONE_SHOT_PUSH : PER_TICK_PUSH);
     }
 
