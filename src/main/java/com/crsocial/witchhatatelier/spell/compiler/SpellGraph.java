@@ -94,6 +94,21 @@ public record SpellGraph(RingNode root,
         return enumName.charAt(0) + enumName.substring(1).toLowerCase(Locale.ROOT);
     }
 
+    /** Lists recovered glyph headings (drawn "arrow" directions) for directional nodes. */
+    private void appendHeadings(StringBuilder sb) {
+        if (core.hasHeading()) {
+            sb.append(String.format(Locale.ROOT,
+                    "  heading[%s sigil]: (%.2f,%.2f) conf=%.2f%n",
+                    core.type(), core.heading().x, core.heading().y, core.headingConfidence()));
+        }
+        for (SignNode n : modifiers) {
+            if (!n.hasHeading()) continue;
+            sb.append(String.format(Locale.ROOT,
+                    "  heading[%s sign]: (%.2f,%.2f) conf=%.2f%n",
+                    n.type(), n.heading().x, n.heading().y, n.headingConfidence()));
+        }
+    }
+
     /** Multi-line structured dump for server logging (Phase 1 verification). */
     public String toDebugString() {
         StringBuilder sb = new StringBuilder();
@@ -104,6 +119,7 @@ public record SpellGraph(RingNode root,
         sb.append(String.format(Locale.ROOT,
                 "  sigil: %s x%d quality=%.2f centre=(%.1f,%.1f)%n",
                 core.type(), sigilStack, core.quality(), core.centre().x, core.centre().y));
+        appendHeadings(sb);
         sb.append(String.format(Locale.ROOT, "  form: %s%n", describeForm()));
         sb.append("  signs:");
         if (signsByType().isEmpty()) {

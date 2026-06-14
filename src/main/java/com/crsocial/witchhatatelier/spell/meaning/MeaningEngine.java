@@ -12,6 +12,7 @@ import com.crsocial.witchhatatelier.spell.meaning.effect.EffectRegistry;
 import com.crsocial.witchhatatelier.spell.meaning.sign.SignBehavior;
 import com.crsocial.witchhatatelier.spell.meaning.sign.SignBehaviorRegistry;
 import com.crsocial.witchhatatelier.spell.meaning.sign.SpellModification;
+import org.joml.Vector2f;
 import org.joml.Vector3f;
 
 import java.util.ArrayList;
@@ -185,18 +186,24 @@ public final class MeaningEngine {
     }
 
     /**
-     * Net direction in world space. Phase 2 uses the canvas-space symmetry
-     * vector projected against {@code surfaceNormal}; Phase 3 will replace this
-     * with a proper basis derived from the placed-paper facing.
+     * Base aim in world space. The primary direction comes from the <b>core sigil's</b>
+     * recovered glyph heading ("which way the drawn sigil points") when the sigil is
+     * directional; otherwise it falls back to the placement-based symmetry vector (where
+     * signs were drawn around the sigil). Direction-bearing <i>signs</i> (e.g. Column)
+     * steer on top of this base through their own {@link SignBehavior}, so their heading
+     * is intentionally not consumed here — that would double-count it.
+     *
+     * <p>The chosen canvas-space direction is rotated by the paper's in-plane rotation so it
+     * follows the rendered drawing, with the surface-normal supplying the vertical term.</p>
      */
     private static Vector3f resolveDirection(SpellGraph graph, CastingContext ctx) {
-        var net = graph.symmetry().netDirection();
-        if (net.lengthSquared() < 1e-6f) return new Vector3f();
+        Vector2f canvasDir = graph.core().hasHeading()
+                ? graph.core().heading()
+                : graph.symmetry().netDirection(); // placement fallback
+        if (canvasDir.lengthSquared() < 1e-6f) return new Vector3f();
         Vector3f normal = new Vector3f(ctx.surfaceNormal());
         if (normal.lengthSquared() < 1e-6f) normal.set(0f, 1f, 0f);
-        // Rotate the canvas direction by the paper's in-plane rotation so it follows the
-        // rendered drawing (matches ColumnSignBehavior); keep the surface-normal vertical term.
-        var world = CanvasDirection.toWorldXZ(net.x, net.y, ctx.drawRotationDeg());
+        var world = CanvasDirection.toWorldXZ(canvasDir.x, canvasDir.y, ctx.drawRotationDeg());
         return new Vector3f(world.x, normal.y, world.y).normalize();
     }
 }

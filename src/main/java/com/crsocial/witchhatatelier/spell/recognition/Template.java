@@ -13,6 +13,7 @@ public record Template(String spellName,
                        int resampleN,
                        float indicativeAngle,
                        boolean isRing,
+                       boolean directional,
                        float normalizedArcLength,
                        SigilMetrics metrics) {
 }

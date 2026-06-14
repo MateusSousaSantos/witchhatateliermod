@@ -409,6 +409,43 @@ public class Config {
                     "forgiving. Range: 0.0 – 1.0. Default: 0.2.")
             .defineInRange("symmetryCancelDeadzone", 0.2, 0.0, 1.0);
 
+    // ── Glyph heading (drawn "arrow" direction) ─────────────────────────────────
+    // Direction-bearing glyphs flagged "directional" in their template JSON (column,
+    // levitation, pull, …) recover a full 360° heading from the drawn shape, used to
+    // aim the spell. The $P+ recognizer is rotation-invariant, so this heading is
+    // derived separately from the raw strokes by HeadingResolver: a principal axis
+    // (the orientation line) plus an asymmetry vote that picks which end is "forward".
+
+    public static final ModConfigSpec.DoubleValue HEADING_MIN_ELONGATION = BUILDER
+            .comment("How elongated a directional glyph must be before it has a usable heading.",
+                    "Measured as (λ1 - λ2)/(λ1 + λ2) of the point cloud's covariance: 0 = a round",
+                    "blob (no axis to point along), 1 = a perfectly straight line. Glyphs below",
+                    "this are treated as having no heading and fall back to placement-based steering.",
+                    "Raise to require clearer arrows; lower to accept stubbier shapes.",
+                    "Range: 0.0 – 1.0. Default: 0.15.")
+            .defineInRange("headingMinElongation", 0.15, 0.0, 1.0);
+    public static final ModConfigSpec.DoubleValue HEADING_MASS_WEIGHT = BUILDER
+            .comment("Weight of the GEOMETRIC mass-asymmetry signal when deciding which end of a",
+                    "directional glyph points forward. The glyph's centroid leans toward its",
+                    "heavier/denser end along the axis; that lean votes for the forward direction.",
+                    "Survives stroke resampling and is independent of draw speed. Combined with",
+                    "headingDensityWeight (the two are normalized). Range: 0.0 – 10.0. Default: 1.0.")
+            .defineInRange("headingMassWeight", 1.0, 0.0, 10.0);
+    public static final ModConfigSpec.DoubleValue HEADING_DENSITY_WEIGHT = BUILDER
+            .comment("Weight of the RAW point-density signal when deciding which end of a directional",
+                    "glyph points forward. Counts raw (unresampled) drawn points on each side of the",
+                    "axis: more points = the forward/aim end. Captures 'I scribbled more here' but is",
+                    "noisier and draw-style dependent. Combined with headingMassWeight (the two are",
+                    "normalized). Set to 0 to rely on geometry alone. Range: 0.0 – 10.0. Default: 1.0.")
+            .defineInRange("headingDensityWeight", 1.0, 0.0, 10.0);
+    public static final ModConfigSpec.DoubleValue HEADING_MIN_CONFIDENCE = BUILDER
+            .comment("Minimum combined confidence (elongation × forward-end agreement, both in [0,1])",
+                    "for a recovered glyph heading to be used. Below this the glyph is treated as",
+                    "directionless and steering falls back to placement, so a near-symmetric drawing",
+                    "doesn't aim the spell randomly. Raise to demand decisive arrows; lower to let",
+                    "faint asymmetries steer. Range: 0.0 – 1.0. Default: 0.15.")
+            .defineInRange("headingMinConfidence", 0.15, 0.0, 1.0);
+
     // ── Spell casting & fuel system ─────────────────────────────────────────────
 
     public static final ModConfigSpec.DoubleValue DEFAULT_SPELL_FUEL = BUILDER

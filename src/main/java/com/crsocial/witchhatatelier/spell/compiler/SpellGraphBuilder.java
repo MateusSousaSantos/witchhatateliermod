@@ -4,6 +4,7 @@ import com.crsocial.witchhatatelier.WitchHatAtelierMod;
 import com.crsocial.witchhatatelier.spell.cluster.SigilCluster;
 import com.crsocial.witchhatatelier.spell.recognition.Point;
 import com.crsocial.witchhatatelier.spell.recognition.RecognitionResult;
+import com.crsocial.witchhatatelier.spell.recognition.TemplateRegistry;
 import com.crsocial.witchhatatelier.spell.trigger.TriggerEvaluator.TriggerResult;
 import org.joml.Vector2f;
 
@@ -54,15 +55,23 @@ public final class SpellGraphBuilder {
 
             Vector2f centre = centroid(clusters.get(i));
 
+            // Recover the drawn 360° heading for "arrow" glyphs (templates flagged
+            // directional); non-directional shapes get a zero heading and steer by placement.
+            HeadingResolver.Heading heading = TemplateRegistry.get().isDirectional(r.spellName())
+                    ? HeadingResolver.resolve(clusters.get(i).strokes())
+                    : HeadingResolver.NONE;
+
             Optional<SigilType> sigil = SigilType.fromSpellName(r.spellName());
             if (sigil.isPresent()) {
-                sigils.add(new SigilNode(sigil.get(), centre, r.confidenceScore()));
+                sigils.add(new SigilNode(sigil.get(), centre, r.confidenceScore(),
+                        heading.dir(), heading.confidence()));
                 continue;
             }
             Optional<SignType> sign = SignType.fromSpellName(r.spellName());
             if (sign.isPresent()) {
                 signs.add(new SignNode(sign.get(), centre,
-                        (float) Math.toDegrees(r.indicativeAngle()), r.confidenceScore()));
+                        (float) Math.toDegrees(r.indicativeAngle()), r.confidenceScore(),
+                        heading.dir(), heading.confidence()));
                 continue;
             }
             WitchHatAtelierMod.LOGGER.info(

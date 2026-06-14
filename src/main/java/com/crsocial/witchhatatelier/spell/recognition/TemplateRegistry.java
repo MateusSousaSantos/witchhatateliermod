@@ -41,4 +41,17 @@ public final class TemplateRegistry {
     public synchronized int size() {
         return templates.size();
     }
+
+    /**
+     * True when any registered template for {@code spellName} is flagged
+     * {@code directional} — i.e. the glyph is an "arrow" whose drawn heading
+     * should steer the spell. Matched case-insensitively against {@code spell_name}.
+     */
+    public synchronized boolean isDirectional(String spellName) {
+        if (spellName == null) return false;
+        for (Template t : templates) {
+            if (t.directional() && t.spellName().equalsIgnoreCase(spellName)) return true;
+        }
+        return false;
+    }
 }

@@ -171,7 +171,7 @@ public final class CorpusCrossVal {
         PointCloud rawCloud = new PointCloud(r.intended() + ":" + variantName, flat);
         PointCloudPreprocessor.Processed p = PointCloudPreprocessor.process(rawCloud, resampleN);
         return new Template(r.intended(), variantName, rawCloud, p.cloud(), resampleN,
-                p.indicativeAngle(), false, p.normalizedArcLength(), p.metrics());
+                p.indicativeAngle(), false, false, p.normalizedArcLength(), p.metrics());
     }
 
     private static List<Rec> parse(Path corpusPath) throws IOException {

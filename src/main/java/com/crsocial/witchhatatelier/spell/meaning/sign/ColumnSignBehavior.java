@@ -16,9 +16,12 @@ import org.joml.Vector2f;
  * to the right steers a Column spell to the right, one drawn forward steers it
  * forward, and so on.
  *
- * <p>The skew direction comes from the sign's placement relative to the sigil
- * centre (mean of the Column occurrences − {@code graph.core().centre()}); its
- * magnitude is {@code signQuality × steerFraction(distance) × maxSkew × steer(size)} —
+ * <p>The skew <i>direction</i> is taken from the Column glyph's own recovered heading
+ * ("which way the drawn arrow points") when one was recovered — the player explicitly
+ * aimed it, so no off-centre placement is needed. When the glyph yields no heading the
+ * behaviour falls back to the sign's <b>placement</b> relative to the sigil centre (mean
+ * of the Column occurrences − {@code graph.core().centre()}); the placement magnitude
+ * is {@code signQuality × steerFraction(distance) × maxSkew × steer(size)} —
  * this sign's own recognizer confidence (averaged over its occurrences), times how far
  * off-centre it was drawn (zero inside {@link Config#COLUMN_STEER_DEADZONE}, ramping to
  * full at {@link Config#COLUMN_STEER_FULL_DISTANCE} so a Column drawn near the centre goes
@@ -42,6 +45,22 @@ public final class ColumnSignBehavior implements SignBehavior {
                                     Magnitude magnitude) {
         // Shared placement read (displacement, quality, paper-rotation-aware direction).
         SignPlacement p = SignPlacement.from(bundle, graph);
+        float size = magnitude.sizeNormalized();
+        float maxSkew = Config.COLUMN_STEER_MAX_SKEW.get().floatValue();
+
+        // ── Primary: steer along the drawn arrow's own heading ───────────────────────────
+        // The player aimed the Column glyph, so it points the pillar directly — no off-centre
+        // ramp needed. Magnitude = sign quality × heading confidence × maxSkew × size-steer.
+        SignHeading h = SignHeading.from(bundle);
+        if (h.hasDirection()) {
+            float skew = p.signQuality() * h.confidence() * maxSkew * SizeScaling.steerMultiplier(size);
+            Vector2f dir = h.worldDirectionXZ(ctx); // rotated to follow the rendered drawing
+            return SpellModification.builder()
+                    .directionBias(dir.x * skew, 0f, dir.y * skew)
+                    .build();
+        }
+
+        // ── Fallback: no heading recovered → steer by where the Column was drawn ──────────
         if (!p.hasDirection()) {
             // Drawn on the centre — no directional intent, no skew.
             return SpellModification.NONE;
@@ -53,9 +72,6 @@ public final class ColumnSignBehavior implements SignBehavior {
         // This is what makes "straight up" easy to hit by hand — see Config.COLUMN_STEER_*.
         float steerFraction = steerFraction(p.distance());
         if (steerFraction <= 0f) return SpellModification.NONE;
-
-        float size = magnitude.sizeNormalized();
-        float maxSkew = Config.COLUMN_STEER_MAX_SKEW.get().floatValue();
 
         // ── Direction skew: side from placement, magnitude = quality × off-centre ramp ───
         // × maxSkew × size-steer curve. Size feeds through SizeScaling.steerMultiplier (the

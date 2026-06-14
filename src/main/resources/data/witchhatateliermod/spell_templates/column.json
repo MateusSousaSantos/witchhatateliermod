@@ -1,5 +1,6 @@
 {
   "spell_name": "column",
+  "directional": true,
   "variants": [
     {
       "name": "variant_1",

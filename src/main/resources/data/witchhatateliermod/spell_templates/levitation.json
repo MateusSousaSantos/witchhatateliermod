@@ -1,5 +1,6 @@
 {
   "spell_name": "levitation",
+  "directional": true,
   "variants": [
     {
       "name": "variant_1",
