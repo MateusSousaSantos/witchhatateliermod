@@ -164,6 +164,18 @@ def main():
         print("No corpus at", args.corpus, "- run build_corpus.py first.")
         return
     allrecs = [r for r in load(args.corpus) if r.get("intended")]
+    # Cut/uncovered classes (labels with no template in the logged registry, e.g.
+    # dispersion after its roster cut) can't be recalled by any decision-stage tuning —
+    # exclude them so they don't drag every config's accuracy by a constant.
+    covered = {s["spell"] for r in allrecs for s in (r.get("survivors") or [])}
+    cut = [r for r in allrecs if r["intended"] != GARBAGE
+           and covered and r["intended"] not in covered]
+    if cut:
+        cut_labels = Counter(r["intended"] for r in cut)
+        print("excluding cut-class labels (no live template):",
+              ", ".join(f"{k} x{v}" for k, v in sorted(cut_labels.items())))
+        cut_ids = {id(r) for r in cut}
+        allrecs = [r for r in allrecs if id(r) not in cut_ids]
     recs = [r for r in allrecs if r.get("decision")]
     print("corpus:", len(allrecs), "labeled |", len(recs), "with decision trail (usable)")
     if not recs:

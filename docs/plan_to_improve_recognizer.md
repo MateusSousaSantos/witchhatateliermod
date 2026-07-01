@@ -254,3 +254,21 @@ below 90% in-sample recall, leave-one-drawer-out recall measured (target ≥ 85%
   - M2 focus, in order: (a) crush recall + crush↔levitation confusion, (b) decide whether
     the dispersion leak needs a mitigation (it is invisible to recall metrics), (c) only
     then gate retune.
+- **2026-07-01 — M2 iteration 1 (verified live via headless replay):**
+  - Ablations (`tune_corpus.py --drop` on the fresh replay log): `pull:variant_5` net-zero
+    (keep), `levitation:variant_6` net-positive holder (keep), **`levitation:variant_11`
+    net-negative thief** — steals 2–3 crush, holds 1 levitation. **Pruned** (17→16 variants).
+  - **Margin retune 0.03 → 0.05** (Config.java default): offline sweep showed the sign-cluster
+    confusions and a big slice of garbage live in the 0.03–0.05 gap band while real winners
+    clear it. Knee sharp: 0.06 loses one draw, 0.08 → 96% recall.
+  - **Result: recall 453→454/465 (97.6%), wrong-class accepts 10→6 (1.3%), garbage
+    rejection 20%→40%**, crossval base 453→454. Per-class: crush 92→95%, levitation 95→93%
+    (one draw traded to the prune + one to unknown — acceptable), everything else ≥97%.
+    Dispersion leak 48→44/51 (still the biggest uncontrolled hole; mitigation deferred —
+    needs either a shape-space guard (M4 resolver) or acceptance that a cut-class draw casts
+    its nearest neighbor).
+  - **Remaining in-sample errors: 6 wrong-class + 5 ambiguity-gate fizzles**, almost all
+    Dev-drawer sign-cluster boundary cases. In-sample tuning is at diminishing returns —
+    **next lever is M3 (4th drawer + honest generalization number), which needs new data.**
+  - Tooling: `tune_corpus.py` now excludes cut-class labels (covered set derived from the
+    log's survivors) so ablation/sweep numbers aren't dragged by a constant 51-record penalty.

@@ -182,8 +182,13 @@ public class Config {
                     "FINAL (2026-06-11, R4): 0.03, paired with distAtFullScore 0.03 — once",
                     "the ramp top is de-saturated, real winners separate by more than 0.03",
                     "while saturated false ties no longer occur.",
-                    "Range: 0.00 – 0.30. Default: 0.03.")
-            .defineInRange("recognitionAmbiguityMargin", 0.03, 0.0, 0.30);
+                    "M2 retune (2026-07-01, 576-corpus replay + levitation:variant_11 prune):",
+                    "0.03 → 0.05. Recall identical (454/465), wrong-class accepts 10 → 8, and",
+                    "garbage rejection 20% → 37% — the sign-cluster confusions and garbage sit",
+                    "in the 0.03–0.05 gap band while real winners clear it. Knee is sharp:",
+                    "0.06 loses one draw, 0.08 craters recall to 96%.",
+                    "Range: 0.00 – 0.30. Default: 0.05.")
+            .defineInRange("recognitionAmbiguityMargin", 0.05, 0.0, 0.30);
     public static final ModConfigSpec.DoubleValue RECOGNITION_CONSENSUS_BONUS = BUILDER
             .comment("Consensus tie-breaker bonus. When the winning sigil fails the",
                     "ambiguity margin against a DIFFERENT spell, the recognizer counts how",
