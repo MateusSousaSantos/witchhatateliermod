@@ -12,7 +12,9 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Tier-2 offline harness. Replays every record in a labeled corpus
@@ -37,9 +39,18 @@ public final class CorpusReplay {
 
     private CorpusReplay() {}
 
-    /** Headline counts from one replay, for the command's chat summary. */
+    /**
+     * Headline counts from one replay, for the command's chat summary.
+     *
+     * <p>Cut classes: corpus labels with no template class in the live registry
+     * (e.g. {@code dispersion} after its roster cut, {@code bolt} which never shipped).
+     * They are tallied apart from real recall — ideally rejected; a cut draw that still
+     * matches some other class ({@code cutTotal - cutRejected}) is a live
+     * misrecognition risk worth watching.</p>
+     */
     public record Summary(int total, int realTotal, int correct, int unknown,
-                          int garbageTotal, int garbageRejected, Path output) {}
+                          int garbageTotal, int garbageRejected,
+                          int cutTotal, int cutRejected, Path output) {}
 
     /**
      * Replays {@code corpusPath} through the live pipeline and writes the resulting
@@ -55,8 +66,14 @@ public final class CorpusReplay {
         float minScore = Config.RECOGNITION_MIN_SCORE.get().floatValue();
         PDollarPlusRecognizer recognizer = new PDollarPlusRecognizer(registry, minScore);
 
+        // Labels with a template class in the live registry. Anything else labeled in the
+        // corpus is a cut/uncovered class — scored in its own bucket, never as a recall miss.
+        Set<String> covered = new HashSet<>();
+        for (Template t : contentTemplates) covered.add(t.spellName());
+
         List<RecognitionLog.Entry> out = new ArrayList<>(lines.size());
         int total = 0, realTotal = 0, correct = 0, unknown = 0, garbageTotal = 0, garbageRejected = 0;
+        int cutTotal = 0, cutRejected = 0;
 
         for (String line : lines) {
             if (line.isBlank()) continue;
@@ -95,6 +112,9 @@ public final class CorpusReplay {
             if (isGarbage) {
                 garbageTotal++;
                 if (isUnknown) garbageRejected++;
+            } else if (intended != null && !covered.contains(intended)) {
+                cutTotal++;
+                if (isUnknown) cutRejected++;
             } else if (intended != null) {
                 realTotal++;
                 if (intended.equals(result.spellName())) correct++;
@@ -104,9 +124,10 @@ public final class CorpusReplay {
 
         RecognitionLog.writeRecords(outPath, out);
         WitchHatAtelierMod.LOGGER.info(
-                "[CorpusReplay] Replayed {} record(s) from {} against {} template(s) → {}",
-                total, corpusPath, registry.size(), outPath);
-        return new Summary(total, realTotal, correct, unknown, garbageTotal, garbageRejected, outPath);
+                "[CorpusReplay] Replayed {} record(s) from {} against {} template(s) ({} cut-class) → {}",
+                total, corpusPath, registry.size(), cutTotal, outPath);
+        return new Summary(total, realTotal, correct, unknown, garbageTotal, garbageRejected,
+                cutTotal, cutRejected, outPath);
     }
 
     /** Parses {@code [[{x,y},…],…]} into per-stroke point lists (strokeID = stroke index). */

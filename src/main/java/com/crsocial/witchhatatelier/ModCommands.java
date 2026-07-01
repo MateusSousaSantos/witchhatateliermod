@@ -134,7 +134,11 @@ public class ModCommands {
                             .withStyle(ChatFormatting.GREEN))
                     .append(Component.literal(", " + s.unknown() + " unknown").withStyle(ChatFormatting.GRAY))
                     .append(Component.literal(", garbage " + s.garbageRejected() + "/" + s.garbageTotal() + " rejected")
-                            .withStyle(ChatFormatting.GOLD)), false);
+                            .withStyle(ChatFormatting.GOLD))
+                    .append(s.cutTotal() == 0 ? Component.empty() : Component.literal(
+                            ", cut-class " + s.cutRejected() + "/" + s.cutTotal() + " rejected ("
+                            + (s.cutTotal() - s.cutRejected()) + " matched as something)")
+                            .withStyle(ChatFormatting.RED)), false);
             source.sendSuccess(() -> Component.literal("  → wrote " + out
                     + "\n  analyze: python scripts/tune_corpus.py run/logs/corpus_replay.jsonl")
                     .withStyle(ChatFormatting.DARK_GRAY), false);
@@ -179,6 +183,13 @@ public class ModCommands {
                             s.baseGarbageRej(), s.garbageTotal(),
                             s.augGarbageRej(), s.garbageTotal()))
                     .withStyle(ChatFormatting.GOLD), false);
+            if (s.cutTotal() > 0) {
+                source.sendSuccess(() -> Component.literal(
+                        String.format("  cut-class rejected: base %d/%d  →  base+coverage %d/%d",
+                                s.baseCutRej(), s.cutTotal(),
+                                s.augCutRej(), s.cutTotal()))
+                        .withStyle(ChatFormatting.RED), false);
+            }
             if (!s.userIndependent()) {
                 source.sendSuccess(() -> Component.literal(
                         "  (collect a 2nd drawer's draws for a real user-independent split)")

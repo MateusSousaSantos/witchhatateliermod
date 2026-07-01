@@ -13,11 +13,16 @@ recall-first loop iterates on:
   3. UNKNOWN rejection stages — floor vs ambiguity-gate, i.e. whether false rejects
      are a score problem or a near-tie problem.
 
-Drawer identity: CorpusReplay currently stamps player="<replay>" on its output (R0
-backlog), so this script re-joins each replay line to the corpus line it came from BY
-ORDER and takes `player` from there. The strict length assert below fails loudly if
-the two files ever misalign (e.g. corpus edited after the replay ran) — re-run
-`/spell replay-corpus` rather than trusting a stale log.
+Drawer identity: CorpusReplay carries the corpus `player` field through, so the replay
+log alone is usually enough; the positional corpus join remains as a fallback for old
+logs. The strict length assert below fails loudly if the two files ever misalign
+(e.g. corpus edited after the replay ran) — re-run `/spell replay-corpus` rather than
+trusting a stale log.
+
+Cut classes: labels with no template class in the replayed registry (e.g. `dispersion`
+after its roster cut, `bolt` which never shipped) are excluded from real accuracy and
+the steal table, and reported in their own should-reject section — a cut draw that
+still matches some class is a live misrecognition risk.
 
   python scripts/audit_replay.py [replay.jsonl] [corpus.jsonl]
   # defaults: run/logs/corpus_replay.jsonl, dataset/spell_corpus.jsonl
@@ -45,11 +50,20 @@ def main():
         f"replay has {len(replay)} records but corpus has {len(corpus)} — "
         "stale replay log? re-run /spell replay-corpus")
 
+    # Template classes that were live during the replay — every record's survivors list
+    # covers all templates, so their union is the covered-class set. Labels outside it
+    # are cut/uncovered classes and get their own bucket.
+    covered = set()
+    for rec in replay:
+        for s in rec.get("survivors") or []:
+            covered.add(s["spell"])
+
     steal = collections.Counter()                                # winner variant -> wrong-win count
     steal_from = collections.defaultdict(collections.Counter)    # winner variant -> intended labels
     unknown_stage = collections.Counter()
     per_drawer = collections.defaultdict(lambda: [0, 0])         # drawer -> [correct, real total]
     per_drawer_conf = collections.defaultdict(collections.Counter)
+    cut_outcome = collections.defaultdict(collections.Counter)   # cut label -> result spells
 
     for rec, crec in zip(replay, corpus):
         intended = rec.get("intended")
@@ -60,6 +74,9 @@ def main():
         res = rec["result"]["spell"]
         d = rec.get("decision") or {}
         if not intended or intended == "garbage":
+            continue
+        if covered and intended not in covered:
+            cut_outcome[intended][res] += 1
             continue
         per_drawer[drawer][1] += 1
         if res == intended:
@@ -86,6 +103,15 @@ def main():
 
     print("\nUNKNOWN rejection stages (false rejects):",
           dict(unknown_stage) if unknown_stage else "none")
+
+    if cut_outcome:
+        print("\nCUT-CLASS draws (no live template — should reject):")
+        for label, outcomes in sorted(cut_outcome.items()):
+            total = sum(outcomes.values())
+            rejected = outcomes.get("unknown", 0)
+            leaks = ", ".join(f"{k}x{v}" for k, v in outcomes.most_common() if k != "unknown")
+            print(f"  {label:<12} {rejected}/{total} rejected"
+                  + (f"  (leaked to: {leaks})" if leaks else ""))
 
 
 if __name__ == "__main__":

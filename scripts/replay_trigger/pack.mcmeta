@@ -1,0 +1,6 @@
+{
+  "pack": {
+    "pack_format": 48,
+    "description": "Headless recognizer harness: runs corpus replay + crossval on server boot, then stops."
+  }
+}

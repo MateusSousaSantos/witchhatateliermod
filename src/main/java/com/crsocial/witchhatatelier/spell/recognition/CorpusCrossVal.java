@@ -13,9 +13,11 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Tier-2 cross-validation harness — measures <b>generalization</b>, the missing piece
@@ -58,10 +60,15 @@ public final class CorpusCrossVal {
                              int garbageTotal, int baseGarbageRej, int augGarbageRej,
                              int trainTemplates) {}
 
-    /** Whole-run summary across all folds. */
+    /**
+     * Whole-run summary across all folds. Cut classes (labels with no template class in
+     * the live registry, e.g. {@code dispersion}/{@code bolt}) are neither scored as real
+     * recall nor promoted to train templates — they get their own should-reject tally.
+     */
     public record Summary(boolean userIndependent, int drawers, List<FoldResult> folds,
                           int realTotal, int baseCorrect, int augCorrect,
                           int garbageTotal, int baseGarbageRej, int augGarbageRej,
+                          int cutTotal, int baseCutRej, int augCutRej,
                           Path output) {}
 
     private record Rec(String player, String intended, List<List<Point>> strokes) {}
@@ -95,10 +102,17 @@ public final class CorpusCrossVal {
         PDollarPlusRecognizer recognizer = new PDollarPlusRecognizer(TemplateRegistry.get(), minScore);
         List<Template> baseTemplates = TemplateRegistry.get().all();
 
+        // Labels with a template class in the live registry. Cut/uncovered labels are
+        // excluded from train promotion (a cut class must not be resurrected in-memory)
+        // and scored in their own should-reject bucket instead of as recall.
+        Set<String> covered = new HashSet<>();
+        for (Template t : baseTemplates) covered.add(t.spellName());
+
         List<FoldResult> foldResults = new ArrayList<>();
         List<RecognitionLog.Entry> logOut = new ArrayList<>();
         int realTotal = 0, baseCorrect = 0, augCorrect = 0;
         int garbageTotal = 0, baseGarbageRej = 0, augGarbageRej = 0;
+        int cutTotal = 0, baseCutRej = 0, augCutRej = 0;
 
         for (var fold : folds) {
             List<Rec> test = fold.getValue();
@@ -108,7 +122,8 @@ public final class CorpusCrossVal {
             for (var other : folds) {
                 if (other == fold) continue;
                 for (Rec r : other.getValue()) {
-                    if (r.intended() == null || "garbage".equals(r.intended())) continue;
+                    if (r.intended() == null || "garbage".equals(r.intended())
+                            || !covered.contains(r.intended())) continue;
                     Template t = toTemplate(r, "cv_" + ti++, resampleN);
                     if (t != null) trainTemplates.add(t);
                 }
@@ -133,6 +148,10 @@ public final class CorpusCrossVal {
                     fGarb++;
                     if (RecognitionResult.UNKNOWN.equals(basePred)) fBaseG++;
                     if (RecognitionResult.UNKNOWN.equals(augPred)) fAugG++;
+                } else if (r.intended() != null && !covered.contains(r.intended())) {
+                    cutTotal++;
+                    if (RecognitionResult.UNKNOWN.equals(basePred)) baseCutRej++;
+                    if (RecognitionResult.UNKNOWN.equals(augPred)) augCutRej++;
                 } else if (r.intended() != null) {
                     fReal++;
                     if (r.intended().equals(basePred)) fBase++;
@@ -160,7 +179,8 @@ public final class CorpusCrossVal {
                 byPlayer.size(), baseCorrect, realTotal, augCorrect, realTotal, outPath);
         return new Summary(userIndependent, byPlayer.size(), foldResults,
                 realTotal, baseCorrect, augCorrect,
-                garbageTotal, baseGarbageRej, augGarbageRej, outPath);
+                garbageTotal, baseGarbageRej, augGarbageRej,
+                cutTotal, baseCutRej, augCutRej, outPath);
     }
 
     /** Promotes one corpus record to an in-memory template (mirrors {@link SpellTemplateLoader}). */

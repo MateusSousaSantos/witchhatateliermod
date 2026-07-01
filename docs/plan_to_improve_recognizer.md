@@ -225,3 +225,32 @@ below 90% in-sample recall, leave-one-drawer-out recall measured (target ≥ 85%
 
 - **2026-07-01 — M0 started.** Doc recovered from stash `3a47994` and committed; execution
   history reconstructed above.
+- **2026-07-01 — M0 done.** Headless harness rebuilt (canonical copy `scripts/replay_trigger/`).
+  **Crossval "crash" solved: it was the ServerHangWatchdog** — crossval runs minutes of chamfer
+  on the server thread in one tick and the 60s watchdog force-killed the server; the reported
+  `CorpusCrossVal.java:129` was just the watchdog's thread-dump sample. Fix: `max-tick-time=0`
+  in `run/server.properties` (dev harness only). Cut-class bucket added to `CorpusReplay`,
+  `CorpusCrossVal` (also excluded from train promotion), `ModCommands`, `audit_replay.py` —
+  covered set derived from the live registry/replay log, self-maintaining.
+- **2026-07-01 — M1 baseline** (576-record corpus, 130 template variants, post-dispersion-cut,
+  gates as shipped in Config.java):
+  - **In-sample replay: 453/465 = 97.4%** real recall; misrecognition (wrong class accepted)
+    **10/465 = 2.2%** — already under the 3% target. Per-class: all five elements 98–100%
+    (zero element↔element confusions; `light` 100% despite only 7 variants), column 97%,
+    pull 98%, levitation 95%, **crush 92%** (weakest). False rejects: 2 (ambiguityGate).
+    Garbage 12/60 = 20% rejected (above the 17% floor).
+  - **Every wrong-class error is inside the sign cluster** crush↔levitation↔pull↔column
+    (plus one levitation→air). Steals are diffuse (no variant stole more than 2) →
+    intrinsic look-alike geometry, not a thief template — the old plan's Phase-3
+    cluster-resolver scenario, now with data.
+  - **First-ever leave-one-drawer-out crossval: base 453/465 (97.4%) → +train-coverage
+    457/465 (98.3%).** Caveat: "base" templates were partly authored from these same
+    drawers' draws, so this is not a clean user-independent number — the honest read
+    arrives with the 4th drawer (M3). Small Δ says extra coverage adds little for
+    already-known drawers.
+  - **Cut-class leakage is the big hole: dispersion draws 48/51 match a live class**
+    (23→column, 21→pull, 2→air, 1→crush, 1→fire). Anything dispersion-shaped drawn in
+    live play casts column/pull.
+  - M2 focus, in order: (a) crush recall + crush↔levitation confusion, (b) decide whether
+    the dispersion leak needs a mitigation (it is invisible to recall metrics), (c) only
+    then gate retune.

@@ -135,7 +135,21 @@ shared, path-parameterized writer) + the `replay-corpus` branch in `ModCommands.
 `run/world/datapacks/replay_trigger/` contains a `#minecraft:load` datapack function
 that runs `spell replay-corpus` + `spell crossval` and then `stop` every time the dev
 server boots (`run/server.properties` sets `function-permission-level=4` so the
-function may issue `stop`). So one Gradle command produces fresh
+function may issue `stop`). The **canonical copy lives in `scripts/replay_trigger/`**
+(the world folder is disposable and has been wiped before — the harness was lost with
+it once); after a world wipe, restore it with:
+
+```powershell
+Copy-Item -Recurse scripts/replay_trigger run/world/datapacks/replay_trigger
+```
+
+`run/server.properties` needs two non-default values: `function-permission-level=4`
+(so the function may issue `stop`) and `max-tick-time=0` — crossval runs minutes of
+chamfer on the server thread in a single tick, and the default 60s ServerHangWatchdog
+force-kills the server mid-run (this was the mysterious "crossval crash at
+CorpusCrossVal.java:129": that line is just where the watchdog's thread dump sampled).
+
+So one Gradle command produces fresh
 `run/logs/corpus_replay.jsonl` + `corpus_crossval.jsonl` against the current code,
 config defaults, and templates — the whole recall-first loop without launching a
 client. Delete the datapack folder to get a normal interactive dev server back.
