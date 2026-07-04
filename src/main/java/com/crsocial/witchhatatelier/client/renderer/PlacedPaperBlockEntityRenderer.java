@@ -21,9 +21,11 @@ import org.jetbrains.annotations.NotNull;
 import org.joml.Matrix4f;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Renders gesture strokes on the outward face of any {@link PlacedPaper} block variant.
@@ -47,6 +49,13 @@ public class PlacedPaperBlockEntityRenderer implements BlockEntityRenderer<Place
     private static final float INK_G = 0.04f;
     private static final float INK_B = 0.09f;
     private static final float INK_A = 0.86f;
+
+    // Ink for strokes the recognizer couldn't read, shown only on a spent paper: a dark
+    // blood red — clearly reddened so "these failed" reads at a glance, but still dark
+    // enough to look like tinted ink rather than a different material.
+    private static final float RED_INK_R = 0.52f;
+    private static final float RED_INK_G = 0.04f;
+    private static final float RED_INK_B = 0.05f;
 
     /** Inset margin for the smallest configured canvas size (UV space). */
     private static final float MIN_CANVAS_MARGIN = 0.25f;
@@ -106,17 +115,28 @@ public class PlacedPaperBlockEntityRenderer implements BlockEntityRenderer<Place
                    .add(new float[]{ pt.getFloat("x"), pt.getFloat("y") });
         }
 
-        // ── Rasterize all strokes onto a shared boolean grid ─────────────────────
+        // Unrecognized strokes are surfaced red only once the paper is SPENT (the cast
+        // finished) — so a live/prepared drawing stays neutral. Pre-spend, redSet is empty
+        // and everything rasterizes to the normal grid, exactly as before.
+        Set<Integer> redSet = new HashSet<>();
+        if (be.isSpent()) {
+            for (int id : be.getUnrecognizedStrokeIds()) redSet.add(id);
+        }
+
+        // ── Rasterize strokes onto two grids: normal ink and (unread) red ink ─────
         boolean[][] grid = new boolean[gridSize][gridSize];
-        for (List<float[]> stroke : strokes.values()) {
+        boolean[][] redGrid = new boolean[gridSize][gridSize];
+        for (Map.Entry<Integer, List<float[]>> e : strokes.entrySet()) {
+            boolean[][] target = redSet.contains(e.getKey()) ? redGrid : grid;
+            List<float[]> stroke = e.getValue();
             for (int i = 0; i < stroke.size(); i++) {
                 int cx = uvToCell(stroke.get(i)[0], gridSize);
                 int cy = uvToCell(stroke.get(i)[1], gridSize);
-                markCell(grid, cx, cy, gridSize);
+                markCell(target, cx, cy, gridSize);
                 if (i > 0) {
                     int px = uvToCell(stroke.get(i - 1)[0], gridSize);
                     int py = uvToCell(stroke.get(i - 1)[1], gridSize);
-                    bresenham(grid, px, py, cx, cy, gridSize);
+                    bresenham(target, px, py, cx, cy, gridSize);
                 }
             }
         }
@@ -141,7 +161,8 @@ public class PlacedPaperBlockEntityRenderer implements BlockEntityRenderer<Place
         final float fr2 = circleR2;
         for (int cy = 0; cy < gridSize; cy++) {
             for (int cx = 0; cx < gridSize; cx++) {
-                if (!grid[cy][cx]) continue;
+                boolean red = redGrid[cy][cx];
+                if (!red && !grid[cy][cx]) continue;
 
                 float cu = margin + (cx + 0.5f) * cellUV;
                 float cv = margin + (cy + 0.5f) * cellUV;
@@ -154,11 +175,15 @@ public class PlacedPaperBlockEntityRenderer implements BlockEntityRenderer<Place
                 float uMin = cu - dotHalf, uMax = cu + dotHalf;
                 float vMin = cv - dotHalf, vMax = cv + dotHalf;
 
+                float r = red ? RED_INK_R : INK_R;
+                float g = red ? RED_INK_G : INK_G;
+                float b = red ? RED_INK_B : INK_B;
+
                 // CCW winding seen from the outward face normal: TL, BL, BR, TR
-                emitVertex(vc, mat, ft.project(rotU(uMin, vMin, rotCos, rotSin), rotV(uMin, vMin, rotCos, rotSin)));
-                emitVertex(vc, mat, ft.project(rotU(uMin, vMax, rotCos, rotSin), rotV(uMin, vMax, rotCos, rotSin)));
-                emitVertex(vc, mat, ft.project(rotU(uMax, vMax, rotCos, rotSin), rotV(uMax, vMax, rotCos, rotSin)));
-                emitVertex(vc, mat, ft.project(rotU(uMax, vMin, rotCos, rotSin), rotV(uMax, vMin, rotCos, rotSin)));
+                emitVertex(vc, mat, ft.project(rotU(uMin, vMin, rotCos, rotSin), rotV(uMin, vMin, rotCos, rotSin)), r, g, b);
+                emitVertex(vc, mat, ft.project(rotU(uMin, vMax, rotCos, rotSin), rotV(uMin, vMax, rotCos, rotSin)), r, g, b);
+                emitVertex(vc, mat, ft.project(rotU(uMax, vMax, rotCos, rotSin), rotV(uMax, vMax, rotCos, rotSin)), r, g, b);
+                emitVertex(vc, mat, ft.project(rotU(uMax, vMin, rotCos, rotSin), rotV(uMax, vMin, rotCos, rotSin)), r, g, b);
             }
         }
     }
@@ -237,8 +262,8 @@ public class PlacedPaperBlockEntityRenderer implements BlockEntityRenderer<Place
         }
     }
 
-    private static void emitVertex(VertexConsumer vc, Matrix4f mat, float[] pos) {
-        vc.addVertex(mat, pos[0], pos[1], pos[2]).setColor(INK_R, INK_G, INK_B, INK_A);
+    private static void emitVertex(VertexConsumer vc, Matrix4f mat, float[] pos, float r, float g, float b) {
+        vc.addVertex(mat, pos[0], pos[1], pos[2]).setColor(r, g, b, INK_A);
     }
 
     // ── Face transform ────────────────────────────────────────────────────────────

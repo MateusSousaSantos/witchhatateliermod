@@ -29,6 +29,12 @@ public class PlacedPaperBlockEntity extends BlockEntity {
     private boolean spent = false;
     /** In-plane drawing rotation (0–15, {@code RotationSegment} convention). Floor/ceiling only. */
     private int rotationSegment = 0;
+    /**
+     * Stroke IDs whose cluster the recognizer could not read, written by the spell
+     * pipeline. The renderer tints these red — but only once {@link #spent} is set (the
+     * cast has finished) — as retrospective "these didn't read" feedback.
+     */
+    private int[] unrecognizedStrokeIds = new int[0];
 
     public PlacedPaperBlockEntity(BlockPos pos, BlockState state) {
         this(ModBlockEntities.PLACED_PAPER.get(), pos, state);
@@ -74,6 +80,14 @@ public class PlacedPaperBlockEntity extends BlockEntity {
         syncToClient();
     }
 
+    public int[] getUnrecognizedStrokeIds() { return unrecognizedStrokeIds; }
+
+    public void setUnrecognizedStrokeIds(int[] ids) {
+        this.unrecognizedStrokeIds = ids == null ? new int[0] : ids;
+        setChanged();
+        syncToClient();
+    }
+
     private void syncToClient() {
         if (level != null && !level.isClientSide) {
             level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), Block.UPDATE_CLIENTS);
@@ -101,6 +115,7 @@ public class PlacedPaperBlockEntity extends BlockEntity {
         tag.put("gestureData", gestureData.copy());
         tag.putBoolean("spent", spent);
         tag.putInt("rotation", rotationSegment);
+        tag.putIntArray("unrecognizedStrokes", unrecognizedStrokeIds);
     }
 
     @Override
@@ -115,5 +130,6 @@ public class PlacedPaperBlockEntity extends BlockEntity {
         }
         spent = tag.getBoolean("spent");
         rotationSegment = tag.getInt("rotation");
+        unrecognizedStrokeIds = tag.getIntArray("unrecognizedStrokes");
     }
 }

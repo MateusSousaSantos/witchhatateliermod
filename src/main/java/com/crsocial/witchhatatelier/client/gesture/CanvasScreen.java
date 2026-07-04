@@ -25,9 +25,11 @@ import org.lwjgl.system.MemoryUtil;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.BiConsumer;
 
 /**
@@ -76,6 +78,13 @@ public class CanvasScreen extends Screen {
     private static final float SNAP_MIN_SEGMENT     = 2f;
     private static final int   SNAP_MIN_CONSISTENCY = 8;
 
+    /**
+     * Ink for strokes the recognizer couldn't read, shown when reviewing a placed paper.
+     * A dark blood red — matches {@code PlacedPaperBlockEntityRenderer.RED_INK_*} so the
+     * canvas and the in-world drawing agree.
+     */
+    private static final int UNRECOGNIZED_STROKE_COLOR = 0xFF850A0D;
+
     // ════════════════════════════════════════════════════════════════════════════
     // Fields
     // ════════════════════════════════════════════════════════════════════════════
@@ -101,6 +110,12 @@ public class CanvasScreen extends Screen {
     // ── Stroke data ─────────────────────────────────────────────────────────────
     private final CanvasPointStore pointStore = new CanvasPointStore();
     private final List<GesturePoint> preloadedPoints;
+    /**
+     * Indices (into {@link CanvasPointStore#strokes()}) of preloaded strokes the recognizer
+     * couldn't read on the source placed paper — rendered in {@link #UNRECOGNIZED_STROKE_COLOR}.
+     * Empty for item canvases (no block) and papers whose strokes all read.
+     */
+    private Set<Integer> unrecognizedStrokeIndices = Set.of();
     /**
      * Guards the one-time stroke load + viewport reset. A window resize / GUI-scale change /
      * fullscreen toggle re-runs {@link #init()} (vanilla {@code resize() → rebuildWidgets()}),
@@ -193,8 +208,40 @@ public class CanvasScreen extends Screen {
             panX = 0f;
             panY = 0f;
             loadPoints(preloadedPoints);
+            computeUnrecognizedStrokes();
             contentInitialized = true;
         }
+    }
+
+    /**
+     * Resolves which loaded strokes the recognizer couldn't read on the source placed
+     * paper, so {@link #renderCanvas} can tint them red — a review of what failed after a
+     * cast attempt. Item canvases (no source block) never show it. No {@code spent} gate:
+     * a spent paper can't be reopened, so the reachable case is a Prepared/fizzled paper
+     * still holding its ink.
+     */
+    private void computeUnrecognizedStrokes() {
+        unrecognizedStrokeIndices = Set.of();
+        if (sourceBlock == null) return;
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.level == null
+                || !(mc.level.getBlockEntity(sourceBlock) instanceof PlacedPaperBlockEntity be)) return;
+        int[] unrec = be.getUnrecognizedStrokeIds();
+        if (unrec.length == 0) return;
+
+        // CanvasPointStore.denormalize drops empty stroke IDs but keeps ascending order, so
+        // the i-th stored stroke is the i-th distinct present stroke id. Map id → that index.
+        List<Integer> present = preloadedPoints.stream()
+                .map(GesturePoint::strokeID).distinct().sorted().toList();
+        Map<Integer, Integer> idToIndex = new HashMap<>();
+        for (int i = 0; i < present.size(); i++) idToIndex.put(present.get(i), i);
+
+        Set<Integer> idx = new HashSet<>();
+        for (int id : unrec) {
+            Integer i = idToIndex.get(id);
+            if (i != null) idx.add(i);
+        }
+        unrecognizedStrokeIndices = idx;
     }
 
     /**
@@ -360,8 +407,11 @@ public class CanvasScreen extends Screen {
         drawBorder(gui);
 
         int sw = profile.strokeWidth();
-        for (List<Vector2f> stroke : pointStore.strokes()) {
-            drawStroke(gui, stroke, profile.strokeColor(), sw);
+        List<List<Vector2f>> committedStrokes = pointStore.strokes();
+        for (int i = 0; i < committedStrokes.size(); i++) {
+            int color = unrecognizedStrokeIndices.contains(i)
+                    ? UNRECOGNIZED_STROKE_COLOR : profile.strokeColor();
+            drawStroke(gui, committedStrokes.get(i), color, sw);
         }
 
         List<Vector2f> active = pointStore.activeStroke();

@@ -15,6 +15,14 @@ public enum SignType {
     BOLT(Tier.MANIFESTATION, StackingMode.REPETITION, ManifestationRole.RIDER),
     CRUSH(Tier.FORCE, StackingMode.MAGNITUDE, ManifestationRole.NONE),
     CONVERGENCE(Tier.FORCE, StackingMode.MAGNITUDE, ManifestationRole.NONE),
+    // A Force sign like Crush/Convergence: it retargets a carrier op rather than
+    // producing its own. The recognizer has a well-trained `pull` glyph (~21 template
+    // variants), so this constant stops the compiler discarding those recognitions as
+    // "recognized but not a sign". Its world effect is not wired yet — with no carrier
+    // it falls back to Prepared, and no pillar reads a PULL modifier — so drawing it
+    // today is inert but no longer dropped. Wire it like Crush (an isPull()/crush()-style
+    // hook, or a dedicated vortex EffectKind) when its mechanics are designed.
+    PULL(Tier.FORCE, StackingMode.MAGNITUDE, ManifestationRole.NONE),
     COLLECTION(Tier.META, StackingMode.MAGNITUDE, ManifestationRole.NONE),
     LEVITATION(Tier.META, StackingMode.MODIFIER, ManifestationRole.NONE),
     CROSSHAIR(Tier.META, StackingMode.MAGNITUDE, ManifestationRole.NONE);
@@ -80,6 +88,7 @@ public enum SignType {
             case "bolt"        -> Optional.of(BOLT);
             case "crush"       -> Optional.of(CRUSH);
             case "convergence" -> Optional.of(CONVERGENCE);
+            case "pull"        -> Optional.of(PULL);
             case "collection"  -> Optional.of(COLLECTION);
             case "levitation"  -> Optional.of(LEVITATION);
             case "crosshair"   -> Optional.of(CROSSHAIR);

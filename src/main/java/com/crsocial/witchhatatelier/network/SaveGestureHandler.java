@@ -95,10 +95,29 @@ public final class SaveGestureHandler {
                 inscribed = saveItemPath(payload, player);
             }
 
-            runSpellPipeline(payload, player, inscribed);
-            playActivationEffects(payload, player);
+            CastOutcome outcome = runSpellPipeline(payload, player, inscribed);
+            playActivationEffects(payload, player, outcome);
         });
     }
+
+    /**
+     * What actually happened when a closed ring reached the pipeline — the signal the
+     * in-world feedback ({@link #playActivationEffects}) speaks with, so the four
+     * outcomes are distinguishable without reading chat.
+     *
+     * <ul>
+     *   <li>{@link #CAST} — a spell compiled, resolved a matrix cell, and fired.</li>
+     *   <li>{@link #PREPARED} — a valid glyph compiled but no matrix cell is wired for
+     *       the combination; the inscription holds, ready (draw-now, fire-later).</li>
+     *   <li>{@link #FIZZLE} — glyphs were recognized but don't form a castable spell
+     *       (no element, or two different elements without nesting).</li>
+     *   <li>{@link #UNRECOGNIZED} — nothing legible: every content cluster came back
+     *       {@code unknown} (unrecognized, ambiguity-gated, or rejection-template), or
+     *       the ring enclosed no content at all.</li>
+     *   <li>{@link #NONE} — the pipeline did not run (no ring / no points); no feedback.</li>
+     * </ul>
+     */
+    public enum CastOutcome { CAST, PREPARED, FIZZLE, UNRECOGNIZED, NONE }
 
     // ── Save paths ──────────────────────────────────────────────────────────────
 
@@ -186,8 +205,14 @@ public final class SaveGestureHandler {
 
     // ── Activation effects (server-side broadcast) ──────────────────────────────
 
-    private static void playActivationEffects(SaveGesturePayload payload, Player player) {
-        if (payload.activationRingStrokeIds().isEmpty()) return;
+    /**
+     * Speaks the {@link CastOutcome} in-world: a distinct sound + particle burst per
+     * outcome so a player learns to read what happened without watching chat. The
+     * anchor point is the placed-paper block (surface cast) or the caster's chest
+     * (hand cast). {@link CastOutcome#NONE} is silent (the pipeline never ran).
+     */
+    private static void playActivationEffects(SaveGesturePayload payload, Player player, CastOutcome outcome) {
+        if (outcome == CastOutcome.NONE) return;
         if (player == null) return;
         Level level = player.level();
         if (!(level instanceof ServerLevel serverLevel)) return;
@@ -204,13 +229,36 @@ public final class SaveGestureHandler {
             z = player.getZ();
         }
 
-        serverLevel.playSound(null, x, y, z,
-                SoundEvents.ENCHANTMENT_TABLE_USE, SoundSource.PLAYERS, 1.0f, 1.0f);
-        serverLevel.sendParticles(ParticleTypes.SCRAPE,
-                x, y, z, 40, 0.4, 0.4, 0.4, 0.6);
-
-        serverLevel.sendParticles(ParticleTypes.ELECTRIC_SPARK,
-                x, y, z, 20, 0.8, 0.2, 0.8, 0.3);
+        switch (outcome) {
+            case CAST -> {
+                // Success — the bright, magical activation flourish.
+                serverLevel.playSound(null, x, y, z,
+                        SoundEvents.ENCHANTMENT_TABLE_USE, SoundSource.PLAYERS, 1.0f, 1.0f);
+                serverLevel.sendParticles(ParticleTypes.SCRAPE, x, y, z, 40, 0.4, 0.4, 0.4, 0.6);
+                serverLevel.sendParticles(ParticleTypes.ELECTRIC_SPARK, x, y, z, 20, 0.8, 0.2, 0.8, 0.3);
+            }
+            case PREPARED -> {
+                // Valid glyph, no matrix cell yet — a stable, held "glow" that reads as
+                // ready-but-inert rather than failed.
+                serverLevel.playSound(null, x, y, z,
+                        SoundEvents.AMETHYST_BLOCK_CHIME, SoundSource.PLAYERS, 0.7f, 1.2f);
+                serverLevel.sendParticles(ParticleTypes.END_ROD, x, y, z, 14, 0.25, 0.35, 0.25, 0.01);
+            }
+            case FIZZLE -> {
+                // Glyphs read but don't form a spell — a smoky sputter.
+                serverLevel.playSound(null, x, y, z,
+                        SoundEvents.FIRE_EXTINGUISH, SoundSource.PLAYERS, 0.8f, 0.8f);
+                serverLevel.sendParticles(ParticleTypes.LARGE_SMOKE, x, y, z, 16, 0.3, 0.3, 0.3, 0.02);
+            }
+            case UNRECOGNIZED -> {
+                // Nothing legible — a dull spark and a hiss.
+                serverLevel.playSound(null, x, y, z,
+                        SoundEvents.FIRE_EXTINGUISH, SoundSource.PLAYERS, 0.5f, 1.3f);
+                serverLevel.sendParticles(ParticleTypes.SMOKE, x, y, z, 10, 0.25, 0.25, 0.25, 0.01);
+                serverLevel.sendParticles(ParticleTypes.ELECTRIC_SPARK, x, y, z, 4, 0.3, 0.2, 0.3, 0.05);
+            }
+            case NONE -> { /* unreachable — guarded above */ }
+        }
     }
 
     // ── Spell pipeline (cluster → preprocess → recognize) ───────────────────────
@@ -226,12 +274,12 @@ public final class SaveGestureHandler {
     }
 
     /** Payload entry point: derive the gesture + casting context from the packet and dispatch. */
-    private static void runSpellPipeline(SaveGesturePayload payload, Player player, ItemStack inscribed) {
-        if (payload.points().isEmpty()) return;
-        if (!(player.level() instanceof ServerLevel level)) return;
+    private static CastOutcome runSpellPipeline(SaveGesturePayload payload, Player player, ItemStack inscribed) {
+        if (payload.points().isEmpty()) return CastOutcome.NONE;
+        if (!(player.level() instanceof ServerLevel level)) return CastOutcome.NONE;
         CastingContext ctx = buildCastingContext(payload, player);
         Dispatch dispatch = payload.blockOrigin() == null ? Dispatch.HAND : Dispatch.SURFACE;
-        castFromGesture(level, player, payload.points(), payload.activationRingStrokeIds(),
+        return castFromGesture(level, player, payload.points(), payload.activationRingStrokeIds(),
                 ctx, payload.blockOrigin(), dispatch, inscribed);
     }
 
@@ -248,12 +296,13 @@ public final class SaveGestureHandler {
      * @param blockOrigin the source block for surface/plate casts, or {@code null} for hand casts
      * @param dispatch    how to run the compiled spell + whether to consume the medium
      * @param inscribed   the inscribed paper stack for {@link Dispatch#HAND}, else {@code null}
+     * @return the {@link CastOutcome} the caller can turn into in-world feedback
      */
-    public static void castFromGesture(ServerLevel level, @Nullable Player player,
+    public static CastOutcome castFromGesture(ServerLevel level, @Nullable Player player,
                                        List<GesturePoint> points, List<Integer> ringIds,
                                        CastingContext ctx, @Nullable BlockPos blockOrigin,
                                        Dispatch dispatch, @Nullable ItemStack inscribed) {
-        if (points.isEmpty()) return;
+        if (points.isEmpty()) return CastOutcome.NONE;
 
         Map<Integer, List<Point>> byStroke = new LinkedHashMap<>();
         for (GesturePoint gp : points) {
@@ -261,7 +310,7 @@ public final class SaveGestureHandler {
                     .add(new Point(gp.x(), gp.y(), gp.strokeID()));
         }
 
-        if (ringIds.isEmpty()) return; // only run the pipeline when a ring was closed
+        if (ringIds.isEmpty()) return CastOutcome.NONE; // only run the pipeline when a ring was closed
 
         List<List<Point>> contentStrokes = new ArrayList<>();
         for (var e : byStroke.entrySet()) {
@@ -272,7 +321,7 @@ public final class SaveGestureHandler {
             WitchHatAtelierMod.LOGGER.info(
                     "[SpellPipeline] No content strokes (ring={} of {} stroke(s)) — nothing to recognize.",
                     ringIds.size(), byStroke.size());
-            return;
+            return CastOutcome.UNRECOGNIZED;
         }
 
         float microR = Config.MICRO_MERGE_RADIUS.get().floatValue();
@@ -372,6 +421,23 @@ public final class SaveGestureHandler {
             }
         }
 
+        // Content stroke IDs whose cluster the recognizer could not read. Stored on the
+        // placed-paper block so the renderer can tint them red once the paper is spent
+        // (retrospective "these strokes didn't read" feedback — never live/pre-cast).
+        // Always written (empty when everything read) so a redraw clears a stale set.
+        if (blockOrigin != null
+                && level.getBlockEntity(blockOrigin) instanceof PlacedPaperBlockEntity placedPaper) {
+            java.util.Set<Integer> unrecognizedIds = new java.util.LinkedHashSet<>();
+            for (int i = 0; i < clusters.size(); i++) {
+                if (!RecognitionResult.UNKNOWN.equals(recognitions.get(i).spellName())) continue;
+                for (List<Point> stroke : clusters.get(i).strokes()) {
+                    for (Point p : stroke) unrecognizedIds.add(p.strokeID());
+                }
+            }
+            placedPaper.setUnrecognizedStrokeIds(
+                    unrecognizedIds.stream().mapToInt(Integer::intValue).toArray());
+        }
+
         // ── Compile the spell graph ───────────────────────────────────────────────
         List<List<Point>> ringStrokes = new ArrayList<>();
         List<Integer> contentIds = new ArrayList<>();
@@ -387,6 +453,7 @@ public final class SaveGestureHandler {
 
         CompileResult result = SpellGraphBuilder.build(trigger, ringStrokes, clusters, recognitions, ctx);
 
+        CastOutcome outcome;
         if (result.isSuccess()) {
             var graph = result.graph().get();
             WitchHatAtelierMod.LOGGER.info(
@@ -460,9 +527,15 @@ public final class SaveGestureHandler {
                         // Canvas pressure plate → fire once per trigger; reusable, never spent.
                         SpellExecutor.run(level, player, spell);
                 }
+                outcome = CastOutcome.CAST;
+            } else {
+                // Valid glyph, but no matrix cell resolved — inscription is Prepared.
+                outcome = CastOutcome.PREPARED;
             }
         } else {
             WitchHatAtelierMod.LOGGER.info("[Compiler] Rejected: {}", result.rejectionReason());
+            // Glyphs recognized but structurally invalid = fizzle; nothing legible = unrecognized.
+            outcome = recogCounts.isEmpty() ? CastOutcome.UNRECOGNIZED : CastOutcome.FIZZLE;
             if (player != null && dispatch != Dispatch.PLATE) {
                 assert result.rejectionReason() != null;
                 player.sendSystemMessage(Component.empty()
@@ -476,6 +549,7 @@ public final class SaveGestureHandler {
                 }
             }
         }
+        return outcome;
     }
 
     // ── Medium consumption (Phase 3: Prepared → Activated → Used) ──────────────
