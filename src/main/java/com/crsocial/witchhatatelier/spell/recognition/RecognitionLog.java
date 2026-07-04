@@ -136,6 +136,7 @@ public final class RecognitionLog {
         thr.addProperty("distAtFullScore", Config.RECOGNITION_DIST_AT_FULL_SCORE.get());
         thr.addProperty("distAtZeroScore", Config.RECOGNITION_DIST_AT_ZERO_SCORE.get());
         thr.addProperty("ambiguityMargin", Config.RECOGNITION_AMBIGUITY_MARGIN.get());
+        thr.addProperty("rejectionMargin", Config.RECOGNITION_REJECTION_MARGIN.get());
         thr.addProperty("consensusBonus", Config.RECOGNITION_CONSENSUS_BONUS.get());
         thr.addProperty("consensusTopN", Config.RECOGNITION_CONSENSUS_TOP_N.get());
         thr.addProperty("resampleN", Config.RESAMPLE_N.get());
@@ -229,6 +230,9 @@ public final class RecognitionLog {
         d.addProperty("effectiveScore", round(t.effectiveScore()));
         d.addProperty("worstPairFree", round(t.worstPairFree()));
         d.addProperty("worstPairWeight", round(t.worstPairWeight()));
+        addStr(d, "bestRejectionSpell", t.bestRejectionSpell());
+        d.addProperty("bestRejectionScore", round(t.bestRejectionScore()));
+        d.addProperty("rejectionMargin", round(t.rejectionMargin()));
         addStr(d, "rejectionStage", t.rejectionStage());
 
         JsonArray temps = new JsonArray();

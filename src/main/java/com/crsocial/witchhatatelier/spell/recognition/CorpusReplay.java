@@ -66,10 +66,12 @@ public final class CorpusReplay {
         float minScore = Config.RECOGNITION_MIN_SCORE.get().floatValue();
         PDollarPlusRecognizer recognizer = new PDollarPlusRecognizer(registry, minScore);
 
-        // Labels with a template class in the live registry. Anything else labeled in the
+        // Labels with a REAL (castable) template class in the live registry. Negative
+        // templates (is_rejection) are excluded — their label (e.g. dispersion) must stay
+        // a cut/should-reject class, not become a recall class. Anything else labeled in the
         // corpus is a cut/uncovered class — scored in its own bucket, never as a recall miss.
         Set<String> covered = new HashSet<>();
-        for (Template t : contentTemplates) covered.add(t.spellName());
+        for (Template t : contentTemplates) if (!t.isRejection()) covered.add(t.spellName());
 
         List<RecognitionLog.Entry> out = new ArrayList<>(lines.size());
         int total = 0, realTotal = 0, correct = 0, unknown = 0, garbageTotal = 0, garbageRejected = 0;

@@ -3,6 +3,7 @@ package com.crsocial.witchhatatelier.spell.meaning;
 import com.crsocial.witchhatatelier.spell.compiler.SigilType;
 import com.crsocial.witchhatatelier.spell.compiler.SignType;
 import com.google.gson.JsonObject;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
 
@@ -12,7 +13,8 @@ import java.util.List;
  * overrides. See {@code docs/magic_system/03_meaning_engine.md}.
  *
  * @param sigil         element domain
- * @param sign          behaviour modifier
+ * @param sign          behaviour modifier, or {@code null} for the sigil's
+ *                      "no-signs" default cell ({@code <sigil>/default.json})
  * @param behaviorKind  identifier the engine maps to an effect implementation
  *                      (e.g. {@code "earth_pillar"} → {@code EarthPillarEffect})
  * @param basePower     baseline power before scaling
@@ -23,7 +25,7 @@ import java.util.List;
  * @param costPerUse    fuel drained once per trigger/event (default 0.0)
  */
 public record MatrixEntry(SigilType sigil,
-                          SignType sign,
+                          @Nullable SignType sign,
                           String behaviorKind,
                           float basePower,
                           float baseAoe,

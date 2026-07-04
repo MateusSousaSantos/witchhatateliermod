@@ -1,6 +1,8 @@
 package com.crsocial.witchhatatelier.items;
 
 import com.crsocial.witchhatatelier.WitchHatAtelierMod;
+import com.crsocial.witchhatatelier.blocks.ModBlocks;
+import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.registries.DeferredItem;
@@ -26,6 +28,11 @@ public class ModItems {
 
     public static final DeferredItem<Item> SPELL_BINDER = ITEMS.register("spell_binder",
             () -> new Item(new Item.Properties().stacksTo(1)));
+
+    // ── Blocks ───────────────────────────────────────────────────────────────────
+
+    public static final DeferredItem<BlockItem> CANVAS_PLATE = ITEMS.register("canvas_plate",
+            () -> new BlockItem(ModBlocks.CANVAS_PLATE.get(), new Item.Properties()));
 
     // ── Blank papers (stackable, placeable) ──────────────────────────────────────
 

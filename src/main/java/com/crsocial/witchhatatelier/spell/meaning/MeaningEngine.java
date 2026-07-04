@@ -104,6 +104,36 @@ public final class MeaningEngine {
             totalCostPerUse += entry.costPerUse();
         }
 
+        // ── Sigil default behaviour ──────────────────────────────────────────────
+        // No sign produced an op (none drawn, or none with a matrix cell). Fall back
+        // to the sigil's <sigil>/default.json cell — a sign-less BehaviorOp with no
+        // stacking. This is what fires for a bare sigil drawn inside a ring.
+        if (ops.isEmpty()) {
+            Optional<MatrixEntry> def = MatrixRegistry.get().findDefault(element);
+            if (def.isPresent()) {
+                MatrixEntry entry = def.get();
+                Optional<EffectKind> kind = EffectRegistry.get().find(entry.behaviorKind());
+                if (kind.isPresent()) {
+                    float opPower = entry.basePower() * quality * SizeScaling.powerMultiplier(size);
+                    ops.add(new BehaviorOp(null, 1, entry.behaviorKind(),
+                            kind.get().parsePayload(entry.effects()),
+                            entry.costPerTick(), entry.costPerUse(), forceModifiers));
+                    maxPower = opPower;
+                    dominantBasePower = entry.basePower();
+                    maxAoe = entry.baseAoe();
+                    totalCostPerTick += entry.costPerTick();
+                    totalCostPerUse += entry.costPerUse();
+                    WitchHatAtelierMod.LOGGER.info(
+                            "[MeaningEngine] No sign cell for sigil={}; using default behaviour '{}'.",
+                            element, entry.behaviorKind());
+                } else {
+                    WitchHatAtelierMod.LOGGER.warn(
+                            "[MeaningEngine] Default cell for {} references unknown behavior_kind '{}'; skipping.",
+                            element, entry.behaviorKind());
+                }
+            }
+        }
+
         if (ops.isEmpty()) {
             WitchHatAtelierMod.LOGGER.info(
                     "[MeaningEngine] No matrix cells matched for sigil={} signs={} — falling back to Prepared.",

@@ -107,6 +107,7 @@ public final class PDollarPlusRecognizer {
             float margin, float gap,
             int consensusAgree, float consensusBonus, float effectiveScore,
             float worstPairFree, float worstPairWeight,
+            String bestRejectionSpell, float bestRejectionScore, float rejectionMargin,
             String rejectionStage) {}
 
     /** A {@link #match} result paired with its decision trail. */
@@ -115,9 +116,9 @@ public final class PDollarPlusRecognizer {
     /** Mutable accumulator filled by {@link #matchInternal} only when tracing is on. */
     private static final class TraceCollector {
         final List<TemplateTrace> templates = new ArrayList<>();
-        String winnerSpell, winnerVariant, runnerUpSpell, rejectionStage;
+        String winnerSpell, winnerVariant, runnerUpSpell, rejectionStage, bestRejectionSpell;
         float bestScore, bestWorstPair, bestOfOtherSpell, margin, gap, consensusBonus, effectiveScore;
-        float worstPairFree, worstPairWeight;
+        float worstPairFree, worstPairWeight, bestRejectionScore, rejectionMargin;
         int consensusAgree;
     }
 
@@ -138,7 +139,9 @@ public final class PDollarPlusRecognizer {
                 tc.runnerUpSpell, tc.bestOfOtherSpell,
                 tc.margin, tc.gap,
                 tc.consensusAgree, tc.consensusBonus, tc.effectiveScore,
-                tc.worstPairFree, tc.worstPairWeight, tc.rejectionStage);
+                tc.worstPairFree, tc.worstPairWeight,
+                tc.bestRejectionSpell, tc.bestRejectionScore, tc.rejectionMargin,
+                tc.rejectionStage);
         return new Traced(r, mt);
     }
 
@@ -164,6 +167,7 @@ public final class PDollarPlusRecognizer {
         float worstPairWeight    = Config.WORST_PAIR_WEIGHT.get().floatValue();
         float distAtFull         = Config.RECOGNITION_DIST_AT_FULL_SCORE.get().floatValue();
         float distAtZero         = Config.RECOGNITION_DIST_AT_ZERO_SCORE.get().floatValue();
+        float rejectionMargin    = Config.RECOGNITION_REJECTION_MARGIN.get().floatValue();
 
         // Per-spell best score, overall best template, and the full ranked list of
         // survivors (templates that cleared the pre-filters) for consensus scoring.
@@ -172,6 +176,11 @@ public final class PDollarPlusRecognizer {
         Template best = null;
         float bestScore = 0f;
         float bestWorstPair = 0f;
+        // Best-scoring NEGATIVE (is_rejection) template. Tracked apart from real spells:
+        // it never wins a cast, but if it out-scores (or ties within rejectionMargin) the
+        // winning real spell, the draw is rejected as garbage/cut-class below.
+        float bestRejectionScore = 0f;
+        String bestRejectionSpell = null;
         for (Template t : templates) {
             SigilMetrics tMetrics = t.metrics();
 
@@ -216,10 +225,23 @@ public final class PDollarPlusRecognizer {
                 s *= gridMult;
             }
 
-            survivors.add(new Scored(t.spellName(), t.variantName(), s, d, cs.worstPair(), cs.p90Pair()));
             if (tc != null) tc.templates.add(new TemplateTrace(
                     t.spellName(), t.variantName(), true, null,
                     rawScore, gridSim, gridMult, s, d, cs.worstPair(), cs.p90Pair()));
+
+            // Negative template: a strong match here is evidence to REJECT, not to cast.
+            // It never enters the survivor pool (consensus is about real-spell agreement),
+            // the per-spell table, or the winning-template race — only its best score is
+            // kept, for the rejection gate below.
+            if (t.isRejection()) {
+                if (s > bestRejectionScore) {
+                    bestRejectionScore = s;
+                    bestRejectionSpell = t.spellName();
+                }
+                continue;
+            }
+
+            survivors.add(new Scored(t.spellName(), t.variantName(), s, d, cs.worstPair(), cs.p90Pair()));
             Float prev = bestPerSpell.get(t.spellName());
             if (prev == null || s > prev) bestPerSpell.put(t.spellName(), s);
             if (s > bestScore) {
@@ -255,6 +277,9 @@ public final class PDollarPlusRecognizer {
             tc.worstPairWeight = worstPairWeight;
             tc.effectiveScore = bestScore;
             tc.gap = bestScore - bestOfOtherSpell;
+            tc.bestRejectionSpell = bestRejectionSpell;
+            tc.bestRejectionScore = bestRejectionScore;
+            tc.rejectionMargin = rejectionMargin;
             if (best != null) {
                 tc.winnerSpell = best.spellName();
                 tc.winnerVariant = best.variantName();
@@ -289,6 +314,25 @@ public final class PDollarPlusRecognizer {
         }
         if (tc != null) { tc.effectiveScore = effectiveScore; tc.gap = gap; }
 
+        // Open-set rejection gate. A negative/tombstone template (is_rejection) matching at
+        // least as well as the winning spell — within rejectionMargin — means the draw is a
+        // garbage or cut-class shape sitting closest to some real spell only by default.
+        // Reject it instead of casting that nearest neighbor. With the default margin of 0
+        // this fires only when a negative template strictly out-scores every real spell, so
+        // it is inert until negative templates are authored. Consensus (folded into
+        // effectiveScore above) is positive evidence and is allowed to clear this gate.
+        if (bestRejectionSpell != null && effectiveScore - bestRejectionScore < rejectionMargin) {
+            if (tc != null) tc.rejectionStage = "rejectionTemplate";
+            WitchHatAtelierMod.LOGGER.warn(
+                    "[Recognizer] Rejection gate rejected '{}' (score={}) — negative template '{}' scored {} (margin={})",
+                    best.spellName(),
+                    String.format(java.util.Locale.ROOT, "%.3f", effectiveScore),
+                    bestRejectionSpell,
+                    String.format(java.util.Locale.ROOT, "%.3f", bestRejectionScore),
+                    String.format(java.util.Locale.ROOT, "%.3f", rejectionMargin));
+            return RecognitionResult.unknown(effectiveScore, candidate.indicativeAngle());
+        }
+
         if (gap < margin) {
             if (tc != null) tc.rejectionStage = "ambiguityGate";
             WitchHatAtelierMod.LOGGER.warn(
@@ -305,11 +349,17 @@ public final class PDollarPlusRecognizer {
     }
 
     /**
-     * Returns every template ranked by raw chamfer score, best first. <b>Does
-     * not apply the {@link SigilFilters} pipeline</b> — this is the unfiltered
-     * diagnostic view, so a caller can compare {@code matchVerbose} output to
-     * the result of {@link #match} and identify which templates were rejected
-     * by which filter (aspect ratio, ink density, or 3×3 grid).
+     * Returns every <b>real (castable)</b> template ranked by raw chamfer score, best
+     * first. <b>Does not apply the {@link SigilFilters} pipeline</b> — this is the
+     * unfiltered diagnostic view, so a caller can compare {@code matchVerbose} output to
+     * the result of {@link #match} and identify which templates were rejected by which
+     * filter (aspect ratio, ink density, or 3×3 grid).
+     *
+     * <p>Negative ({@code is_rejection}) templates are skipped here so the survivor
+     * ranking — and the per-spell distributions the offline tools derive from it — stay a
+     * castable-spell view; a negative label like {@code dispersion} must not read as a
+     * recall class. Their scoring is still fully visible in the {@link #matchTraced}
+     * decision trail ({@link MatchTrace#bestRejectionSpell} and the per-template list).</p>
      */
     public List<Scored> matchVerbose(PointCloudPreprocessor.Processed candidate,
                                      List<Template> templates) {
@@ -318,6 +368,7 @@ public final class PDollarPlusRecognizer {
         float distAtZero = Config.RECOGNITION_DIST_AT_ZERO_SCORE.get().floatValue();
         List<Scored> out = new ArrayList<>(templates.size());
         for (Template t : templates) {
+            if (t.isRejection()) continue;
             ChamferStats cs = chamferStats(cloud, t.processedCloud());
             float s = scoreFromDistance(cs.mean(), distAtFull, distAtZero);
             out.add(new Scored(t.spellName(), t.variantName(), s, cs.mean(), cs.worstPair(), cs.p90Pair()));

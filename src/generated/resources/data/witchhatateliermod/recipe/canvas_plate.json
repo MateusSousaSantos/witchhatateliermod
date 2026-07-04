@@ -1,0 +1,20 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "redstone",
+  "key": {
+    "p": {
+      "item": "witchhatateliermod:medium_square_paper"
+    },
+    "s": {
+      "item": "minecraft:stone_pressure_plate"
+    }
+  },
+  "pattern": [
+    "p",
+    "s"
+  ],
+  "result": {
+    "count": 1,
+    "id": "witchhatateliermod:canvas_plate"
+  }
+}

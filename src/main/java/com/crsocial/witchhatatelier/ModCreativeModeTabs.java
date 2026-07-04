@@ -37,5 +37,7 @@ public class ModCreativeModeTabs {
         output.accept(ModItems.MEDIUM_SQUARE_PAPER);
         output.accept(ModItems.SMALL_ROUND_PAPER);
         output.accept(ModItems.MEDIUM_ROUND_PAPER);
+        // Blocks
+        output.accept(ModItems.CANVAS_PLATE);
     }
 }

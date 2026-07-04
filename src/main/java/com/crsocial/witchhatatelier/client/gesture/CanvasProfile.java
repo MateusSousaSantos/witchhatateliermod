@@ -145,6 +145,34 @@ public interface CanvasProfile {
     }
 
     /**
+     * Profile for the {@link com.crsocial.witchhatatelier.blocks.CanvasPressurePlate}.
+     * Stone-etching aesthetic — a grey slab with dark engraved strokes — so the plate's
+     * canvas reads as carved stone rather than parchment. Square 1024² canvas, no parchment
+     * sprite behind it.
+     */
+    record CanvasPlateProfile() implements CanvasProfile {
+        private static final ResourceLocation CURSOR =
+                ResourceLocation.fromNamespaceAndPath(WitchHatAtelierMod.MODID, "textures/gui/cursor.png");
+
+        @Override public String     titleKey()            { return "screen.witchhatatelier.gesture_canvas.canvas_plate"; }
+        @Override public String     readOnlyKey()         { return titleKey() + ".read_only"; }
+        @Override public CanvasSize canvasSize()          { return new CanvasSize(1024, 1024); }
+        @Override public Shape      inputShape()          { return Shape.RECTANGLE; }
+        @Override public int        canvasBgColor()       { return 0xFFB8B8B8; }
+        @Override public int        canvasBgReadOnlyColor(){ return 0xFFA0A0A0; }
+        @Override public int        canvasBorderColor()   { return 0xFF6E6E6E; }
+        @Override public int        borderThickness()     { return 20; }
+        @Override public int        strokeColor()         { return 0xFF1A1A1A; }
+        @Override public int        activeStrokeColor()   { return 0xFFCF31C2; }
+        @Override public float      strokeSmoothingFactor(){ return 1f; }
+        @Override public boolean    angleSnapEnabled()    { return false; }
+        @Override public @Nullable ResourceLocation screenSprite() { return null; }
+        @Override public ResourceLocation cursorSprite()  { return CURSOR; }
+        @Override public int        cursorHotspotX()      { return -1; }
+        @Override public int        cursorHotspotY()      { return -1; }
+    }
+
+    /**
      * Fallback profile — reads smoothing and snap toggles from the global config.
      * Used when no known item type is in hand (e.g. debug/editor scenarios).
      */

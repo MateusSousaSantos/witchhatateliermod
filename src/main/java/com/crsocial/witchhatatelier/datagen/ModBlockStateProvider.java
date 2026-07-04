@@ -31,5 +31,7 @@ public class ModBlockStateProvider extends BlockStateProvider {
         directionalBlock(ModBlocks.PLACED_MEDIUM_ROUND_PAPER.get(),
                 models().getExistingFile(modLoc("block/placed_medium_round_paper")));
 
+        // Canvas pressure plate — vanilla stone texture, so it reads as a stone pressure plate.
+        pressurePlateBlock(ModBlocks.CANVAS_PLATE.get(), mcLoc("block/stone"));
     }
 }

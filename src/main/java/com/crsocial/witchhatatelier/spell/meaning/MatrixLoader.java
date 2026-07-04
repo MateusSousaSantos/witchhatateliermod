@@ -78,11 +78,23 @@ public final class MatrixLoader extends SimpleJsonResourceReloadListener {
         String signSlug = parts[parts.length - 1];
 
         Optional<SigilType> sigil = SigilType.fromSpellName(sigilSlug);
-        Optional<SignType> sign = SignType.fromSpellName(signSlug);
-        if (sigil.isEmpty() || sign.isEmpty()) {
+        if (sigil.isEmpty()) {
             WitchHatAtelierMod.LOGGER.warn(
-                    "[MatrixLoader] '{}' does not name a known (sigil, sign) pair — skipped.", id);
+                    "[MatrixLoader] '{}' does not name a known sigil — skipped.", id);
             return Optional.empty();
+        }
+
+        // A file named "default" is the sigil's no-signs default cell (null sign).
+        boolean isDefault = signSlug.equalsIgnoreCase("default");
+        SignType sign = null;
+        if (!isDefault) {
+            Optional<SignType> parsedSign = SignType.fromSpellName(signSlug);
+            if (parsedSign.isEmpty()) {
+                WitchHatAtelierMod.LOGGER.warn(
+                        "[MatrixLoader] '{}' does not name a known (sigil, sign) pair — skipped.", id);
+                return Optional.empty();
+            }
+            sign = parsedSign.get();
         }
 
         if (root.has("sigil") && !root.get("sigil").getAsString().equalsIgnoreCase(sigilSlug)) {
@@ -90,7 +102,7 @@ public final class MatrixLoader extends SimpleJsonResourceReloadListener {
                     "[MatrixLoader] '{}' JSON sigil='{}' disagrees with path sigil='{}'; trusting path.",
                     id, root.get("sigil").getAsString(), sigilSlug);
         }
-        if (root.has("sign") && !root.get("sign").getAsString().equalsIgnoreCase(signSlug)) {
+        if (!isDefault && root.has("sign") && !root.get("sign").getAsString().equalsIgnoreCase(signSlug)) {
             WitchHatAtelierMod.LOGGER.warn(
                     "[MatrixLoader] '{}' JSON sign='{}' disagrees with path sign='{}'; trusting path.",
                     id, root.get("sign").getAsString(), signSlug);
@@ -116,7 +128,7 @@ public final class MatrixLoader extends SimpleJsonResourceReloadListener {
         float costPerUse = costObj.has("per_use") ? costObj.get("per_use").getAsFloat() : 0.0f;
 
         return Optional.of(new MatrixEntry(
-                sigil.get(), sign.get(), behaviorKind,
+                sigil.get(), sign, behaviorKind,
                 power, aoe,
                 List.copyOf(effects), curve, costPerTick, costPerUse));
     }

@@ -49,7 +49,12 @@ public final class GestureCanvasClient {
     /** Opens the canvas for a placed-paper block, using its stored {@link PaperType}. */
     public static void openCanvas(PaperType paperType, List<GesturePoint> preloaded,
                                   boolean editable, BlockPos origin) {
-        CanvasProfile profile = new CanvasProfile.PaperTypeProfile(paperType);
+        openCanvas(new CanvasProfile.PaperTypeProfile(paperType), preloaded, editable, origin);
+    }
+
+    /** Opens the canvas for a block with an explicit {@link CanvasProfile} (e.g. the canvas plate). */
+    public static void openCanvas(CanvasProfile profile, List<GesturePoint> preloaded,
+                                  boolean editable, BlockPos origin) {
         Minecraft.getInstance().setScreen(
                 new CanvasScreen(profile, preloaded, editable,
                         (points, ringIds) -> sendToServer(points, origin, ringIds), origin));

@@ -48,6 +48,7 @@ import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.properties.RotationSegment;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import org.joml.Vector3f;
 
 import java.util.ArrayList;
@@ -214,16 +215,52 @@ public final class SaveGestureHandler {
 
     // ── Spell pipeline (cluster → preprocess → recognize) ───────────────────────
 
+    /** Selects the runtime dispatch + medium-consumption behavior for a compiled spell. */
+    public enum Dispatch {
+        /** Held-paper hand cast → channeled, aim-following; paper consumed when the channel ends. */
+        HAND,
+        /** Placed-paper surface cast → sustained if per-tick, else fire-once and mark spent. */
+        SURFACE,
+        /** Canvas pressure plate → fire once on each trigger; reusable, never consumed. */
+        PLATE
+    }
+
+    /** Payload entry point: derive the gesture + casting context from the packet and dispatch. */
     private static void runSpellPipeline(SaveGesturePayload payload, Player player, ItemStack inscribed) {
         if (payload.points().isEmpty()) return;
+        if (!(player.level() instanceof ServerLevel level)) return;
+        CastingContext ctx = buildCastingContext(payload, player);
+        Dispatch dispatch = payload.blockOrigin() == null ? Dispatch.HAND : Dispatch.SURFACE;
+        castFromGesture(level, player, payload.points(), payload.activationRingStrokeIds(),
+                ctx, payload.blockOrigin(), dispatch, inscribed);
+    }
+
+    /**
+     * Runs the recognize → compile → meaning → execute chain for a gesture from any source
+     * (a live draw payload or a stored canvas), then dispatches the compiled spell per
+     * {@code dispatch}. All chat/log output is null-safe on {@code player}.
+     *
+     * @param level       server level the cast runs in
+     * @param player      the caster/trigger, or {@code null} (e.g. a mob stepping on a plate)
+     * @param points      normalized gesture points with stroke ids
+     * @param ringIds     stroke ids forming the activation ring (must be non-empty to compile)
+     * @param ctx         casting context (medium, origin, normal) for this source
+     * @param blockOrigin the source block for surface/plate casts, or {@code null} for hand casts
+     * @param dispatch    how to run the compiled spell + whether to consume the medium
+     * @param inscribed   the inscribed paper stack for {@link Dispatch#HAND}, else {@code null}
+     */
+    public static void castFromGesture(ServerLevel level, @Nullable Player player,
+                                       List<GesturePoint> points, List<Integer> ringIds,
+                                       CastingContext ctx, @Nullable BlockPos blockOrigin,
+                                       Dispatch dispatch, @Nullable ItemStack inscribed) {
+        if (points.isEmpty()) return;
 
         Map<Integer, List<Point>> byStroke = new LinkedHashMap<>();
-        for (GesturePoint gp : payload.points()) {
+        for (GesturePoint gp : points) {
             byStroke.computeIfAbsent(gp.strokeID(), k -> new ArrayList<>())
                     .add(new Point(gp.x(), gp.y(), gp.strokeID()));
         }
 
-        List<Integer> ringIds = payload.activationRingStrokeIds();
         if (ringIds.isEmpty()) return; // only run the pipeline when a ring was closed
 
         List<List<Point>> contentStrokes = new ArrayList<>();
@@ -290,7 +327,7 @@ public final class SaveGestureHandler {
             // Phase 0 — persist the full recognition event (raw strokes, processed cloud,
             // every template's chamfer distance + score, final result, live thresholds).
             if (RecognitionLog.isEnabled()) {
-                BlockPos bo = payload.blockOrigin();
+                BlockPos bo = blockOrigin;
                 RecognitionLog.log(new RecognitionLog.Entry(
                         who,
                         player != null ? player.getStringUUID() : "<none>",
@@ -347,7 +384,6 @@ public final class SaveGestureHandler {
         }
         TriggerEvaluator.TriggerResult trigger =
                 new TriggerEvaluator.TriggerResult(ringIds, contentIds);
-        CastingContext ctx = buildCastingContext(payload, player);
 
         CompileResult result = SpellGraphBuilder.build(trigger, ringStrokes, clusters, recognitions, ctx);
 
@@ -358,7 +394,9 @@ public final class SaveGestureHandler {
 
             java.util.Optional<ExecutableSpell> executable = MeaningEngine.evaluate(graph, ctx);
 
-            if (player != null) {
+            // Stepping on a canvas plate re-casts on every stomp; suppress the per-cast
+            // chat feedback for it so it doesn't spam the triggerer.
+            if (player != null && dispatch != Dispatch.PLATE) {
                 player.sendSystemMessage(Component.empty()
                         .append(Component.literal("◆ ").withStyle(ChatFormatting.GOLD))
                         .append(Component.literal(graph.core().type().toString())
@@ -394,31 +432,38 @@ public final class SaveGestureHandler {
                         "[MeaningEngine] player='{}' → {}", who, executable.get().toLogString());
 
                 // ── Phase 3: dispatch to runtime ──────────────────────────────────
-                if (player != null && player.level() instanceof ServerLevel serverLevel) {
-                    if (payload.blockOrigin() == null && player instanceof ServerPlayer sp) {
+                ExecutableSpell spell = executable.get();
+                switch (dispatch) {
+                    case HAND -> {
                         // Hand cast → start a channeled, aim-following cast keyed to the
                         // inscribed paper just produced. The paper is consumed when the
                         // channel finishes or is canceled, so we do NOT consume here.
-                        SpellCastManager.get().start(sp, executable.get(), inscribed);
-                    } else if (payload.blockOrigin() != null
-                            && executable.get().totalCostPerTick() > 0f) {
-                        // Surface cast with a per-tick cost → sustained channel anchored to
-                        // the placed_paper, active until its fuel drains; the block is marked
-                        // spent by the manager when the cast ends (so we do NOT consume here).
-                        PlacedPaperCastManager.get().start(
-                                serverLevel, player, executable.get(), payload.blockOrigin());
-                    } else {
-                        // Instantaneous surface cast (no per-tick cost) → fire once and spend.
-                        boolean fired = SpellExecutor.run(serverLevel, player, executable.get());
-                        if (fired) {
-                            consumeMedium(payload, player, serverLevel);
+                        if (player instanceof ServerPlayer sp) {
+                            SpellCastManager.get().start(sp, spell, inscribed);
                         }
                     }
+                    case SURFACE -> {
+                        if (spell.totalCostPerTick() > 0f) {
+                            // Per-tick cost → sustained channel anchored to the placed_paper,
+                            // active until its fuel drains; the block is marked spent by the
+                            // manager when the cast ends (so we do NOT consume here).
+                            PlacedPaperCastManager.get().start(level, player, spell, blockOrigin);
+                        } else {
+                            // Instantaneous surface cast → fire once and spend.
+                            boolean fired = SpellExecutor.run(level, player, spell);
+                            if (fired) {
+                                consumeMedium(blockOrigin, player, level);
+                            }
+                        }
+                    }
+                    case PLATE ->
+                        // Canvas pressure plate → fire once per trigger; reusable, never spent.
+                        SpellExecutor.run(level, player, spell);
                 }
             }
         } else {
             WitchHatAtelierMod.LOGGER.info("[Compiler] Rejected: {}", result.rejectionReason());
-            if (player != null) {
+            if (player != null && dispatch != Dispatch.PLATE) {
                 assert result.rejectionReason() != null;
                 player.sendSystemMessage(Component.empty()
                         .append(Component.literal("◆ ").withStyle(ChatFormatting.DARK_PURPLE))
@@ -435,8 +480,7 @@ public final class SaveGestureHandler {
 
     // ── Medium consumption (Phase 3: Prepared → Activated → Used) ──────────────
 
-    private static void consumeMedium(SaveGesturePayload payload, Player player, ServerLevel level) {
-        BlockPos blockOrigin = payload.blockOrigin();
+    private static void consumeMedium(@Nullable BlockPos blockOrigin, Player player, ServerLevel level) {
         if (blockOrigin != null) {
             // Surface cast: mark the placed_paper as spent so it stays in the world
             // but rejects any further casts. The inscription is considered consumed.
@@ -558,6 +602,11 @@ public final class SaveGestureHandler {
         }
         root.put("points", pointsList);
         root.putInt("strokeCount", payload.points().isEmpty() ? 0 : maxStroke + 1);
+        // Persist the activation ring so a stored canvas (e.g. the pressure plate) can be
+        // re-split into content vs ring strokes and re-cast without the client. Harmless on
+        // the paper-item and placed-paper paths, which never re-read it.
+        root.putIntArray("ringStrokeIds",
+                payload.activationRingStrokeIds().stream().mapToInt(Integer::intValue).toArray());
         return root;
     }
 }

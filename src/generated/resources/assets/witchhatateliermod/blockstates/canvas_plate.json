@@ -1,0 +1,10 @@
+{
+  "variants": {
+    "powered=false": {
+      "model": "witchhatateliermod:block/canvas_plate"
+    },
+    "powered=true": {
+      "model": "witchhatateliermod:block/canvas_plate_down"
+    }
+  }
+}

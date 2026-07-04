@@ -7,6 +7,8 @@ import net.neoforged.neoforge.registries.DeferredBlock;
 import net.neoforged.neoforge.registries.DeferredRegister;
 import net.minecraft.world.level.block.SoundType;
 import net.minecraft.world.level.block.state.BlockBehaviour;
+import net.minecraft.world.level.block.state.properties.BlockSetType;
+import net.minecraft.world.level.material.PushReaction;
 
 import java.util.EnumMap;
 
@@ -43,6 +45,11 @@ public class ModBlocks {
     public static final DeferredBlock<PlacedPaper> PLACED_MEDIUM_ROUND_PAPER = BLOCKS.register("placed_medium_round_paper",
             () -> new PlacedPaper(paperProps()));
 
+    // ── Canvas pressure plate ────────────────────────────────────────────────────
+
+    public static final DeferredBlock<CanvasPressurePlate> CANVAS_PLATE = BLOCKS.register("canvas_plate",
+            () -> new CanvasPressurePlate(BlockSetType.OAK, plateProps()));
+
     // ── PaperType → block lookup ─────────────────────────────────────────────────
 
     private static final EnumMap<PaperType, DeferredBlock<PlacedPaper>> PLACED_MAP = new EnumMap<>(PaperType.class);
@@ -66,5 +73,14 @@ public class ModBlocks {
                 .noOcclusion()
                 .strength(0.2f)
                 .sound(SoundType.WOOL);
+    }
+
+    private static BlockBehaviour.Properties plateProps() {
+        // Note: BasePressurePlateBlock forces the sound from the BlockSetType, so it is not set here.
+        return BlockBehaviour.Properties.of()
+                .forceSolidOn()
+                .noCollission()
+                .strength(0.5f)
+                .pushReaction(PushReaction.DESTROY);
     }
 }

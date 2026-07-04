@@ -272,3 +272,29 @@ below 90% in-sample recall, leave-one-drawer-out recall measured (target ≥ 85%
     **next lever is M3 (4th drawer + honest generalization number), which needs new data.**
   - Tooling: `tune_corpus.py` now excludes cut-class labels (covered set derived from the
     log's survivors) so ablation/sweep numbers aren't dragged by a constant 51-record penalty.
+- **2026-07-04 — M4 (structural): open-set rejection templates** — the first structural
+  lever, targeting the two holes in-sample tuning cannot touch: the ~60% garbage acceptance
+  and the dispersion leak (44/51 cut draws still cast a live spell). Turns the closed-set
+  classifier (always "which template is nearest?") open-set by letting a template's *win mean
+  reject*.
+  - **Mechanism:** `Template.isRejection` + `"is_rejection": true` in a `spell_templates` JSON
+    (parsed in `SpellTemplateLoader`). Negative templates run the same prefilters + chamfer as
+    any template but never enter the survivor pool, per-spell table, or winner race; their best
+    score is tracked apart (`bestRejectionScore`). New **rejection gate** in
+    `PDollarPlusRecognizer.matchInternal` (after consensus, before the ambiguity gate): reject
+    when `winnerEffectiveScore − bestRejectionScore < recognitionRejectionMargin`. New stage
+    label `rejectionTemplate`; `bestRejection*` fields added to `MatchTrace` and the log's
+    decision block; `rejectionMargin` added to the thresholds snapshot.
+  - **`recognitionRejectionMargin` default 0.0** = fire only when a negative template *strictly*
+    out-scores every real spell → **inert until negative templates are authored**, and a pure
+    monotone add-on (never changes which real spell wins). Raise it to also reject
+    look-alikes-of-garbage (trades cut/garbage rejection for a little recall).
+  - **Seeded negative template:** `dispersion.json` recovered from `48334b4^` (12 variants),
+    re-added with `is_rejection: true`. Because dispersion won its own draws at full roster,
+    the gate should reclaim most of the 44/51 leak at margin 0.0. `covered`-set builders in
+    `CorpusReplay`/`CorpusCrossVal` and `matchVerbose` now exclude negatives, so `dispersion`
+    stays a should-reject class (not recall) and isn't promoted in crossval.
+  - **Not yet measured live** — needs a headless replay run (`/spell replay-corpus`) to quantify
+    the dispersion-leak drop and any valid-recall cost, then a `recognitionRejectionMargin`
+    sweep against the garbage + cut buckets. Extend the negative set with labeled `garbage`
+    draws (via `promote_to_templates.py` with an `is_rejection` flag) once the seed is validated.

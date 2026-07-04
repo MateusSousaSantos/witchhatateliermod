@@ -17,6 +17,8 @@ public final class MatrixRegistry {
     private static final MatrixRegistry INSTANCE = new MatrixRegistry();
 
     private final Map<SigilType, EnumMap<SignType, MatrixEntry>> cells = new EnumMap<>(SigilType.class);
+    /** Per-sigil "no signs" default cells (from {@code <sigil>/default.json}). */
+    private final Map<SigilType, MatrixEntry> defaults = new EnumMap<>(SigilType.class);
 
     private MatrixRegistry() {}
 
@@ -26,9 +28,14 @@ public final class MatrixRegistry {
 
     public synchronized void clear() {
         cells.clear();
+        defaults.clear();
     }
 
     public synchronized void register(MatrixEntry entry) {
+        if (entry.sign() == null) {
+            defaults.put(entry.sigil(), entry);
+            return;
+        }
         cells.computeIfAbsent(entry.sigil(), k -> new EnumMap<>(SignType.class))
                 .put(entry.sign(), entry);
     }
@@ -40,9 +47,14 @@ public final class MatrixRegistry {
         return Optional.ofNullable(row.get(sign));
     }
 
-    /** Total number of loaded cells across all sigils. */
+    /** Returns the sigil's default "no signs" cell, or empty if none is authored. */
+    public synchronized Optional<MatrixEntry> findDefault(SigilType sigil) {
+        return Optional.ofNullable(defaults.get(sigil));
+    }
+
+    /** Total number of loaded cells across all sigils, including per-sigil defaults. */
     public synchronized int size() {
-        int n = 0;
+        int n = defaults.size();
         for (EnumMap<SignType, MatrixEntry> row : cells.values()) n += row.size();
         return n;
     }

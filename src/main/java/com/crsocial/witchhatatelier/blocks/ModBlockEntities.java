@@ -29,4 +29,11 @@ public class ModBlockEntities {
                                     ModBlocks.PLACED_SMALL_ROUND_PAPER.get(),
                                     ModBlocks.PLACED_MEDIUM_ROUND_PAPER.get())
                             .build(null));
+
+    @SuppressWarnings("DataFlowIssue")
+    public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<CanvasPlateBlockEntity>>
+            CANVAS_PLATE = BLOCK_ENTITIES.register("canvas_plate",
+                    () -> BlockEntityType.Builder
+                            .of(CanvasPlateBlockEntity::new, ModBlocks.CANVAS_PLATE.get())
+                            .build(null));
 }

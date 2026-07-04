@@ -4,6 +4,7 @@ import com.crsocial.witchhatatelier.spell.meaning.effect.air.AirPillarEffect;
 import com.crsocial.witchhatatelier.spell.meaning.effect.earth.EarthPillarEffect;
 import com.crsocial.witchhatatelier.spell.meaning.effect.fire.FirePillarEffect;
 import com.crsocial.witchhatatelier.spell.meaning.effect.fire.PyreballEffect;
+import com.crsocial.witchhatatelier.spell.meaning.effect.light.LightEffect;
 import com.crsocial.witchhatatelier.spell.meaning.effect.water.WaterPillarEffect;
 
 import java.util.HashMap;
@@ -39,6 +40,7 @@ public final class EffectRegistry {
         INSTANCE.register(new AirPillarEffect());
         INSTANCE.register(new ParticleEffect());
         INSTANCE.register(new PyreballEffect());
+        INSTANCE.register(new LightEffect());
     }
 
     public synchronized void register(EffectKind kind) {

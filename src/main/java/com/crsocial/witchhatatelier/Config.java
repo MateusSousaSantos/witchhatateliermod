@@ -189,6 +189,22 @@ public class Config {
                     "0.06 loses one draw, 0.08 craters recall to 96%.",
                     "Range: 0.00 – 0.30. Default: 0.05.")
             .defineInRange("recognitionAmbiguityMargin", 0.05, 0.0, 0.30);
+    public static final ModConfigSpec.DoubleValue RECOGNITION_REJECTION_MARGIN = BUILDER
+            .comment("Open-set rejection margin against NEGATIVE templates. Templates authored",
+                    "with \"is_rejection\": true are tombstone/garbage examples (e.g. the cut",
+                    "`dispersion` glyph kept only so its draws don't cast their nearest live",
+                    "spell, or explicit garbage). They compete in the chamfer like any template",
+                    "but can never be cast: when the best negative template scores within this",
+                    "margin of the winning real spell, the result is reported as 'unknown'.",
+                    "  reject when:  winnerEffectiveScore − bestNegativeScore < margin",
+                    "Default 0.0 = reject only when a negative template STRICTLY out-scores every",
+                    "real spell — so the gate is INERT until negative templates are added, and",
+                    "even then only fires on a draw that literally sits closest to a negative",
+                    "example. Raise it to also reject draws that merely resemble one (trades",
+                    "garbage/cut-class rejection for a little valid recall). Tune via",
+                    "/spell replay-corpus against the garbage + cut-class (should-reject) buckets.",
+                    "Range: 0.00 – 0.30. Default: 0.0.")
+            .defineInRange("recognitionRejectionMargin", 0.0, 0.0, 0.30);
     public static final ModConfigSpec.DoubleValue RECOGNITION_CONSENSUS_BONUS = BUILDER
             .comment("Consensus tie-breaker bonus. When the winning sigil fails the",
                     "ambiguity margin against a DIFFERENT spell, the recognizer counts how",

@@ -32,6 +32,7 @@
   "block.witchhatateliermod.placed_small_round_paper": "Small Round Paper",
   "block.witchhatateliermod.placed_medium_round_paper": "Medium Round Paper",
   "block.witchhatateliermod.placed_large_round_paper": "Large Round Paper",
+  "block.witchhatateliermod.canvas_plate": "Canvas Pressure Plate",
 
   "screen.witchhatatelier.gesture_canvas": "Sigil Canvas",
   "screen.witchhatatelier.gesture_canvas.read_only": "✦ View only — equip a Wand to edit ✦",
@@ -41,6 +42,8 @@
   "screen.witchhatatelier.gesture_canvas.small_round": "Small Paper Canvas",
   "screen.witchhatatelier.gesture_canvas.medium_round": "Paper Canvas",
   "screen.witchhatatelier.gesture_canvas.large_round": "Large Paper Canvas",
+  "screen.witchhatatelier.gesture_canvas.canvas_plate": "Stone Sigil Canvas",
+  "screen.witchhatatelier.gesture_canvas.canvas_plate.read_only": "✦ View only — equip a Wand to edit ✦",
 
 
   "screen.witchhatatelier.gesture_canvas.button.save": "Save",

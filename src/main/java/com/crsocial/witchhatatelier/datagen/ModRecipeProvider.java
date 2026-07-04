@@ -1,5 +1,6 @@
 package com.crsocial.witchhatatelier.datagen;
 
+import com.crsocial.witchhatatelier.blocks.ModBlocks;
 import com.crsocial.witchhatatelier.items.ModItems;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.data.PackOutput;
@@ -47,6 +48,15 @@ public class ModRecipeProvider extends RecipeProvider {
                 .define('i', Items.IRON_NUGGET)
                 .define('s', Items.STRING)
                 .define('l', Items.LEATHER)
+                .unlockedBy("has_medium_square_paper", has(ModItems.MEDIUM_SQUARE_PAPER.get()))
+                .save(output);
+
+        // Canvas pressure plate: a paper laid over a stone pressure plate.
+        ShapedRecipeBuilder.shaped(RecipeCategory.REDSTONE, ModBlocks.CANVAS_PLATE.get())
+                .pattern("p")
+                .pattern("s")
+                .define('p', ModItems.MEDIUM_SQUARE_PAPER.get())
+                .define('s', Items.STONE_PRESSURE_PLATE)
                 .unlockedBy("has_medium_square_paper", has(ModItems.MEDIUM_SQUARE_PAPER.get()))
                 .save(output);
     }

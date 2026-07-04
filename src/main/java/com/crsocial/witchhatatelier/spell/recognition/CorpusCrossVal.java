@@ -102,11 +102,12 @@ public final class CorpusCrossVal {
         PDollarPlusRecognizer recognizer = new PDollarPlusRecognizer(TemplateRegistry.get(), minScore);
         List<Template> baseTemplates = TemplateRegistry.get().all();
 
-        // Labels with a template class in the live registry. Cut/uncovered labels are
-        // excluded from train promotion (a cut class must not be resurrected in-memory)
-        // and scored in their own should-reject bucket instead of as recall.
+        // Labels with a REAL (castable) template class in the live registry. Cut/uncovered
+        // labels — including negative (is_rejection) template classes like dispersion — are
+        // excluded from train promotion (a cut class must not be resurrected in-memory as a
+        // castable spell) and scored in their own should-reject bucket instead of as recall.
         Set<String> covered = new HashSet<>();
-        for (Template t : baseTemplates) covered.add(t.spellName());
+        for (Template t : baseTemplates) if (!t.isRejection()) covered.add(t.spellName());
 
         List<FoldResult> foldResults = new ArrayList<>();
         List<RecognitionLog.Entry> logOut = new ArrayList<>();
@@ -191,7 +192,7 @@ public final class CorpusCrossVal {
         PointCloud rawCloud = new PointCloud(r.intended() + ":" + variantName, flat);
         PointCloudPreprocessor.Processed p = PointCloudPreprocessor.process(rawCloud, resampleN);
         return new Template(r.intended(), variantName, rawCloud, p.cloud(), resampleN,
-                p.indicativeAngle(), false, p.normalizedArcLength(), p.metrics());
+                p.indicativeAngle(), false, false, p.normalizedArcLength(), p.metrics());
     }
 
     private static List<Rec> parse(Path corpusPath) throws IOException {

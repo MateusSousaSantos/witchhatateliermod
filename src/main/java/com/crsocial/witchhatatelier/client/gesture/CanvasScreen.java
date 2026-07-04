@@ -210,6 +210,7 @@ public class CanvasScreen extends Screen {
         Minecraft mc = Minecraft.getInstance();
         if (sourceBlock == null || mc.level == null || mc.player == null) return;
         if (!(mc.level.getBlockEntity(sourceBlock) instanceof PlacedPaperBlockEntity be)) return;
+        if (!be.getBlockState().hasProperty(PlacedPaper.FACING)) return; // e.g. canvas plate → no facing, rotation 0
 
         Direction facing = be.getBlockState().getValue(PlacedPaper.FACING);
         if (facing != Direction.UP && facing != Direction.DOWN) return; // walls stay upright

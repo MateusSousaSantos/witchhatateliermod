@@ -5,6 +5,7 @@ import net.minecraft.client.renderer.block.model.BlockModel;
 import net.minecraft.data.PackOutput;
 import net.minecraft.world.item.ItemDisplayContext;
 import net.neoforged.neoforge.client.model.generators.ItemModelProvider;
+import net.neoforged.neoforge.client.model.generators.ModelFile;
 import net.neoforged.neoforge.client.model.generators.loaders.SeparateTransformsModelBuilder;
 import net.neoforged.neoforge.common.data.ExistingFileHelper;
 
@@ -52,6 +53,10 @@ public class ModItemModelProvider extends ItemModelProvider {
                 .texture("layer0", modLoc("item/medium_round_spell_paper"));
         withExistingParent("large_round_spell_paper", "minecraft:item/generated")
                 .texture("layer0", modLoc("item/large_round_spell_paper"));
+
+        // ── Canvas pressure plate (block item parents the generated "up" model) ─
+        getBuilder("canvas_plate")
+                .parent(new ModelFile.UncheckedModelFile(modLoc("block/canvas_plate")));
 
         // ── Wand (unchanged) ──────────────────────────────────────────────────
         withExistingParent("wand_2d", "minecraft:item/generated")

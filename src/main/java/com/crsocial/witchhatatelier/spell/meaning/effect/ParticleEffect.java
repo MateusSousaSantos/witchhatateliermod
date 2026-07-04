@@ -62,7 +62,7 @@ public final class ParticleEffect implements EffectKind {
 
             for (EffectInstruction ins : (List<EffectInstruction>) raw) {
                 if (!(ins instanceof SpawnParticlesInstruction sp)) continue;
-                ParticleOptions particle = ParticleSupport.resolve(sp.particleId(), KEY);
+                ParticleOptions particle = ParticleSupport.resolve(sp, KEY);
                 if (particle == null) continue;
 
                 int count = Math.min(MAX_PARTICLES_PER_EMISSION,

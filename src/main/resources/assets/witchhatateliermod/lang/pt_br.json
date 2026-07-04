@@ -32,6 +32,7 @@
   "block.witchhatateliermod.placed_small_round_paper": "Papel Redondo Pequeno",
   "block.witchhatateliermod.placed_medium_round_paper": "Papel Redondo Médio",
   "block.witchhatateliermod.placed_large_round_paper": "Papel Redondo Grande",
+  "block.witchhatateliermod.canvas_plate": "Placa de Pressão de Tela",
 
   "screen.witchhatatelier.gesture_canvas": "Tela de Sigilos",
   "screen.witchhatatelier.gesture_canvas.read_only": "✦ Apenas visualização — equipe uma Varinha para editar ✦",
@@ -41,6 +42,8 @@
   "screen.witchhatatelier.gesture_canvas.small_round": "Tela de Papel Pequena",
   "screen.witchhatatelier.gesture_canvas.medium_round": "Tela de Papel",
   "screen.witchhatatelier.gesture_canvas.large_round": "Tela de Papel Grande",
+  "screen.witchhatatelier.gesture_canvas.canvas_plate": "Tela de Sigilos em Pedra",
+  "screen.witchhatatelier.gesture_canvas.canvas_plate.read_only": "✦ Apenas visualização — equipe uma Varinha para editar ✦",
 
 
   "screen.witchhatatelier.gesture_canvas.button.save": "Salvar",

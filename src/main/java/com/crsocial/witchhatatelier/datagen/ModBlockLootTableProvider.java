@@ -29,5 +29,6 @@ public class ModBlockLootTableProvider extends BlockLootSubProvider {
         add(ModBlocks.PLACED_MEDIUM_SQUARE_PAPER.get(), LootTable.lootTable());
         add(ModBlocks.PLACED_SMALL_ROUND_PAPER.get(),   LootTable.lootTable());
         add(ModBlocks.PLACED_MEDIUM_ROUND_PAPER.get(),  LootTable.lootTable());
+        dropSelf(ModBlocks.CANVAS_PLATE.get());
     }
 }
