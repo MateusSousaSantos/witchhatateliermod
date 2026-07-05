@@ -58,5 +58,39 @@
 
   "screen.witchhatatelier.gesture_canvas.tooltip.wand_required": "Equip a Wand to edit this paper.",
   "screen.witchhatatelier.gesture_canvas.tooltip.read_only": "View only",
-  "item.witchhatateliermod.spell_paper.spent": "Spent"
+  "screen.witchhatatelier.gesture_canvas.status": "%1$s · %2$s",
+  "item.witchhatateliermod.spell_paper.spent": "Spent",
+
+  "sigil.witchhatateliermod.earth": "Earth",
+  "sigil.witchhatateliermod.air": "Air",
+  "sigil.witchhatateliermod.water": "Water",
+  "sigil.witchhatateliermod.fire": "Fire",
+  "sigil.witchhatateliermod.light": "Light",
+
+  "sign.witchhatateliermod.column": "Column",
+  "sign.witchhatateliermod.dispersion": "Dispersion",
+  "sign.witchhatateliermod.bolt": "Bolt",
+  "sign.witchhatateliermod.crush": "Crush",
+  "sign.witchhatateliermod.convergence": "Convergence",
+  "sign.witchhatateliermod.pull": "Pull",
+  "sign.witchhatateliermod.collection": "Collection",
+  "sign.witchhatateliermod.levitation": "Levitation",
+  "sign.witchhatateliermod.crosshair": "Crosshair",
+
+  "inscription.witchhatateliermod.composition": "%1$s — %2$s",
+  "inscription.witchhatateliermod.composition.compact": "%1$s %2$s",
+  "inscription.witchhatateliermod.sign_count": "%1$s ×%2$s",
+  "inscription.witchhatateliermod.state.ready": "Prepared — close the ring to cast",
+  "inscription.witchhatateliermod.state.inert": "The combination holds no meaning yet",
+  "inscription.witchhatateliermod.state.fizzle": "The sigils clash — this will not cast",
+  "inscription.witchhatateliermod.state.illegible": "Illegible — the glyphs could not be read",
+  "inscription.witchhatateliermod.quality": "Quality: %s",
+
+  "hud.witchhatateliermod.cast": "✦ %1$s — %2$s",
+  "hud.witchhatateliermod.prepared": "◈ Prepared: %s",
+  "hud.witchhatateliermod.prepared.ring_hint": "◈ Prepared: %s — finish the ring to cast",
+  "hud.witchhatateliermod.ring_unfinished": "◈ The ring is unfinished",
+  "hud.witchhatateliermod.inert": "◈ %s — the combination holds no meaning yet",
+  "hud.witchhatateliermod.fizzle": "✗ The spell fizzles",
+  "hud.witchhatateliermod.illegible": "· The ink says nothing"
 }

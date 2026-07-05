@@ -155,8 +155,21 @@ land without an API change (`CastingContext.java:24-28`). **The medium never cha
 
 `MeaningEngine.evaluate(graph, ctx)` (`MeaningEngine.java:40-161`) is where the
 matrix resolves. It returns `Optional<ExecutableSpell>` — **empty** means "no matrix
-cell matched", which the orchestrator surfaces as *Prepared (no matrix cell for this
-combination)* (`SaveGestureHandler.java:378-383`).
+cell matched", which the orchestrator surfaces as the `INERT` inscription state:
+an action-bar line at save time, plus the state line on the paper's tooltip and the
+reopened canvas (the old per-cast chat breakdown is now `/spell debug`-only). The
+pipeline also runs on **ring-less** saves — recognize + compile + meaning, no
+execution — purely to stamp this `InscriptionSummary` (`spell/feedback/`) onto the
+paper item / placed-paper block entity.
+
+Before clustering, the pipeline excludes a detected **ring-in-progress** chain from
+the content set (`TriggerEvaluator.findRingInProgress`: winds ≥
+`ringInProgressMinWindingDegrees`, ring-sized, encloses other strokes — no closure
+gates): an unfinished ring's hull would otherwise macro-merge every sigil into one
+unrecognizable cluster. **Recorded trade-off:** a large circle-like *sign* that fully
+encloses other strokes can be misclassified as ring-in-progress on ring-less saves;
+this only affects the preview summary — at cast time the client's strict closed-ring
+trigger decides the real ring, and content is split by its verdict.
 
 ### 4.1 One op per sign bundle that has a cell
 

@@ -15,6 +15,7 @@ import com.crsocial.witchhatatelier.spell.cast.SpellCastManager;
 import com.crsocial.witchhatatelier.spell.compiler.CastingContext;
 import com.crsocial.witchhatatelier.spell.compiler.CompileResult;
 import com.crsocial.witchhatatelier.spell.compiler.SpellGraphBuilder;
+import com.crsocial.witchhatatelier.spell.feedback.InscriptionSummary;
 import com.crsocial.witchhatatelier.spell.meaning.ExecutableSpell;
 import com.crsocial.witchhatatelier.spell.meaning.MeaningEngine;
 import com.crsocial.witchhatatelier.spell.meaning.SpellExecutor;
@@ -95,9 +96,29 @@ public final class SaveGestureHandler {
                 inscribed = saveItemPath(payload, player);
             }
 
-            CastOutcome outcome = runSpellPipeline(payload, player, inscribed);
-            playActivationEffects(payload, player, outcome);
+            PipelineResult result = runSpellPipeline(payload, player, inscribed);
+            playActivationEffects(payload, player, result.outcome());
+            stampInscription(payload, player, inscribed, result.summary());
         });
+    }
+
+    /**
+     * Persists the pipeline's conclusion onto the inscription medium so the item
+     * tooltip / canvas header can show what the paper holds. Runs after the save
+     * paths, so the item stamp lands on top of the freshly written gesture NBT.
+     */
+    private static void stampInscription(SaveGesturePayload payload, Player player,
+                                         @Nullable ItemStack inscribed,
+                                         @Nullable InscriptionSummary summary) {
+        if (summary == null) return;
+        if (payload.blockOrigin() != null) {
+            if (player.level().getBlockEntity(payload.blockOrigin())
+                    instanceof PlacedPaperBlockEntity placed && !placed.isSpent()) {
+                placed.setInscription(summary);
+            }
+        } else if (inscribed != null && !inscribed.isEmpty()) {
+            SpellPaperItem.stampInscription(inscribed, summary);
+        }
     }
 
     /**
@@ -114,10 +135,17 @@ public final class SaveGestureHandler {
      *   <li>{@link #UNRECOGNIZED} — nothing legible: every content cluster came back
      *       {@code unknown} (unrecognized, ambiguity-gated, or rejection-template), or
      *       the ring enclosed no content at all.</li>
-     *   <li>{@link #NONE} — the pipeline did not run (no ring / no points); no feedback.</li>
+     *   <li>{@link #NONE} — no closed ring (a plain save; recognition still runs to stamp
+     *       the inscription summary, but nothing triggers) or no points; no in-world feedback.</li>
      * </ul>
      */
     public enum CastOutcome { CAST, PREPARED, FIZZLE, UNRECOGNIZED, NONE }
+
+    /**
+     * A pipeline pass's in-world outcome plus what to stamp onto the inscription
+     * medium ({@code summary == null} when the pipeline never saw any points).
+     */
+    private record PipelineResult(CastOutcome outcome, @Nullable InscriptionSummary summary) {}
 
     // ── Save paths ──────────────────────────────────────────────────────────────
 
@@ -274,12 +302,12 @@ public final class SaveGestureHandler {
     }
 
     /** Payload entry point: derive the gesture + casting context from the packet and dispatch. */
-    private static CastOutcome runSpellPipeline(SaveGesturePayload payload, Player player, ItemStack inscribed) {
-        if (payload.points().isEmpty()) return CastOutcome.NONE;
-        if (!(player.level() instanceof ServerLevel level)) return CastOutcome.NONE;
+    private static PipelineResult runSpellPipeline(SaveGesturePayload payload, Player player, ItemStack inscribed) {
+        if (payload.points().isEmpty()) return new PipelineResult(CastOutcome.NONE, null);
+        if (!(player.level() instanceof ServerLevel level)) return new PipelineResult(CastOutcome.NONE, null);
         CastingContext ctx = buildCastingContext(payload, player);
         Dispatch dispatch = payload.blockOrigin() == null ? Dispatch.HAND : Dispatch.SURFACE;
-        return castFromGesture(level, player, payload.points(), payload.activationRingStrokeIds(),
+        return runPipeline(level, player, payload.points(), payload.activationRingStrokeIds(),
                 ctx, payload.blockOrigin(), dispatch, inscribed);
     }
 
@@ -302,7 +330,20 @@ public final class SaveGestureHandler {
                                        List<GesturePoint> points, List<Integer> ringIds,
                                        CastingContext ctx, @Nullable BlockPos blockOrigin,
                                        Dispatch dispatch, @Nullable ItemStack inscribed) {
-        if (points.isEmpty()) return CastOutcome.NONE;
+        return runPipeline(level, player, points, ringIds, ctx, blockOrigin, dispatch, inscribed)
+                .outcome();
+    }
+
+    /**
+     * Full pipeline pass. Runs on every save — <b>including ring-less ones</b>, where it
+     * recognizes and compiles (to learn what the paper holds and stamp/report it) but
+     * never executes; only a closed ring dispatches the compiled spell.
+     */
+    private static PipelineResult runPipeline(ServerLevel level, @Nullable Player player,
+                                       List<GesturePoint> points, List<Integer> ringIds,
+                                       CastingContext ctx, @Nullable BlockPos blockOrigin,
+                                       Dispatch dispatch, @Nullable ItemStack inscribed) {
+        if (points.isEmpty()) return new PipelineResult(CastOutcome.NONE, null);
 
         Map<Integer, List<Point>> byStroke = new LinkedHashMap<>();
         for (GesturePoint gp : points) {
@@ -310,18 +351,58 @@ public final class SaveGestureHandler {
                     .add(new Point(gp.x(), gp.y(), gp.strokeID()));
         }
 
-        if (ringIds.isEmpty()) return CastOutcome.NONE; // only run the pipeline when a ring was closed
+        boolean ringClosed = !ringIds.isEmpty();
+
+        // An UNFINISHED ring drawn around the sigils must not enter clustering: its
+        // hull would swallow every sigil into one unrecognizable cluster. Detect it
+        // among the non-ring strokes (also cleans a stale failed-ring attempt out of
+        // a later real cast) and keep its strokes out of the content set. Payload
+        // coords are normalized [0,1], so the stitch radius is the normalized
+        // micro-merge radius and the canvas is the unit square.
+        List<Integer> nonRingIds = new ArrayList<>();
+        List<List<org.joml.Vector2f>> nonRingStrokes = new ArrayList<>();
+        for (var e : byStroke.entrySet()) {
+            if (ringIds.contains(e.getKey())) continue;
+            nonRingIds.add(e.getKey());
+            List<org.joml.Vector2f> s = new ArrayList<>(e.getValue().size());
+            for (Point p : e.getValue()) s.add(new org.joml.Vector2f(p.x(), p.y()));
+            nonRingStrokes.add(s);
+        }
+        java.util.Set<Integer> ringInProgressIds = new java.util.LinkedHashSet<>();
+        TriggerEvaluator.findRingInProgress(nonRingStrokes,
+                        Config.MICRO_MERGE_RADIUS.get().floatValue(), 1f, 1f)
+                .ifPresent(indices -> {
+                    for (int idx : indices) ringInProgressIds.add(nonRingIds.get(idx));
+                });
+        boolean ringInProgress = !ringInProgressIds.isEmpty();
+        if (ringInProgress) {
+            WitchHatAtelierMod.LOGGER.info(
+                    "[SpellPipeline] Excluded ring-in-progress chain from content (strokes={}).",
+                    ringInProgressIds);
+        }
 
         List<List<Point>> contentStrokes = new ArrayList<>();
         for (var e : byStroke.entrySet()) {
-            if (ringIds.contains(e.getKey())) continue;
+            if (ringIds.contains(e.getKey()) || ringInProgressIds.contains(e.getKey())) continue;
             contentStrokes.add(e.getValue());
         }
         if (contentStrokes.isEmpty()) {
+            if (!ringClosed && ringInProgress) {
+                // Only an unfinished ring on the paper — nothing to summarize yet.
+                if (player != null && dispatch != Dispatch.PLATE) {
+                    player.displayClientMessage(
+                            Component.translatable("hud.witchhatateliermod.ring_unfinished")
+                                    .withStyle(ChatFormatting.GRAY), true);
+                }
+                return new PipelineResult(CastOutcome.NONE, null);
+            }
             WitchHatAtelierMod.LOGGER.info(
                     "[SpellPipeline] No content strokes (ring={} of {} stroke(s)) — nothing to recognize.",
                     ringIds.size(), byStroke.size());
-            return CastOutcome.UNRECOGNIZED;
+            InscriptionSummary summary = InscriptionSummary.illegible();
+            sendActionBar(player, dispatch, ringClosed, summary, false);
+            return new PipelineResult(
+                    ringClosed ? CastOutcome.UNRECOGNIZED : CastOutcome.NONE, summary);
         }
 
         float microR = Config.MICRO_MERGE_RADIUS.get().floatValue();
@@ -383,7 +464,7 @@ public final class SaveGestureHandler {
                         player != null ? ModCommands.intendedLabel(player.getUUID()) : null,
                         bo != null ? "PLACED_PAPER" : "PAPER_ITEM",
                         bo != null ? new int[]{bo.getX(), bo.getY(), bo.getZ()} : null,
-                        debugMode,
+                        debugMode, ringClosed,
                         i, clusters.size(), TemplateRegistry.get().size(),
                         clusters.get(i).strokes(), processed.cloud(), processed.indicativeAngle(),
                         r, ranked, trace));
@@ -421,21 +502,22 @@ public final class SaveGestureHandler {
             }
         }
 
-        // Content stroke IDs whose cluster the recognizer could not read. Stored on the
-        // placed-paper block so the renderer can tint them red once the paper is spent
-        // (retrospective "these strokes didn't read" feedback — never live/pre-cast).
-        // Always written (empty when everything read) so a redraw clears a stale set.
+        // Content stroke IDs whose cluster the recognizer could not read — the
+        // "these strokes didn't read" review feedback. Carried in the inscription
+        // summary (item + block canvases tint them red on reopen) and mirrored on
+        // the placed-paper block for its renderer. Always computed (empty when
+        // everything read) so a redraw clears a stale set.
+        java.util.Set<Integer> unrecognizedIds = new java.util.LinkedHashSet<>();
+        for (int i = 0; i < clusters.size(); i++) {
+            if (!RecognitionResult.UNKNOWN.equals(recognitions.get(i).spellName())) continue;
+            for (List<Point> stroke : clusters.get(i).strokes()) {
+                for (Point p : stroke) unrecognizedIds.add(p.strokeID());
+            }
+        }
+        int[] unrecognizedArr = unrecognizedIds.stream().mapToInt(Integer::intValue).toArray();
         if (blockOrigin != null
                 && level.getBlockEntity(blockOrigin) instanceof PlacedPaperBlockEntity placedPaper) {
-            java.util.Set<Integer> unrecognizedIds = new java.util.LinkedHashSet<>();
-            for (int i = 0; i < clusters.size(); i++) {
-                if (!RecognitionResult.UNKNOWN.equals(recognitions.get(i).spellName())) continue;
-                for (List<Point> stroke : clusters.get(i).strokes()) {
-                    for (Point p : stroke) unrecognizedIds.add(p.strokeID());
-                }
-            }
-            placedPaper.setUnrecognizedStrokeIds(
-                    unrecognizedIds.stream().mapToInt(Integer::intValue).toArray());
+            placedPaper.setUnrecognizedStrokeIds(unrecognizedArr);
         }
 
         // ── Compile the spell graph ───────────────────────────────────────────────
@@ -444,7 +526,7 @@ public final class SaveGestureHandler {
         for (var e : byStroke.entrySet()) {
             if (ringIds.contains(e.getKey())) {
                 ringStrokes.add(e.getValue());
-            } else {
+            } else if (!ringInProgressIds.contains(e.getKey())) {
                 contentIds.add(e.getKey());
             }
         }
@@ -454,16 +536,19 @@ public final class SaveGestureHandler {
         CompileResult result = SpellGraphBuilder.build(trigger, ringStrokes, clusters, recognitions, ctx);
 
         CastOutcome outcome;
+        InscriptionSummary summary;
         if (result.isSuccess()) {
             var graph = result.graph().get();
             WitchHatAtelierMod.LOGGER.info(
                     "[Compiler] Compiled spell graph for player='{}':\n{}", who, graph.toDebugString());
 
             java.util.Optional<ExecutableSpell> executable = MeaningEngine.evaluate(graph, ctx, level);
+            summary = InscriptionSummary.of(result, executable.isPresent(), recogCounts, unrecognizedArr);
 
-            // Stepping on a canvas plate re-casts on every stomp; suppress the per-cast
-            // chat feedback for it so it doesn't spam the triggerer.
-            if (player != null && dispatch != Dispatch.PLATE) {
+            // Verbose per-cast chat is a /spell debug tool only — normal play speaks
+            // through the action bar, in-world effects, and the inscription tooltip.
+            // (PLATE stays excluded so plate stomps never spam the triggerer.)
+            if (debugMode && player != null && dispatch != Dispatch.PLATE) {
                 player.sendSystemMessage(Component.empty()
                         .append(Component.literal("◆ ").withStyle(ChatFormatting.GOLD))
                         .append(Component.literal(graph.core().type().toString())
@@ -486,15 +571,13 @@ public final class SaveGestureHandler {
                             .append(Component.literal("Prepared (no matrix cell for this combination)")
                                     .withStyle(ChatFormatting.GRAY)));
                 }
-                if (debugMode) {
-                    for (String line : graph.toDebugString().split("\n")) {
-                        player.sendSystemMessage(Component.literal(line)
-                                .withStyle(ChatFormatting.GRAY));
-                    }
+                for (String line : graph.toDebugString().split("\n")) {
+                    player.sendSystemMessage(Component.literal(line)
+                            .withStyle(ChatFormatting.GRAY));
                 }
             }
 
-            if (executable.isPresent()) {
+            if (executable.isPresent() && ringClosed) {
                 WitchHatAtelierMod.LOGGER.info(
                         "[MeaningEngine] player='{}' → {}", who, executable.get().toLogString());
 
@@ -528,15 +611,21 @@ public final class SaveGestureHandler {
                         SpellExecutor.run(level, player, spell);
                 }
                 outcome = CastOutcome.CAST;
+            } else if (!ringClosed) {
+                // Plain save (no trigger) — the drawing holds; nothing fires yet.
+                outcome = CastOutcome.NONE;
             } else {
                 // Valid glyph, but no matrix cell resolved — inscription is Prepared.
                 outcome = CastOutcome.PREPARED;
             }
         } else {
             WitchHatAtelierMod.LOGGER.info("[Compiler] Rejected: {}", result.rejectionReason());
-            // Glyphs recognized but structurally invalid = fizzle; nothing legible = unrecognized.
-            outcome = recogCounts.isEmpty() ? CastOutcome.UNRECOGNIZED : CastOutcome.FIZZLE;
-            if (player != null && dispatch != Dispatch.PLATE) {
+            summary = InscriptionSummary.of(result, false, recogCounts, unrecognizedArr);
+            // Glyphs recognized but structurally invalid = fizzle; nothing legible =
+            // unrecognized. A ring-less save stays outcome-silent in the world.
+            outcome = !ringClosed ? CastOutcome.NONE
+                    : recogCounts.isEmpty() ? CastOutcome.UNRECOGNIZED : CastOutcome.FIZZLE;
+            if (debugMode && player != null && dispatch != Dispatch.PLATE) {
                 assert result.rejectionReason() != null;
                 player.sendSystemMessage(Component.empty()
                         .append(Component.literal("◆ ").withStyle(ChatFormatting.DARK_PURPLE))
@@ -549,7 +638,40 @@ public final class SaveGestureHandler {
                 }
             }
         }
-        return outcome;
+        sendActionBar(player, dispatch, ringClosed, summary, ringInProgress);
+        return new PipelineResult(outcome, summary);
+    }
+
+    /**
+     * The one-line, fading feedback above the hotbar — what the drawing turned out to
+     * be, spoken at the moment of saving/casting without touching the chat log. PLATE
+     * dispatch stays silent (a plate re-fires on every stomp). When an unfinished ring
+     * was detected on a ring-less save, the prepared line says so — the player learns
+     * their ring didn't close instead of wondering why nothing happened.
+     */
+    private static void sendActionBar(@Nullable Player player, Dispatch dispatch,
+                                      boolean ringClosed, InscriptionSummary summary,
+                                      boolean ringInProgress) {
+        if (player == null || dispatch == Dispatch.PLATE) return;
+        Component msg = switch (summary.state()) {
+            case READY -> ringClosed
+                    ? Component.translatable("hud.witchhatateliermod.cast",
+                            summary.compositionCompact().orElseGet(Component::empty),
+                            summary.gradeLetter().orElse(Component.literal("?")))
+                    : Component.translatable(
+                            ringInProgress ? "hud.witchhatateliermod.prepared.ring_hint"
+                                           : "hud.witchhatateliermod.prepared",
+                            summary.compositionCompact().orElseGet(Component::empty))
+                            .withStyle(ChatFormatting.WHITE);
+            case INERT -> Component.translatable("hud.witchhatateliermod.inert",
+                            summary.compositionCompact().orElseGet(Component::empty))
+                    .withStyle(ChatFormatting.GRAY);
+            case FIZZLE -> Component.translatable("hud.witchhatateliermod.fizzle")
+                    .withStyle(ChatFormatting.RED);
+            case ILLEGIBLE -> Component.translatable("hud.witchhatateliermod.illegible")
+                    .withStyle(ChatFormatting.GRAY);
+        };
+        player.displayClientMessage(msg, true);
     }
 
     // ── Medium consumption (Phase 3: Prepared → Activated → Used) ──────────────
@@ -652,7 +774,15 @@ public final class SaveGestureHandler {
                                    ItemStack handStack, ItemStack result) {
         if (handStack.isEmpty()) {
             player.setItemInHand(hand, result);
-        } else if (!player.getInventory().add(result)) {
+            return;
+        }
+        // Insert by slot, not Inventory.add: add() copies the stack into the slot and
+        // zeroes the argument, which would orphan the `result` reference that the caller
+        // keeps using for the cast-id and inscription-summary stamps.
+        int slot = player.getInventory().getFreeSlot();
+        if (slot >= 0) {
+            player.getInventory().setItem(slot, result);
+        } else {
             player.drop(result, false);
         }
     }

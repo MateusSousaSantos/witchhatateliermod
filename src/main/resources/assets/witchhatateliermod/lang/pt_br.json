@@ -58,5 +58,39 @@
 
   "screen.witchhatatelier.gesture_canvas.tooltip.wand_required": "Equipe uma Varinha para editar este papel.",
   "screen.witchhatatelier.gesture_canvas.tooltip.read_only": "Apenas visualização",
-  "item.witchhatateliermod.spell_paper.spent": "Gasto"
+  "screen.witchhatatelier.gesture_canvas.status": "%1$s · %2$s",
+  "item.witchhatateliermod.spell_paper.spent": "Gasto",
+
+  "sigil.witchhatateliermod.earth": "Terra",
+  "sigil.witchhatateliermod.air": "Ar",
+  "sigil.witchhatateliermod.water": "Água",
+  "sigil.witchhatateliermod.fire": "Fogo",
+  "sigil.witchhatateliermod.light": "Luz",
+
+  "sign.witchhatateliermod.column": "Coluna",
+  "sign.witchhatateliermod.dispersion": "Dispersão",
+  "sign.witchhatateliermod.bolt": "Raio",
+  "sign.witchhatateliermod.crush": "Esmagar",
+  "sign.witchhatateliermod.convergence": "Convergência",
+  "sign.witchhatateliermod.pull": "Puxar",
+  "sign.witchhatateliermod.collection": "Coleta",
+  "sign.witchhatateliermod.levitation": "Levitação",
+  "sign.witchhatateliermod.crosshair": "Mira",
+
+  "inscription.witchhatateliermod.composition": "%1$s — %2$s",
+  "inscription.witchhatateliermod.composition.compact": "%1$s %2$s",
+  "inscription.witchhatateliermod.sign_count": "%1$s ×%2$s",
+  "inscription.witchhatateliermod.state.ready": "Preparado — feche o anel para conjurar",
+  "inscription.witchhatateliermod.state.inert": "A combinação ainda não possui significado",
+  "inscription.witchhatateliermod.state.fizzle": "Os sigilos conflitam — não será conjurado",
+  "inscription.witchhatateliermod.state.illegible": "Ilegível — os glifos não puderam ser lidos",
+  "inscription.witchhatateliermod.quality": "Qualidade: %s",
+
+  "hud.witchhatateliermod.cast": "✦ %1$s — %2$s",
+  "hud.witchhatateliermod.prepared": "◈ Preparado: %s",
+  "hud.witchhatateliermod.prepared.ring_hint": "◈ Preparado: %s — termine o anel para conjurar",
+  "hud.witchhatateliermod.ring_unfinished": "◈ O anel está inacabado",
+  "hud.witchhatateliermod.inert": "◈ %s — a combinação ainda não possui significado",
+  "hud.witchhatateliermod.fizzle": "✗ O feitiço falha",
+  "hud.witchhatateliermod.illegible": "· A tinta não diz nada"
 }

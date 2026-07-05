@@ -103,7 +103,7 @@ public final class CorpusReplay {
                     recognizer.matchVerbose(processed, contentTemplates);
 
             out.add(new RecognitionLog.Entry(
-                    player, "<replay>", intended, "REPLAY", null, false,
+                    player, "<replay>", intended, "REPLAY", null, false, true,
                     0, 1, registry.size(),
                     rawStrokes, processed.cloud(), processed.indicativeAngle(),
                     result, ranked, traced.trace()));

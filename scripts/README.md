@@ -43,6 +43,7 @@ python scripts/analyze_recognition_log.py
 Each record is one **sigil** (a cast can contain several). Key fields:
 
 - `intended` — ground-truth label from `/spell label` (`null` if you didn't label). `"garbage"` is the negative class.
+- `ringClosed` — whether the live save had a closed activation ring. Ring-less saves are casual mid-drawing snapshots (the pipeline now also recognizes those to stamp the inscription summary); filter on this when a record set should only contain deliberate casts. Replay/crossval records always write `true`.
 - `result` — what the recognizer actually returned: `{spell, score, angle}`.
 - `rawStrokes` — the un-preprocessed ink, grouped per stroke: `[[{x,y}, …], …]`.
 - `processedCloud` — what the chamfer saw: `[{x,y,a,s}, …]` (a = turning angle, s = stroke id).

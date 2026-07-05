@@ -4,6 +4,7 @@ import com.crsocial.witchhatatelier.WitchHatAtelierMod;
 import com.crsocial.witchhatatelier.items.PaperType;
 import com.crsocial.witchhatatelier.items.SpellPaperItem;
 import com.crsocial.witchhatatelier.network.SaveGesturePayload;
+import com.crsocial.witchhatatelier.spell.feedback.InscriptionSummary;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.item.ItemStack;
@@ -41,9 +42,11 @@ public final class GestureCanvasClient {
     public static void openCanvas(ItemStack stack, List<GesturePoint> preloaded,
                                   boolean editable, BlockPos origin) {
         CanvasProfile profile = resolveProfile(stack);
+        // Parse the stamped inscription summary now — the screen never keeps the stack.
+        InscriptionSummary summary = SpellPaperItem.readInscription(stack).orElse(null);
         Minecraft.getInstance().setScreen(
                 new CanvasScreen(profile, preloaded, editable,
-                        (points, ringIds) -> sendToServer(points, origin, ringIds), origin));
+                        (points, ringIds) -> sendToServer(points, origin, ringIds), origin, summary));
     }
 
     /** Opens the canvas for a placed-paper block, using its stored {@link PaperType}. */

@@ -5,6 +5,7 @@ import com.mojang.math.Axis;
 import com.crsocial.witchhatatelier.Config;
 import com.crsocial.witchhatatelier.blocks.PlacedPaper;
 import com.crsocial.witchhatatelier.blocks.PlacedPaperBlockEntity;
+import com.crsocial.witchhatatelier.spell.feedback.InscriptionSummary;
 import com.crsocial.witchhatatelier.spell.trigger.TriggerEvaluator;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
@@ -97,6 +98,13 @@ public class CanvasScreen extends Screen {
     /** Placed-paper block this canvas edits, or {@code null} for in-hand drawing. */
     private final BlockPos sourceBlock;
 
+    /**
+     * Inscription summary read off the opened item stack, or {@code null} for block
+     * canvases (which read their block entity instead) and never-recognized papers.
+     * Parsed at open time — the screen does not keep the stack.
+     */
+    private final InscriptionSummary itemSummary;
+
     // ── World-match rotation (set in init) ───────────────────────────────────────
     // For a placed paper on a horizontal face the canvas is spun so it matches the
     // physical paper as the player currently sees it. 0 = axis-aligned (in-hand, walls).
@@ -164,12 +172,22 @@ public class CanvasScreen extends Screen {
                         boolean editable,
                         BiConsumer<List<GesturePoint>, List<Integer>> saveHandler,
                         BlockPos sourceBlock) {
+        this(profile, preloadedPoints, editable, saveHandler, sourceBlock, null);
+    }
+
+    public CanvasScreen(CanvasProfile profile,
+                        List<GesturePoint> preloadedPoints,
+                        boolean editable,
+                        BiConsumer<List<GesturePoint>, List<Integer>> saveHandler,
+                        BlockPos sourceBlock,
+                        InscriptionSummary itemSummary) {
         super(Component.translatable(profile.titleKey()));
         this.profile         = profile;
         this.readOnly        = !editable;
         this.saveHandler     = saveHandler;
         this.preloadedPoints = preloadedPoints;
         this.sourceBlock     = sourceBlock;
+        this.itemSummary     = itemSummary;
     }
 
     // ════════════════════════════════════════════════════════════════════════════
@@ -214,19 +232,40 @@ public class CanvasScreen extends Screen {
     }
 
     /**
-     * Resolves which loaded strokes the recognizer couldn't read on the source placed
-     * paper, so {@link #renderCanvas} can tint them red — a review of what failed after a
-     * cast attempt. Item canvases (no source block) never show it. No {@code spent} gate:
-     * a spent paper can't be reopened, so the reachable case is a Prepared/fizzled paper
-     * still holding its ink.
+     * The pipeline's conclusion about the drawing this canvas holds: the stamped item
+     * summary for in-hand papers, the block entity's for placed papers. Empty until a
+     * save has run the pipeline (or for debug canvases with neither source).
+     */
+    private Optional<InscriptionSummary> resolveSummary() {
+        if (sourceBlock == null) return Optional.ofNullable(itemSummary);
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.level != null
+                && mc.level.getBlockEntity(sourceBlock) instanceof PlacedPaperBlockEntity be) {
+            return Optional.ofNullable(be.getInscription());
+        }
+        return Optional.empty();
+    }
+
+    /**
+     * Resolves which loaded strokes the recognizer couldn't read, so {@link #renderCanvas}
+     * can tint them red — a review of what failed after the last save. Placed papers read
+     * their block entity; item canvases read the stamped inscription summary. No
+     * {@code spent} gate: a spent paper can't be reopened, so the reachable case is a
+     * Prepared/fizzled paper still holding its ink.
      */
     private void computeUnrecognizedStrokes() {
         unrecognizedStrokeIndices = Set.of();
-        if (sourceBlock == null) return;
-        Minecraft mc = Minecraft.getInstance();
-        if (mc.level == null
-                || !(mc.level.getBlockEntity(sourceBlock) instanceof PlacedPaperBlockEntity be)) return;
-        int[] unrec = be.getUnrecognizedStrokeIds();
+        int[] unrec;
+        if (sourceBlock != null) {
+            Minecraft mc = Minecraft.getInstance();
+            if (mc.level == null
+                    || !(mc.level.getBlockEntity(sourceBlock) instanceof PlacedPaperBlockEntity be)) return;
+            unrec = be.getUnrecognizedStrokeIds();
+        } else if (itemSummary != null) {
+            unrec = itemSummary.unrecognizedStrokeIds();
+        } else {
+            return;
+        }
         if (unrec.length == 0) return;
 
         // CanvasPointStore.denormalize drops empty stroke IDs but keeps ascending order, so
@@ -368,6 +407,8 @@ public class CanvasScreen extends Screen {
                     titleX, displayY + displayH + 4, 0xFFAAAAAA);
         }
 
+        renderStatusHeader(gui, titleX);
+
         if (zoom > 1.0f) {
             String label = String.format("%d×", (int) zoom);
             gui.drawString(font, label,
@@ -376,6 +417,29 @@ public class CanvasScreen extends Screen {
         }
 
         super.render(gui, mouseX, mouseY, partialTick);
+    }
+
+    /**
+     * Status lines under the canvas: what the last pipeline pass concluded about this
+     * drawing — composition + grade when a spell compiled, and the state line so a
+     * reopened paper reads at a glance (Prepared / inert / fizzle / illegible).
+     */
+    private void renderStatusHeader(GuiGraphics gui, int centerX) {
+        Optional<InscriptionSummary> summary = resolveSummary();
+        if (summary.isEmpty()) return;
+        InscriptionSummary s = summary.get();
+
+        int y = displayY + displayH + 4 + (readOnly ? font.lineHeight + 2 : 0);
+        Optional<net.minecraft.network.chat.MutableComponent> composition = s.composition();
+        if (composition.isPresent()) {
+            Component line = s.gradeLetter()
+                    .map(grade -> (Component) Component.translatable(
+                            "screen.witchhatatelier.gesture_canvas.status", composition.get(), grade))
+                    .orElse(composition.get());
+            gui.drawCenteredString(font, line, centerX, y, 0xFFFFFFFF);
+            y += font.lineHeight + 2;
+        }
+        gui.drawCenteredString(font, s.stateLine(), centerX, y, 0xFFFFFFFF);
     }
 
     @Override
@@ -521,9 +585,15 @@ public class CanvasScreen extends Screen {
             // closed ring would fire on every unrelated stroke.
             if (!readOnly && !inputLocked && isTriggerPhaseEnabled() && committed != null) {
                 int justReleasedStrokeId = pointStore.strokes().size() - 1;
+                // Stitch radius scales with canvas size (floor: the absolute pixel value)
+                // so multi-stroke rings connect as reliably on a 1024px canvas as on 128px.
+                float stitchEps = Math.max(
+                        Config.SNAP_EPSILON_PIXELS.get().floatValue(),
+                        Config.SNAP_EPSILON_CANVAS_FRACTION.get().floatValue()
+                                * Math.min(canvasSize.width(), canvasSize.height()));
                 Optional<TriggerEvaluator.TriggerResult> trig = TriggerEvaluator.evaluate(
                         pointStore.strokes(),
-                        Config.SNAP_EPSILON_PIXELS.get().floatValue(),
+                        stitchEps,
                         canvasSize.width(),
                         canvasSize.height());
                 if (trig.isPresent() && trig.get().ringStrokeIds().contains(justReleasedStrokeId)) {

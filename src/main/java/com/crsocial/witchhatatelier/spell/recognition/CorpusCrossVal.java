@@ -162,7 +162,7 @@ public final class CorpusCrossVal {
                 // Persist the augmented (realistic generalization) prediction for inspection.
                 List<PDollarPlusRecognizer.Scored> ranked = recognizer.matchVerbose(proc, augTemplates);
                 logOut.add(new RecognitionLog.Entry(
-                        fold.getKey(), "<crossval>", r.intended(), "CROSSVAL", null, false,
+                        fold.getKey(), "<crossval>", r.intended(), "CROSSVAL", null, false, true,
                         0, 1, augTemplates.size(), r.strokes(), proc.cloud(), proc.indicativeAngle(),
                         augTraced.result(), ranked, augTraced.trace()));
             }

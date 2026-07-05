@@ -47,37 +47,7 @@ public final class TriggerEvaluator {
                                                    float snapEpsilon,
                                                    float canvasW,
                                                    float canvasH) {
-        int n = strokes.size();
-        if (n == 0) return Optional.empty();
-
-        // ── Endpoint connectivity ───────────────────────────────────────────────
-        int[] parent = new int[n];
-        for (int i = 0; i < n; i++) parent[i] = i;
-
-        // Union strokes whose endpoints stitch together into the same chain.
-        for (int i = 0; i < n; i++) {
-            List<Vector2f> si = strokes.get(i);
-            if (si.isEmpty()) continue;
-            Vector2f hi = si.getFirst();
-            Vector2f ti = si.getLast();
-            for (int j = i + 1; j < n; j++) {
-                List<Vector2f> sj = strokes.get(j);
-                if (sj.isEmpty()) continue;
-                Vector2f hj = sj.getFirst();
-                Vector2f tj = sj.getLast();
-
-                if (within(hi, hj, snapEpsilon) || within(hi, tj, snapEpsilon)
-                        || within(ti, hj, snapEpsilon) || within(ti, tj, snapEpsilon)) {
-                    union(parent, i, j);
-                }
-            }
-        }
-
-        // Group strokes by connected component (= stroke chain).
-        Map<Integer, List<Integer>> chains = new LinkedHashMap<>();
-        for (int i = 0; i < n; i++) {
-            chains.computeIfAbsent(find(parent, i), k -> new ArrayList<>()).add(i);
-        }
+        if (strokes.isEmpty()) return Optional.empty();
 
         // ── Evaluate every chain for closure + encapsulation ────────────────────
         float minArea       = Config.MIN_RING_AREA_FRACTION.get().floatValue() * canvasW * canvasH;
@@ -85,7 +55,7 @@ public final class TriggerEvaluator {
         float gapFraction   = Config.RING_CLOSURE_GAP_FRACTION.get().floatValue();
         float maxRadialDev  = Config.RING_MAX_RADIAL_DEVIATION.get().floatValue();
 
-        for (List<Integer> chain : chains.values()) {
+        for (List<Integer> chain : buildChains(strokes, snapEpsilon)) {
             // ── Gate 0: geometric closure (winding + gap + roundness) ───────────
             List<Vector2f> path = orderedChainPath(strokes, chain, snapEpsilon);
             if (!isClosedLoop(path, minWinding, gapFraction, maxRadialDev)) continue;
@@ -114,6 +84,80 @@ public final class TriggerEvaluator {
             return Optional.of(new TriggerResult(chain, enclosed));
         }
         return Optional.empty();
+    }
+
+    /**
+     * Relaxed detection of an <b>unfinished</b> ring: a chain that sweeps most of a
+     * turn ({@code ringInProgressMinWindingDegrees}), is ring-sized, and encloses at
+     * least one other stroke — but need not close (no gap/roundness gates, which an
+     * in-progress ring fails by definition). The server pipeline uses this to keep a
+     * ring-in-progress out of sigil clustering on saves, where its hull would
+     * otherwise swallow every sigil into one unrecognizable cluster.
+     *
+     * @return the stroke indices of the largest qualifying chain, or empty
+     */
+    public static Optional<List<Integer>> findRingInProgress(List<List<Vector2f>> strokes,
+                                                             float snapEpsilon,
+                                                             float canvasW,
+                                                             float canvasH) {
+        if (strokes.isEmpty()) return Optional.empty();
+
+        float minArea    = Config.MIN_RING_AREA_FRACTION.get().floatValue() * canvasW * canvasH;
+        float minWinding = (float) Math.toRadians(Config.RING_IN_PROGRESS_MIN_WINDING_DEGREES.get());
+
+        List<Integer> best = null;
+        float bestArea = -1f;
+        for (List<Integer> chain : buildChains(strokes, snapEpsilon)) {
+            List<Vector2f> path = orderedChainPath(strokes, chain, snapEpsilon);
+            if (path == null || path.size() < 3) continue;
+            if (absWinding(path) < minWinding) continue;
+
+            float[] bbox = boundingBox(strokes, chain);
+            float area = (bbox[2] - bbox[0]) * (bbox[3] - bbox[1]);
+            if (area < minArea) continue;
+            if (findEnclosed(strokes, chain, bbox).isEmpty()) continue;
+
+            if (area > bestArea) {
+                bestArea = area;
+                best = chain;
+            }
+        }
+        return Optional.ofNullable(best);
+    }
+
+    // ── Chain grouping (endpoint connectivity) ────────────────────────────────────
+
+    /** Groups strokes into chains: connected components under endpoint stitching. */
+    private static Iterable<List<Integer>> buildChains(List<List<Vector2f>> strokes,
+                                                       float snapEpsilon) {
+        int n = strokes.size();
+        int[] parent = new int[n];
+        for (int i = 0; i < n; i++) parent[i] = i;
+
+        // Union strokes whose endpoints stitch together into the same chain.
+        for (int i = 0; i < n; i++) {
+            List<Vector2f> si = strokes.get(i);
+            if (si.isEmpty()) continue;
+            Vector2f hi = si.getFirst();
+            Vector2f ti = si.getLast();
+            for (int j = i + 1; j < n; j++) {
+                List<Vector2f> sj = strokes.get(j);
+                if (sj.isEmpty()) continue;
+                Vector2f hj = sj.getFirst();
+                Vector2f tj = sj.getLast();
+
+                if (within(hi, hj, snapEpsilon) || within(hi, tj, snapEpsilon)
+                        || within(ti, hj, snapEpsilon) || within(ti, tj, snapEpsilon)) {
+                    union(parent, i, j);
+                }
+            }
+        }
+
+        Map<Integer, List<Integer>> chains = new LinkedHashMap<>();
+        for (int i = 0; i < n; i++) {
+            chains.computeIfAbsent(find(parent, i), k -> new ArrayList<>()).add(i);
+        }
+        return chains.values();
     }
 
     // ── Geometric closure (winding + gap + roundness) ─────────────────────────────
@@ -188,31 +232,21 @@ public final class TriggerEvaluator {
                                         float maxRadialDev) {
         if (path == null || path.size() < 3) return false;
 
-        // Centroid.
-        float cx = 0f, cy = 0f;
-        for (Vector2f p : path) { cx += p.x; cy += p.y; }
-        cx /= path.size();
-        cy /= path.size();
+        if (absWinding(path) < minWinding) return false;
 
-        // Winding angle around the centroid + radial mean.
-        double winding = 0.0;
+        // Radial mean + bounding box (around the centroid).
+        float[] c = centroid(path);
+        float cx = c[0], cy = c[1];
         double radSum = 0.0;
         float minX = Float.MAX_VALUE, minY = Float.MAX_VALUE, maxX = -Float.MAX_VALUE, maxY = -Float.MAX_VALUE;
-        float prevX = path.getFirst().x - cx, prevY = path.getFirst().y - cy;
         for (Vector2f p : path) {
             float vx = p.x - cx, vy = p.y - cy;
-            // signed angle from previous radial vector to this one, in (-π, π]
-            float cross = prevX * vy - prevY * vx;
-            float dot   = prevX * vx + prevY * vy;
-            if (cross != 0f || dot != 0f) winding += Math.atan2(cross, dot);
-            prevX = vx; prevY = vy;
             radSum += Math.sqrt((double) vx * vx + (double) vy * vy);
             if (p.x < minX) minX = p.x;
             if (p.y < minY) minY = p.y;
             if (p.x > maxX) maxX = p.x;
             if (p.y > maxY) maxY = p.y;
         }
-        if (Math.abs(winding) < minWinding) return false;
 
         // Scale-relative endpoint gap.
         float diag = (float) Math.sqrt((double)(maxX - minX) * (maxX - minX)
@@ -234,6 +268,32 @@ public final class TriggerEvaluator {
         }
         double radialDev = Math.sqrt(varSum / path.size()) / meanRad;
         return radialDev <= maxRadialDev;
+    }
+
+    private static float[] centroid(List<Vector2f> path) {
+        float cx = 0f, cy = 0f;
+        for (Vector2f p : path) { cx += p.x; cy += p.y; }
+        return new float[]{cx / path.size(), cy / path.size()};
+    }
+
+    /**
+     * Total swept angle {@code |Σ Δθ|} of the path around its own centroid, in radians —
+     * a full circle sweeps 2π, a C-shape less, a spiral more.
+     */
+    private static float absWinding(List<Vector2f> path) {
+        float[] c = centroid(path);
+        double winding = 0.0;
+        float prevX = path.getFirst().x - c[0], prevY = path.getFirst().y - c[1];
+        for (Vector2f p : path) {
+            float vx = p.x - c[0], vy = p.y - c[1];
+            // signed angle from previous radial vector to this one, in (-π, π]
+            float cross = prevX * vy - prevY * vx;
+            float dot   = prevX * vx + prevY * vy;
+            if (cross != 0f || dot != 0f) winding += Math.atan2(cross, dot);
+            prevX = vx;
+            prevY = vy;
+        }
+        return (float) Math.abs(winding);
     }
 
     // ── Bounding box + enclosure ─────────────────────────────────────────────────

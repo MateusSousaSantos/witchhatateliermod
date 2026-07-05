@@ -51,8 +51,16 @@ public class Config {
     public static final ModConfigSpec.DoubleValue SNAP_EPSILON_PIXELS = BUILDER
             .comment("Endpoint stitching radius (canvas pixels). Strokes whose head or tail land",
                     "within this distance of another stroke's endpoint are merged into a chain.",
+                    "Acts as the floor; see snapEpsilonCanvasFraction for large canvases.",
                     "Range: 1 – 30. Default: 8.")
             .defineInRange("snapEpsilonPixels", 8.0, 1.0, 30.0);
+    public static final ModConfigSpec.DoubleValue SNAP_EPSILON_CANVAS_FRACTION = BUILDER
+            .comment("Endpoint stitching radius as a fraction of the canvas short dimension. The",
+                    "effective radius is max(snapEpsilonPixels, fraction × shortDim), so multi-stroke",
+                    "rings stitch as reliably on a 1024px canvas as on a 128px one. 0 disables the",
+                    "scaling and keeps the absolute pixel radius everywhere.",
+                    "Range: 0.0 – 0.1. Default: 0.02 (≈ 20 px on a 1024 canvas).")
+            .defineInRange("snapEpsilonCanvasFraction", 0.02, 0.0, 0.1);
     public static final ModConfigSpec.DoubleValue CLOSURE_EPSILON_PIXELS = BUILDER
             .comment("Closure radius (canvas pixels). NOTE: ring closure is now decided by the",
                     "geometric winding/gap/roundness test below (ringMinWindingDegrees etc.), not",
@@ -66,21 +74,32 @@ public class Config {
             .comment("Total winding angle (degrees) the ring path must sweep around its own centroid",
                     "to count as a closed loop. A full circle sweeps 360°; lowering this accepts",
                     "rings whose ends don't quite meet, while a C-shape/open arc stays below it.",
-                    "This is the primary 'did it go all the way around' signal.",
-                    "Range: 180 – 360. Default: 300.")
-            .defineInRange("ringMinWindingDegrees", 300.0, 180.0, 360.0);
+                    "This is the primary 'did it go all the way around' signal. Kept close to a full",
+                    "turn so a loopy/spiral sigil or sign stroke (content, not the ring) can't satisfy",
+                    "it on its own and misfire a cast.",
+                    "Range: 180 – 360. Default: 345.")
+            .defineInRange("ringMinWindingDegrees", 345.0, 180.0, 360.0);
     public static final ModConfigSpec.DoubleValue RING_CLOSURE_GAP_FRACTION = BUILDER
             .comment("Maximum gap between the ring path's first and last point, as a fraction of the",
                     "ring's bounding-box diagonal. Size-independent replacement for the absolute",
                     "closureEpsilonPixels gap: a big ring may leave a proportionally bigger gap.",
-                    "Range: 0.05 – 0.6. Default: 0.25.")
-            .defineInRange("ringClosureGapFraction", 0.25, 0.05, 0.6);
+                    "Kept tight so the ring's ends must nearly meet, not merely come close.",
+                    "Range: 0.05 – 0.6. Default: 0.10.")
+            .defineInRange("ringClosureGapFraction", 0.10, 0.05, 0.6);
     public static final ModConfigSpec.DoubleValue RING_MAX_RADIAL_DEVIATION = BUILDER
-            .comment("Lenient roundness ceiling: max radial deviation (stdev/mean of point distance",
+            .comment("Roundness ceiling: max radial deviation (stdev/mean of point distance",
                     "to the centroid) for a path to count as a ring. Rejects degenerate near-line",
                     "'loops' while still passing ellipses and even square rings. Set high to disable.",
-                    "Range: 0.1 – 1.5. Default: 0.6.")
-            .defineInRange("ringMaxRadialDeviation", 0.6, 0.1, 1.5);
+                    "Range: 0.1 – 1.5. Default: 0.45.")
+            .defineInRange("ringMaxRadialDeviation", 0.45, 0.1, 1.5);
+    public static final ModConfigSpec.DoubleValue RING_IN_PROGRESS_MIN_WINDING_DEGREES = BUILDER
+            .comment("Winding angle (degrees) above which a large, content-enclosing stroke chain is",
+                    "treated as a ring-in-progress and kept OUT of sigil clustering on saves (its",
+                    "hull would otherwise swallow every sigil into one unrecognizable cluster).",
+                    "Below the closed-loop threshold (ringMinWindingDegrees) so a partial ring is",
+                    "caught; above half a turn so ordinary curved sigil strokes are not.",
+                    "Range: 90 – 330. Default: 210.")
+            .defineInRange("ringInProgressMinWindingDegrees", 210.0, 90.0, 330.0);
 
     // ── Sigil clustering (server-side; normalized [0,1] space) ──────────────────
 

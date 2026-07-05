@@ -5,6 +5,7 @@ import com.crsocial.witchhatatelier.blocks.PlacedPaper;
 import com.crsocial.witchhatatelier.blocks.PlacedPaperBlockEntity;
 import com.crsocial.witchhatatelier.client.gesture.GestureCanvasClient;
 import com.crsocial.witchhatatelier.client.gesture.GesturePoint;
+import com.crsocial.witchhatatelier.spell.feedback.InscriptionSummary;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.component.DataComponents;
@@ -31,6 +32,7 @@ import org.jetbrains.annotations.NotNull;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -176,6 +178,25 @@ public class SpellPaperItem extends Item {
         stack.set(DataComponents.CUSTOM_DATA, CustomData.of(tag));
     }
 
+    // ── Inscription summary ──────────────────────────────────────────────────────
+    // What the spell pipeline concluded about the drawing, stamped after every save
+    // so the tooltip and the reopened canvas can show what the paper holds.
+
+    /** Writes the pipeline's conclusion into the paper's NBT (copy-and-merge, like {@link #markSpent}). */
+    public static void stampInscription(ItemStack stack, InscriptionSummary summary) {
+        CustomData existing = stack.get(DataComponents.CUSTOM_DATA);
+        CompoundTag tag = existing != null ? existing.copyTag() : new CompoundTag();
+        tag.put(InscriptionSummary.NBT_KEY, summary.toNbt());
+        stack.set(DataComponents.CUSTOM_DATA, CustomData.of(tag));
+    }
+
+    /** Reads the stamped inscription summary, empty for papers saved before the pipeline ran. */
+    public static Optional<InscriptionSummary> readInscription(ItemStack stack) {
+        CustomData customData = stack.get(DataComponents.CUSTOM_DATA);
+        if (customData == null) return Optional.empty();
+        return InscriptionSummary.fromNbt(customData.copyTag());
+    }
+
     // ── Channeled-cast tracking ────────────────────────────────────────────────
     // A channeled cast stamps a unique id into the paper's NBT at start. Because
     // an ItemStack's object identity is NOT preserved across inventory slot moves,
@@ -224,7 +245,16 @@ public class SpellPaperItem extends Item {
     public void appendHoverText(@NotNull ItemStack stack, @NotNull TooltipContext context,
                                 @NotNull List<Component> tooltip, @NotNull TooltipFlag flag) {
         super.appendHoverText(stack, context, tooltip, flag);
-        if (!blank && isSpent(stack)) {
+        if (blank) return;
+        boolean spent = isSpent(stack);
+        readInscription(stack).ifPresent(summary -> {
+            summary.composition().ifPresent(tooltip::add);
+            // The state line describes what will happen when the ring closes — once the
+            // paper is spent that ring already closed, so the hint would be stale/wrong.
+            if (!spent) tooltip.add(summary.stateLine());
+            summary.qualityLine().ifPresent(tooltip::add);
+        });
+        if (spent) {
             tooltip.add(Component.translatable("item.witchhatateliermod.spell_paper.spent")
                     .withStyle(ChatFormatting.DARK_GRAY, ChatFormatting.ITALIC));
         }

@@ -49,6 +49,7 @@ public final class RecognitionLog {
             String medium,
             int[] blockOrigin,
             boolean debugMode,
+            boolean ringClosed,
             int sigilIndex,
             int sigilCount,
             int templateCount,
@@ -125,6 +126,9 @@ public final class RecognitionLog {
             root.add("blockOrigin", com.google.gson.JsonNull.INSTANCE);
         }
         root.addProperty("debugMode", e.debugMode());
+        // Whether the live save had a closed activation ring. Ring-less saves are casual
+        // mid-drawing snapshots — corpus tooling can filter them out via this flag.
+        root.addProperty("ringClosed", e.ringClosed());
         root.addProperty("sigilIndex", e.sigilIndex());
         root.addProperty("sigilCount", e.sigilCount());
         root.addProperty("templateCount", e.templateCount());

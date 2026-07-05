@@ -1,6 +1,7 @@
 package com.crsocial.witchhatatelier.blocks;
 
 import com.crsocial.witchhatatelier.items.PaperType;
+import com.crsocial.witchhatatelier.spell.feedback.InscriptionSummary;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
@@ -35,6 +36,13 @@ public class PlacedPaperBlockEntity extends BlockEntity {
      * cast has finished) — as retrospective "these didn't read" feedback.
      */
     private int[] unrecognizedStrokeIds = new int[0];
+    /**
+     * What the spell pipeline concluded about the current drawing, written after every
+     * save (ring-less included). Read client-side by the canvas status header; synced
+     * with the rest of the BE state. {@code null} until the first pipeline pass.
+     */
+    @Nullable
+    private InscriptionSummary inscription = null;
 
     public PlacedPaperBlockEntity(BlockPos pos, BlockState state) {
         this(ModBlockEntities.PLACED_PAPER.get(), pos, state);
@@ -88,6 +96,15 @@ public class PlacedPaperBlockEntity extends BlockEntity {
         syncToClient();
     }
 
+    @Nullable
+    public InscriptionSummary getInscription() { return inscription; }
+
+    public void setInscription(@Nullable InscriptionSummary inscription) {
+        this.inscription = inscription;
+        setChanged();
+        syncToClient();
+    }
+
     private void syncToClient() {
         if (level != null && !level.isClientSide) {
             level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), Block.UPDATE_CLIENTS);
@@ -116,6 +133,9 @@ public class PlacedPaperBlockEntity extends BlockEntity {
         tag.putBoolean("spent", spent);
         tag.putInt("rotation", rotationSegment);
         tag.putIntArray("unrecognizedStrokes", unrecognizedStrokeIds);
+        if (inscription != null) {
+            tag.put(InscriptionSummary.NBT_KEY, inscription.toNbt());
+        }
     }
 
     @Override
@@ -131,5 +151,6 @@ public class PlacedPaperBlockEntity extends BlockEntity {
         spent = tag.getBoolean("spent");
         rotationSegment = tag.getInt("rotation");
         unrecognizedStrokeIds = tag.getIntArray("unrecognizedStrokes");
+        inscription = InscriptionSummary.fromNbt(tag).orElse(null);
     }
 }
