@@ -19,5 +19,9 @@
     "per_tick": 20,
     "per_use": 250
   },
+  "context_modifiers": [
+    { "when": "raining",    "power": 1.5, "aoe": 1.25 },
+    { "when": "thundering", "power": 1.25 }
+  ],
   "_comment": "Water + Column -> a blockless column of bubble particles rising from the glyph (WaterPillarEffect places no water; the spawn_blocks entry's blocks_per_magnitude only sets the column length / drain depth, and its 'block' field is unused). Length scales with SignBundle.count x Quality x Size. Add a Crush sign to invert it into draining the water along the column instead."
 }

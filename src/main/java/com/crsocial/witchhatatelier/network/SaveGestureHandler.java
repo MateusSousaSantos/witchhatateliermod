@@ -459,7 +459,7 @@ public final class SaveGestureHandler {
             WitchHatAtelierMod.LOGGER.info(
                     "[Compiler] Compiled spell graph for player='{}':\n{}", who, graph.toDebugString());
 
-            java.util.Optional<ExecutableSpell> executable = MeaningEngine.evaluate(graph, ctx);
+            java.util.Optional<ExecutableSpell> executable = MeaningEngine.evaluate(graph, ctx, level);
 
             // Stepping on a canvas plate re-casts on every stomp; suppress the per-cast
             // chat feedback for it so it doesn't spam the triggerer.

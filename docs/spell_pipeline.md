@@ -398,6 +398,7 @@ names:
 | `effects[]` | `:105-109` | Raw payloads the effect kind parses (`EffectKind.parsePayload`). |
 | `stacking_curve` | `:111-112` | LINEAR / LOGARITHMIC / CAPPED (default LINEAR). |
 | `cost.per_tick` / `per_use` | `:114-116` | Fuel costs (default 0.0). |
+| `context_modifiers[]` | `MatrixLoader` | Optional environmental `power`/`aoe` multipliers — the **Context** axis as data. Each entry is `{ "when": <condition>, "power": …, "aoe": … }`; multipliers default to 1.0 and matching entries stack multiplicatively. Conditions live in `ContextCondition` (`raining`, `thundering`, `day`, `night`, `underground`, `exposed_to_sky`, `hot`, `cold`); unknown names warn and are dropped. Evaluated in `MeaningEngine` against the source block (surface cast) or hand-cast origin; because the boost raises `power`, it also raises fuel cost through the §4.5 power→cost scaling. |
 
 **Missing cells are not errors** (`MatrixLoader.java:30-32`): an unregistered
 `(sigil, sign)` pair simply makes the engine return empty and the inscription falls

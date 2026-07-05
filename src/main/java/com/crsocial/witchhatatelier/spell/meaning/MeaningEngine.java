@@ -12,6 +12,9 @@ import com.crsocial.witchhatatelier.spell.meaning.effect.EffectRegistry;
 import com.crsocial.witchhatatelier.spell.meaning.sign.SignBehavior;
 import com.crsocial.witchhatatelier.spell.meaning.sign.SignBehaviorRegistry;
 import com.crsocial.witchhatatelier.spell.meaning.sign.SpellModification;
+import net.minecraft.core.BlockPos;
+import net.minecraft.server.level.ServerLevel;
+import org.jetbrains.annotations.Nullable;
 import org.joml.Vector3f;
 
 import java.util.ArrayList;
@@ -39,10 +42,19 @@ public final class MeaningEngine {
 
     private MeaningEngine() {}
 
-    public static Optional<ExecutableSpell> evaluate(SpellGraph graph, CastingContext ctx) {
+    public static Optional<ExecutableSpell> evaluate(SpellGraph graph, CastingContext ctx,
+                                                     @Nullable ServerLevel level) {
         SigilType element = graph.core().type();
         float quality = graph.core().quality();
         float size = graph.size().normalizedBboxArea();
+
+        // Where to sample the world for context_modifiers: the source block for a surface
+        // cast, else the hand-cast origin in front of the caster. Null level (e.g. a
+        // non-world caller) simply leaves every context multiplier at 1.0.
+        Vector3f o = ctx.originWorld();
+        BlockPos ctxPos = ctx.sourceBlock() != null
+                ? ctx.sourceBlock()
+                : BlockPos.containing(o.x, o.y, o.z);
 
         List<BehaviorOp> ops = new ArrayList<>();
         float maxPower = 0f;
@@ -88,8 +100,11 @@ public final class MeaningEngine {
             float magnitudeScalar = bundle.type().stackingMode() == SignType.StackingMode.MAGNITUDE
                     ? entry.stackingCurve().apply(magnitudeCount) : 1.0f;
 
-            float opPower = entry.basePower() * magnitudeScalar * quality * SizeScaling.powerMultiplier(size);
-            float opAoe = entry.baseAoe() * magnitudeScalar;
+            // Context axis: fold in any environmental multipliers whose condition holds now.
+            float[] ctxMul = contextMultipliers(entry, level, ctxPos, element, bundle.type());
+            float opPower = entry.basePower() * magnitudeScalar * quality
+                    * SizeScaling.powerMultiplier(size) * ctxMul[0];
+            float opAoe = entry.baseAoe() * magnitudeScalar * ctxMul[1];
 
             ops.add(new BehaviorOp(bundle.type(), magnitudeCount,
                     entry.behaviorKind(), kind.get().parsePayload(entry.effects()),
@@ -114,13 +129,14 @@ public final class MeaningEngine {
                 MatrixEntry entry = def.get();
                 Optional<EffectKind> kind = EffectRegistry.get().find(entry.behaviorKind());
                 if (kind.isPresent()) {
-                    float opPower = entry.basePower() * quality * SizeScaling.powerMultiplier(size);
+                    float[] ctxMul = contextMultipliers(entry, level, ctxPos, element, null);
+                    float opPower = entry.basePower() * quality * SizeScaling.powerMultiplier(size) * ctxMul[0];
                     ops.add(new BehaviorOp(null, 1, entry.behaviorKind(),
                             kind.get().parsePayload(entry.effects()),
                             entry.costPerTick(), entry.costPerUse(), forceModifiers));
                     maxPower = opPower;
                     dominantBasePower = entry.basePower();
-                    maxAoe = entry.baseAoe();
+                    maxAoe = entry.baseAoe() * ctxMul[1];
                     totalCostPerTick += entry.costPerTick();
                     totalCostPerUse += entry.costPerUse();
                     WitchHatAtelierMod.LOGGER.info(
@@ -204,6 +220,33 @@ public final class MeaningEngine {
                 element, List.copyOf(ops), finalMagnitude, origin,
                 originWorld, surfaceNormal, finalDirection,
                 totalCostPerTick, totalCostPerUse, null, ctx.sourceBlock()));
+    }
+
+    /**
+     * Combined {@code {power, aoe}} multipliers from an entry's {@code context_modifiers}
+     * whose condition holds at {@code pos}. Returns {@code {1, 1}} when the level is null
+     * (non-world caller) or the cell has no modifiers, so callers can multiply
+     * unconditionally. Matching modifiers stack multiplicatively.
+     */
+    private static float[] contextMultipliers(MatrixEntry entry, @Nullable ServerLevel level,
+                                              BlockPos pos, SigilType element, @Nullable SignType sign) {
+        float p = 1f, a = 1f;
+        if (level != null) {
+            for (ContextModifier cm : entry.contextModifiers()) {
+                if (cm.condition().test(level, pos)) {
+                    p *= cm.powerMultiplier();
+                    a *= cm.aoeMultiplier();
+                }
+            }
+        }
+        if (p != 1f || a != 1f) {
+            WitchHatAtelierMod.LOGGER.info(
+                    "[MeaningEngine] Context modifiers for ({}, {}) at {} → power×{}, aoe×{}.",
+                    element, sign, pos,
+                    String.format(java.util.Locale.ROOT, "%.2f", p),
+                    String.format(java.util.Locale.ROOT, "%.2f", a));
+        }
+        return new float[]{ p, a };
     }
 
     private static Origin originFor(CastingContext.MediumKind medium) {

@@ -127,9 +127,29 @@ public final class MatrixLoader extends SimpleJsonResourceReloadListener {
         float costPerTick = costObj.has("per_tick") ? costObj.get("per_tick").getAsFloat() : 0.0f;
         float costPerUse = costObj.has("per_use") ? costObj.get("per_use").getAsFloat() : 0.0f;
 
+        // Optional environmental overrides — the Context axis, as data. Unknown 'when'
+        // strings are warned and dropped so authors get feedback without a hard failure.
+        List<ContextModifier> contextModifiers = new ArrayList<>();
+        if (root.has("context_modifiers")) {
+            for (JsonElement el : root.getAsJsonArray("context_modifiers")) {
+                JsonObject mo = el.getAsJsonObject();
+                String whenStr = mo.has("when") ? mo.get("when").getAsString() : null;
+                Optional<ContextCondition> cond = ContextCondition.fromId(whenStr);
+                if (cond.isEmpty()) {
+                    WitchHatAtelierMod.LOGGER.warn(
+                            "[MatrixLoader] '{}' context_modifier has unknown when='{}' — skipped.", id, whenStr);
+                    continue;
+                }
+                float pMul = mo.has("power") ? mo.get("power").getAsFloat() : 1.0f;
+                float aMul = mo.has("aoe") ? mo.get("aoe").getAsFloat() : 1.0f;
+                contextModifiers.add(new ContextModifier(cond.get(), pMul, aMul));
+            }
+        }
+
         return Optional.of(new MatrixEntry(
                 sigil.get(), sign, behaviorKind,
                 power, aoe,
-                List.copyOf(effects), curve, costPerTick, costPerUse));
+                List.copyOf(effects), curve, costPerTick, costPerUse,
+                List.copyOf(contextModifiers)));
     }
 }
