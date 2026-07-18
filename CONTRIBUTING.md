@@ -13,7 +13,7 @@ quality.
 
 ### 1. No AI-generated art or images
 
-**All assets and art in this mod are made by a dedicated artist.** That includes
+**All assets and art in this mod are made by a artist.** That includes
 textures, models, GUI art, icons, item/block sprites, particles' source art,
 promotional images — anything visual.
 
@@ -23,7 +23,7 @@ promotional images — anything visual.
   placeholder (e.g. a solid-color or missing-texture block) in your branch and note it
   in the PR so it never gets mistaken for final art.
 
-### 2. AI-assisted code is fine — vibecoding is not
+### 2. AI-assisted code is fine - vibecoding is not
 
 Using an AI assistant to write code is **allowed and welcome**. What's required is that
 *you* understand, own, and have deliberately shaped every line you submit.
@@ -70,33 +70,6 @@ belongs. Read these first:
 - **[`README.md`](README.md)** — what the mod is and how a cast flows end to end.
 - **[`docs/recognizer.md`](docs/recognizer.md)** — the gesture recognizer.
 - **[`docs/spell_pipeline.md`](docs/spell_pipeline.md)** — compilation, meaning, and casting.
-
-A few patterns that matter in practice:
-
-- **Meaning is a matrix, not a list.** A spell is `(Sigil) × (Signs) × (Context)`
-  resolved against data-driven cells. Don't hardcode a spell; add a matrix cell. Adding
-  a sigil/sign should auto-combine with everything already registered.
-- **Mechanics and visuals are decoupled.** The server reads the `ExecutableSpell`; the
-  client reads the `SpellGraph`/visual manifest. Don't make one read the other.
-- **The server is authoritative.** The single client→server crossing is
-  `SaveGesturePayload`. Adding a boundary-crossing step means registering a new payload
-  at the one intended edit site — not a new ad-hoc packet scattered elsewhere.
-- **Prefer data over code.** New content (sigils, signs, spells) is usually JSON in
-  `data/witchhatateliermod/spell_templates/` and `spell_matrix/`, hot-reloadable with
-  `/reload`. Reach for a new `EffectKind` only when the behavior genuinely can't be
-  expressed as data.
-- **Match the local style.** Coordinates are normalized `[0,1]` canvas space until the
-  meaning engine's world-space outputs. Logging goes through
-  `WitchHatAtelierMod.LOGGER` with bracketed stage tags (`[SpellPipeline]`,
-  `[MeaningEngine]`, …). New code should read like the code around it — same comment
-  density, naming, and idioms.
-- **Tunables go in `Config.java`**, commented with their range and default, not as magic
-  numbers buried in logic.
-
-If you're changing recognizer behavior, note that some tuning is done **offline** from
-logged data — see [`scripts/README.md`](scripts/README.md). Don't eyeball threshold
-changes; tune them against the corpus.
-
 ---
 
 ## Workflow
