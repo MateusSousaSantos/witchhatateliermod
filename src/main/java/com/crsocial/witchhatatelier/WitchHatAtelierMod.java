@@ -59,11 +59,9 @@ public class WitchHatAtelierMod {
     }
 
     private void commonSetup(FMLCommonSetupEvent event) {
-        LOGGER.info("COMMON SETUP");
     }
 
     @SubscribeEvent
     public void onServerStarting(ServerStartingEvent event) {
-        LOGGER.info("HELLO from server starting");
     }
 }
