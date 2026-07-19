@@ -85,7 +85,7 @@ public class Config {
                     "closureEpsilonPixels gap: a big ring may leave a proportionally bigger gap.",
                     "Kept tight so the ring's ends must nearly meet, not merely come close.",
                     "Range: 0.05 – 0.6. Default: 0.10.")
-            .defineInRange("ringClosureGapFraction", 0.10, 0.05, 0.6);
+            .defineInRange("ringClosureGapFraction", 0.07, 0.05, 0.6);
     public static final ModConfigSpec.DoubleValue RING_MAX_RADIAL_DEVIATION = BUILDER
             .comment("Roundness ceiling: max radial deviation (stdev/mean of point distance",
                     "to the centroid) for a path to count as a ring. Rejects degenerate near-line",

@@ -59,6 +59,7 @@
   "screen.witchhatatelier.gesture_canvas.tooltip.wand_required": "Equipe uma Varinha para editar este papel.",
   "screen.witchhatatelier.gesture_canvas.tooltip.read_only": "Apenas visualização",
   "screen.witchhatatelier.gesture_canvas.status": "%1$s · %2$s",
+  "screen.witchhatatelier.gesture_canvas.spent_view": "✦ Gasto — a tinta cumpriu seu papel ✦",
   "item.witchhatateliermod.spell_paper.spent": "Gasto",
 
   "sigil.witchhatateliermod.earth": "Terra",

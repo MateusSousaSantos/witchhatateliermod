@@ -42,11 +42,14 @@ public final class GestureCanvasClient {
     public static void openCanvas(ItemStack stack, List<GesturePoint> preloaded,
                                   boolean editable, BlockPos origin) {
         CanvasProfile profile = resolveProfile(stack);
-        // Parse the stamped inscription summary now — the screen never keeps the stack.
+        // Parse the stamped inscription summary + spent flag now — the screen never
+        // keeps the stack.
         InscriptionSummary summary = SpellPaperItem.readInscription(stack).orElse(null);
+        boolean spent = SpellPaperItem.isSpent(stack);
         Minecraft.getInstance().setScreen(
                 new CanvasScreen(profile, preloaded, editable,
-                        (points, ringIds) -> sendToServer(points, origin, ringIds), origin, summary));
+                        (points, ringIds) -> sendToServer(points, origin, ringIds), origin,
+                        summary, spent));
     }
 
     /** Opens the canvas for a placed-paper block, using its stored {@link PaperType}. */

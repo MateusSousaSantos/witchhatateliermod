@@ -59,6 +59,7 @@
   "screen.witchhatatelier.gesture_canvas.tooltip.wand_required": "Equip a Wand to edit this paper.",
   "screen.witchhatatelier.gesture_canvas.tooltip.read_only": "View only",
   "screen.witchhatatelier.gesture_canvas.status": "%1$s · %2$s",
+  "screen.witchhatatelier.gesture_canvas.spent_view": "✦ Spent — the ink has done its work ✦",
   "item.witchhatateliermod.spell_paper.spent": "Spent",
 
   "sigil.witchhatateliermod.earth": "Earth",

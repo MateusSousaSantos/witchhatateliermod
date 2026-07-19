@@ -105,6 +105,9 @@ public class CanvasScreen extends Screen {
      */
     private final InscriptionSummary itemSummary;
 
+    /** Whether the opened item stack was spent (block canvases read their block entity). */
+    private final boolean itemSpent;
+
     // ── World-match rotation (set in init) ───────────────────────────────────────
     // For a placed paper on a horizontal face the canvas is spun so it matches the
     // physical paper as the player currently sees it. 0 = axis-aligned (in-hand, walls).
@@ -172,7 +175,7 @@ public class CanvasScreen extends Screen {
                         boolean editable,
                         BiConsumer<List<GesturePoint>, List<Integer>> saveHandler,
                         BlockPos sourceBlock) {
-        this(profile, preloadedPoints, editable, saveHandler, sourceBlock, null);
+        this(profile, preloadedPoints, editable, saveHandler, sourceBlock, null, false);
     }
 
     public CanvasScreen(CanvasProfile profile,
@@ -180,7 +183,8 @@ public class CanvasScreen extends Screen {
                         boolean editable,
                         BiConsumer<List<GesturePoint>, List<Integer>> saveHandler,
                         BlockPos sourceBlock,
-                        InscriptionSummary itemSummary) {
+                        InscriptionSummary itemSummary,
+                        boolean itemSpent) {
         super(Component.translatable(profile.titleKey()));
         this.profile         = profile;
         this.readOnly        = !editable;
@@ -188,6 +192,7 @@ public class CanvasScreen extends Screen {
         this.preloadedPoints = preloadedPoints;
         this.sourceBlock     = sourceBlock;
         this.itemSummary     = itemSummary;
+        this.itemSpent       = itemSpent;
     }
 
     // ════════════════════════════════════════════════════════════════════════════
@@ -231,6 +236,15 @@ public class CanvasScreen extends Screen {
         }
     }
 
+    /** Whether this canvas shows a spent paper (item flag or the source block entity). */
+    private boolean isSpentView() {
+        if (sourceBlock == null) return itemSpent;
+        Minecraft mc = Minecraft.getInstance();
+        return mc.level != null
+                && mc.level.getBlockEntity(sourceBlock) instanceof PlacedPaperBlockEntity be
+                && be.isSpent();
+    }
+
     /**
      * The pipeline's conclusion about the drawing this canvas holds: the stamped item
      * summary for in-hand papers, the block entity's for placed papers. Empty until a
@@ -250,8 +264,8 @@ public class CanvasScreen extends Screen {
      * Resolves which loaded strokes the recognizer couldn't read, so {@link #renderCanvas}
      * can tint them red — a review of what failed after the last save. Placed papers read
      * their block entity; item canvases read the stamped inscription summary. No
-     * {@code spent} gate: a spent paper can't be reopened, so the reachable case is a
-     * Prepared/fizzled paper still holding its ink.
+     * {@code spent} gate: spent papers open view-only, and the red tint is exactly the
+     * post-mortem detail that view exists for.
      */
     private void computeUnrecognizedStrokes() {
         unrecognizedStrokeIndices = Set.of();
@@ -402,9 +416,12 @@ public class CanvasScreen extends Screen {
                 titleX, displayY - font.lineHeight - 4, 0xFFFFFFFF);
 
         if (readOnly) {
-            gui.drawCenteredString(font,
-                    Component.translatable(profile.readOnlyKey()),
-                    titleX, displayY + displayH + 4, 0xFFAAAAAA);
+            // A spent paper is view-only regardless of the Wand — say so instead of
+            // the misleading "equip a Wand to edit" hint.
+            Component hint = isSpentView()
+                    ? Component.translatable("screen.witchhatatelier.gesture_canvas.spent_view")
+                    : Component.translatable(profile.readOnlyKey());
+            gui.drawCenteredString(font, hint, titleX, displayY + displayH + 4, 0xFFAAAAAA);
         }
 
         renderStatusHeader(gui, titleX);

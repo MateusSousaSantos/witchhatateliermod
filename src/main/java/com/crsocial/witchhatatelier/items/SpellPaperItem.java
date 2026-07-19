@@ -118,10 +118,11 @@ public class SpellPaperItem extends Item {
     @Override
     public @NotNull InteractionResultHolder<ItemStack> use(@NotNull Level level, @NotNull Player player, @NotNull InteractionHand hand) {
         ItemStack stack = player.getItemInHand(hand);
-        if (!blank && isSpent(stack)) {
-            return InteractionResultHolder.fail(stack);
-        }
-        boolean editable = player.getMainHandItem().getItem() instanceof Wand;
+        // A spent paper still opens — view-only — so the player can study the spell
+        // they cast. The read-only canvas never saves, and the server-side save
+        // paths reject spent papers anyway.
+        boolean editable = !(!blank && isSpent(stack))
+                && player.getMainHandItem().getItem() instanceof Wand;
 
         if (level.isClientSide) {
             openCanvasClient(stack, editable);

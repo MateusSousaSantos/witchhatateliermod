@@ -111,8 +111,10 @@ public class PlacedPaper extends Block implements EntityBlock {
     @OnlyIn(Dist.CLIENT)
     protected static void openCanvasFromBlock(Level level, BlockPos pos, ItemStack stack) {
         if (!(level.getBlockEntity(pos) instanceof PlacedPaperBlockEntity be)) return;
-        if (be.isSpent()) return;
-        boolean editable = stack.getItem() instanceof Wand;
+        // A spent paper still opens — view-only — so the player can study the spell
+        // that fired. The read-only canvas never saves, and saveBlockPath rejects
+        // spent papers anyway.
+        boolean editable = !be.isSpent() && stack.getItem() instanceof Wand;
         List<GesturePoint> points = SpellPaperItem.loadPointsFromTag(be.getGestureData());
         GestureCanvasClient.openCanvas(be.getPaperType(), points, editable, pos);
     }
