@@ -35,5 +35,10 @@ public class DataGenerators {
                                 ModBlockLootTableProvider::new,
                                 LootContextParamSets.BLOCK)
                 ),lookupProvider));
+
+        ModBlockTagProvider blockTagProvider = generator.addProvider(event.includeServer(),
+                new ModBlockTagProvider(packOutput, lookupProvider, existingFileHelper));
+        generator.addProvider(event.includeServer(),
+                new ModItemTagProvider(packOutput, lookupProvider, blockTagProvider.contentsGetter(), existingFileHelper));
     }
 }

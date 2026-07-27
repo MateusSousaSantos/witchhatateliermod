@@ -8,6 +8,7 @@ import net.minecraft.data.recipes.RecipeCategory;
 import net.minecraft.data.recipes.RecipeOutput;
 import net.minecraft.data.recipes.RecipeProvider;
 import net.minecraft.data.recipes.ShapedRecipeBuilder;
+import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.item.Items;
 import org.jetbrains.annotations.NotNull;
 
@@ -58,6 +59,27 @@ public class ModRecipeProvider extends RecipeProvider {
                 .define('p', ModItems.MEDIUM_SQUARE_PAPER.get())
                 .define('s', Items.STONE_PRESSURE_PLATE)
                 .unlockedBy("has_medium_square_paper", has(ModItems.MEDIUM_SQUARE_PAPER.get()))
+                .save(output);
+
+        // ── Silver wood ──────────────────────────────────────────────────────
+        planksFromLogs(output, ModBlocks.SILVER_WOOD_PLANKS.get(), ModItemTagProvider.SILVER_WOOD_LOGS, 4);
+        woodFromLogs(output, ModBlocks.SILVER_WOOD_WOOD.get(), ModBlocks.SILVER_WOOD_LOG.get());
+        woodFromLogs(output, ModBlocks.STRIPPED_SILVER_WOOD.get(), ModBlocks.STRIPPED_SILVER_LOG.get());
+
+        stairBuilder(ModBlocks.SILVER_WOOD_STAIRS.get(), Ingredient.of(ModBlocks.SILVER_WOOD_PLANKS.get()))
+                .unlockedBy("has_silver_wood_planks", has(ModBlocks.SILVER_WOOD_PLANKS.get()))
+                .save(output);
+
+        slabBuilder(RecipeCategory.BUILDING_BLOCKS, ModBlocks.SILVER_WOOD_SLAB.get(), Ingredient.of(ModBlocks.SILVER_WOOD_PLANKS.get()))
+                .unlockedBy("has_silver_wood_planks", has(ModBlocks.SILVER_WOOD_PLANKS.get()))
+                .save(output);
+
+        fenceBuilder(ModBlocks.SILVER_WOOD_FENCE.get(), Ingredient.of(ModBlocks.SILVER_WOOD_PLANKS.get()))
+                .unlockedBy("has_silver_wood_planks", has(ModBlocks.SILVER_WOOD_PLANKS.get()))
+                .save(output);
+
+        fenceGateBuilder(ModBlocks.SILVER_WOOD_FENCE_GATE.get(), Ingredient.of(ModBlocks.SILVER_WOOD_PLANKS.get()))
+                .unlockedBy("has_silver_wood_planks", has(ModBlocks.SILVER_WOOD_PLANKS.get()))
                 .save(output);
     }
 }

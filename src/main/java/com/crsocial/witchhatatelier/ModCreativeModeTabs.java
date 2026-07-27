@@ -39,5 +39,19 @@ public class ModCreativeModeTabs {
         output.accept(ModItems.MEDIUM_ROUND_PAPER);
         // Blocks
         output.accept(ModItems.CANVAS_PLATE);
+        // Silver wood
+        output.accept(ModItems.SILVER_WOOD_LOG);
+        output.accept(ModItems.SILVER_WOOD_WOOD);
+        output.accept(ModItems.STRIPPED_SILVER_LOG);
+        output.accept(ModItems.STRIPPED_SILVER_WOOD);
+        output.accept(ModItems.SILVER_WOOD_PLANKS);
+        output.accept(ModItems.SILVER_WOOD_STAIRS);
+        output.accept(ModItems.SILVER_WOOD_SLAB);
+        output.accept(ModItems.SILVER_WOOD_FENCE);
+        output.accept(ModItems.SILVER_WOOD_FENCE_GATE);
+        output.accept(ModItems.SILVER_WOOD_LEAVES);
+        output.accept(ModItems.SILVER_WOOD_VINES);
+        output.accept(ModItems.SILVER_WOOD_SEED);
+        output.accept(ModItems.SILVER_WOOD_BRANCH);
     }
 }

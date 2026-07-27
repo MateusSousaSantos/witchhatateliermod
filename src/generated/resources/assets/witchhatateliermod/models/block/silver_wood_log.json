@@ -1,0 +1,7 @@
+{
+  "parent": "minecraft:block/cube_column",
+  "textures": {
+    "end": "witchhatateliermod:block/silver_wood_log_top",
+    "side": "witchhatateliermod:block/silver_wood_log"
+  }
+}

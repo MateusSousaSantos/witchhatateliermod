@@ -1,0 +1,6 @@
+{
+  "parent": "minecraft:block/cube_all",
+  "textures": {
+    "all": "witchhatateliermod:block/silver_wood_planks"
+  }
+}

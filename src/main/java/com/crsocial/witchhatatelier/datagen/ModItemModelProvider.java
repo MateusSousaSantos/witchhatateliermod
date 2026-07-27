@@ -58,6 +58,32 @@ public class ModItemModelProvider extends ItemModelProvider {
         getBuilder("canvas_plate")
                 .parent(new ModelFile.UncheckedModelFile(modLoc("block/canvas_plate")));
 
+        // ── Silver wood (block items parent generated block models; the block models are
+        // written by ModBlockStateProvider, which runs after this provider, so we reference
+        // them as unchecked model files the same way canvas_plate does above) ─────────────
+        for (String id : new String[]{
+                "silver_wood_log", "silver_wood_wood",
+                "stripped_silver_log", "stripped_silver_wood",
+                "silver_wood_planks", "silver_wood_stairs", "silver_wood_slab",
+                "silver_wood_fence_gate", "silver_wood_leaves"}) {
+            getBuilder(id).parent(new ModelFile.UncheckedModelFile(modLoc("block/" + id)));
+        }
+
+        // Fences use the vanilla "fence_inventory" perspective model rather than their
+        // (non-flat) block model, matching how vanilla oak_fence's item model is authored.
+        withExistingParent("silver_wood_fence", "minecraft:block/fence_inventory")
+                .texture("texture", modLoc("block/silver_wood_planks"));
+
+        // Vines: vanilla's own vine item model is a flat generated icon (not the 3D block
+        // model, which would render oddly as a floating quad in-hand/inventory).
+        withExistingParent("silver_wood_vines", "minecraft:item/generated")
+                .texture("layer0", modLoc("block/silver_wood_vines"));
+
+        withExistingParent("silver_wood_seed", "minecraft:item/generated")
+                .texture("layer0", modLoc("item/silver_wood_seed"));
+        withExistingParent("silver_wood_branch", "minecraft:item/generated")
+                .texture("layer0", modLoc("item/silver_wood_branch"));
+
         // ── Wand (unchanged) ──────────────────────────────────────────────────
         withExistingParent("wand_2d", "minecraft:item/generated")
                 .guiLight(BlockModel.GuiLight.FRONT)

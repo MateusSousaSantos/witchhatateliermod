@@ -1,0 +1,16 @@
+{
+  "variants": {
+    "axis=x": {
+      "model": "witchhatateliermod:block/stripped_silver_wood_horizontal",
+      "x": 90,
+      "y": 90
+    },
+    "axis=y": {
+      "model": "witchhatateliermod:block/stripped_silver_wood"
+    },
+    "axis=z": {
+      "model": "witchhatateliermod:block/stripped_silver_wood_horizontal",
+      "x": 90
+    }
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "parent": "minecraft:block/outer_stairs",
+  "textures": {
+    "bottom": "witchhatateliermod:block/silver_wood_planks",
+    "side": "witchhatateliermod:block/silver_wood_planks",
+    "top": "witchhatateliermod:block/silver_wood_planks"
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "values": {
+    "witchhatateliermod:silver_wood_log": {
+      "stripped_block": "witchhatateliermod:stripped_silver_log"
+    },
+    "witchhatateliermod:silver_wood_wood": {
+      "stripped_block": "witchhatateliermod:stripped_silver_wood"
+    }
+  }
+}

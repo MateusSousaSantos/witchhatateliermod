@@ -34,6 +34,47 @@ public class ModItems {
     public static final DeferredItem<BlockItem> CANVAS_PLATE = ITEMS.register("canvas_plate",
             () -> new BlockItem(ModBlocks.CANVAS_PLATE.get(), new Item.Properties()));
 
+    // ── Silver wood ──────────────────────────────────────────────────────────────
+
+    public static final DeferredItem<BlockItem> SILVER_WOOD_LOG = ITEMS.register("silver_wood_log",
+            () -> new BlockItem(ModBlocks.SILVER_WOOD_LOG.get(), new Item.Properties()));
+
+    public static final DeferredItem<BlockItem> SILVER_WOOD_WOOD = ITEMS.register("silver_wood_wood",
+            () -> new BlockItem(ModBlocks.SILVER_WOOD_WOOD.get(), new Item.Properties()));
+
+    public static final DeferredItem<BlockItem> STRIPPED_SILVER_LOG = ITEMS.register("stripped_silver_log",
+            () -> new BlockItem(ModBlocks.STRIPPED_SILVER_LOG.get(), new Item.Properties()));
+
+    public static final DeferredItem<BlockItem> STRIPPED_SILVER_WOOD = ITEMS.register("stripped_silver_wood",
+            () -> new BlockItem(ModBlocks.STRIPPED_SILVER_WOOD.get(), new Item.Properties()));
+
+    public static final DeferredItem<BlockItem> SILVER_WOOD_PLANKS = ITEMS.register("silver_wood_planks",
+            () -> new BlockItem(ModBlocks.SILVER_WOOD_PLANKS.get(), new Item.Properties()));
+
+    public static final DeferredItem<BlockItem> SILVER_WOOD_STAIRS = ITEMS.register("silver_wood_stairs",
+            () -> new BlockItem(ModBlocks.SILVER_WOOD_STAIRS.get(), new Item.Properties()));
+
+    public static final DeferredItem<BlockItem> SILVER_WOOD_SLAB = ITEMS.register("silver_wood_slab",
+            () -> new BlockItem(ModBlocks.SILVER_WOOD_SLAB.get(), new Item.Properties()));
+
+    public static final DeferredItem<BlockItem> SILVER_WOOD_FENCE = ITEMS.register("silver_wood_fence",
+            () -> new BlockItem(ModBlocks.SILVER_WOOD_FENCE.get(), new Item.Properties()));
+
+    public static final DeferredItem<BlockItem> SILVER_WOOD_FENCE_GATE = ITEMS.register("silver_wood_fence_gate",
+            () -> new BlockItem(ModBlocks.SILVER_WOOD_FENCE_GATE.get(), new Item.Properties()));
+
+    public static final DeferredItem<BlockItem> SILVER_WOOD_LEAVES = ITEMS.register("silver_wood_leaves",
+            () -> new BlockItem(ModBlocks.SILVER_WOOD_LEAVES.get(), new Item.Properties()));
+
+    public static final DeferredItem<BlockItem> SILVER_WOOD_VINES = ITEMS.register("silver_wood_vines",
+            () -> new BlockItem(ModBlocks.SILVER_WOOD_VINES.get(), new Item.Properties()));
+
+    public static final DeferredItem<Item> SILVER_WOOD_SEED = ITEMS.register("silver_wood_seed",
+            () -> new Item(new Item.Properties()));
+
+    public static final DeferredItem<Item> SILVER_WOOD_BRANCH = ITEMS.register("silver_wood_branch",
+            () -> new Item(new Item.Properties()));
+
     // ── Blank papers (stackable, placeable) ──────────────────────────────────────
 
     public static final DeferredItem<Item> SMALL_SQUARE_PAPER = ITEMS.register("small_square_paper",
