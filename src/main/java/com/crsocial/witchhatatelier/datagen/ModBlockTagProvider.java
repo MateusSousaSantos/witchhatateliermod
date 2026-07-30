@@ -29,13 +29,24 @@ public class ModBlockTagProvider extends BlockTagsProvider {
         tag(BlockTags.FENCE_GATES).add(ModBlocks.SILVER_WOOD_FENCE_GATE.get());
         tag(BlockTags.LEAVES).add(ModBlocks.SILVER_WOOD_LEAVES.get());
         tag(BlockTags.CLIMBABLE).add(ModBlocks.SILVER_WOOD_VINES.get());
+        tag(BlockTags.WOODEN_PRESSURE_PLATES).add(ModBlocks.SILVER_WOOD_PLATE.get());
+        tag(BlockTags.WOODEN_BUTTONS).add(ModBlocks.SILVER_WOOD_BUTTON.get());
+        tag(BlockTags.STANDING_SIGNS).add(ModBlocks.SILVER_WOOD_SIGN.get());
+        tag(BlockTags.WALL_SIGNS).add(ModBlocks.SILVER_WOOD_WALL_SIGN.get());
 
         tag(BlockTags.MINEABLE_WITH_AXE).add(
                 ModBlocks.SILVER_WOOD_LOG.get(), ModBlocks.SILVER_WOOD_WOOD.get(),
                 ModBlocks.STRIPPED_SILVER_LOG.get(), ModBlocks.STRIPPED_SILVER_WOOD.get(),
                 ModBlocks.SILVER_WOOD_PLANKS.get(), ModBlocks.SILVER_WOOD_STAIRS.get(),
                 ModBlocks.SILVER_WOOD_SLAB.get(), ModBlocks.SILVER_WOOD_FENCE.get(),
-                ModBlocks.SILVER_WOOD_FENCE_GATE.get());
+                ModBlocks.SILVER_WOOD_FENCE_GATE.get(), ModBlocks.SILVER_WOOD_PLATE.get(),
+                ModBlocks.SILVER_WOOD_BUTTON.get(), ModBlocks.SILVER_WOOD_SIGN.get(),
+                ModBlocks.SILVER_WOOD_WALL_SIGN.get());
         tag(BlockTags.MINEABLE_WITH_HOE).add(ModBlocks.SILVER_WOOD_LEAVES.get());
+
+        tag(BlockTags.MINEABLE_WITH_PICKAXE).add(
+                ModBlocks.BUDDING_SILVER_WOOD.get(),
+                ModBlocks.SILVER_TREE_BRANCH_SMALL.get(), ModBlocks.SILVER_TREE_BRANCH_MEDIUM.get(),
+                ModBlocks.SILVER_TREE_BRANCH_LARGE.get(), ModBlocks.SILVER_TREE_BRANCH.get());
     }
 }

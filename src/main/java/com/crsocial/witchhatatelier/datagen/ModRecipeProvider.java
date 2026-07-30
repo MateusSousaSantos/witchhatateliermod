@@ -8,6 +8,7 @@ import net.minecraft.data.recipes.RecipeCategory;
 import net.minecraft.data.recipes.RecipeOutput;
 import net.minecraft.data.recipes.RecipeProvider;
 import net.minecraft.data.recipes.ShapedRecipeBuilder;
+import net.minecraft.data.recipes.ShapelessRecipeBuilder;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.item.Items;
 import org.jetbrains.annotations.NotNull;
@@ -81,5 +82,31 @@ public class ModRecipeProvider extends RecipeProvider {
         fenceGateBuilder(ModBlocks.SILVER_WOOD_FENCE_GATE.get(), Ingredient.of(ModBlocks.SILVER_WOOD_PLANKS.get()))
                 .unlockedBy("has_silver_wood_planks", has(ModBlocks.SILVER_WOOD_PLANKS.get()))
                 .save(output);
+
+        // pressurePlateBuilder/buttonBuilder/signBuilder are private on vanilla RecipeProvider
+        // (unlike stair/slab/fence/fenceGate above), so their shapes are hand-written here.
+        ShapedRecipeBuilder.shaped(RecipeCategory.REDSTONE, ModBlocks.SILVER_WOOD_PLATE.get())
+                .pattern("##")
+                .define('#', ModBlocks.SILVER_WOOD_PLANKS.get())
+                .unlockedBy("has_silver_wood_planks", has(ModBlocks.SILVER_WOOD_PLANKS.get()))
+                .save(output);
+
+        ShapelessRecipeBuilder.shapeless(RecipeCategory.REDSTONE, ModBlocks.SILVER_WOOD_BUTTON.get())
+                .requires(ModBlocks.SILVER_WOOD_PLANKS.get())
+                .unlockedBy("has_silver_wood_planks", has(ModBlocks.SILVER_WOOD_PLANKS.get()))
+                .save(output);
+
+        ShapedRecipeBuilder.shaped(RecipeCategory.DECORATIONS, ModItems.SILVER_WOOD_SIGN.get(), 3)
+                .group("sign")
+                .pattern("###")
+                .pattern("###")
+                .pattern(" X ")
+                .define('#', ModBlocks.SILVER_WOOD_PLANKS.get())
+                .define('X', Items.STICK)
+                .unlockedBy("has_silver_wood_planks", has(ModBlocks.SILVER_WOOD_PLANKS.get()))
+                .save(output);
+
+        woodenBoat(output, ModItems.SILVER_WOOD_BOAT.get(), ModBlocks.SILVER_WOOD_PLANKS.get());
+        chestBoat(output, ModItems.SILVER_WOOD_CHEST_BOAT.get(), ModItems.SILVER_WOOD_BOAT.get());
     }
 }

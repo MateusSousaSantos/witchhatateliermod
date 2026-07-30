@@ -23,11 +23,20 @@ public class ModCreativeModeTabs {
             () -> CreativeModeTab.builder()
                     .icon(() -> new ItemStack(ModItems.NIB.get()))
                     .title(Component.translatable("creativetab.witchhatatelier.tab"))
-                    .displayItems(ModCreativeModeTabs::addTabItems)
+                    .displayItems(ModCreativeModeTabs::addItemTabItems)
                     .build()
     );
 
-    private static void addTabItems(CreativeModeTab.ItemDisplayParameters ignored,
+    @SuppressWarnings("unused")
+    public static final DeferredHolder<CreativeModeTab, CreativeModeTab> WITCH_HAT_ATELIER_BUILDING_BLOCKS_TAB = CREATIVE_MODE_TABS.register("witch_hat_atelier_building_blocks_tab",
+            () -> CreativeModeTab.builder()
+                    .icon(() -> new ItemStack(ModItems.SILVER_WOOD_PLANKS.get()))
+                    .title(Component.translatable("creativetab.witchhatatelier.building_blocks_tab"))
+                    .displayItems(ModCreativeModeTabs::addBuildingBlockTabItems)
+                    .build()
+    );
+
+    private static void addItemTabItems(CreativeModeTab.ItemDisplayParameters ignored,
                                     CreativeModeTab.Output output) {
         output.accept(ModItems.WAND);
         output.accept(ModItems.NIB);
@@ -37,7 +46,13 @@ public class ModCreativeModeTabs {
         output.accept(ModItems.MEDIUM_SQUARE_PAPER);
         output.accept(ModItems.SMALL_ROUND_PAPER);
         output.accept(ModItems.MEDIUM_ROUND_PAPER);
-        // Blocks
+        // Silver wood non-block items
+        output.accept(ModItems.SILVER_WOOD_SEED);
+        output.accept(ModItems.SILVER_WOOD_BRANCH);
+    }
+
+    private static void addBuildingBlockTabItems(CreativeModeTab.ItemDisplayParameters ignored,
+                                    CreativeModeTab.Output output) {
         output.accept(ModItems.CANVAS_PLATE);
         // Silver wood
         output.accept(ModItems.SILVER_WOOD_LOG);
@@ -49,9 +64,17 @@ public class ModCreativeModeTabs {
         output.accept(ModItems.SILVER_WOOD_SLAB);
         output.accept(ModItems.SILVER_WOOD_FENCE);
         output.accept(ModItems.SILVER_WOOD_FENCE_GATE);
+        output.accept(ModItems.SILVER_WOOD_PLATE);
+        output.accept(ModItems.SILVER_WOOD_BUTTON);
+        output.accept(ModItems.SILVER_WOOD_SIGN);
+        output.accept(ModItems.SILVER_WOOD_BOAT);
+        output.accept(ModItems.SILVER_WOOD_CHEST_BOAT);
         output.accept(ModItems.SILVER_WOOD_LEAVES);
         output.accept(ModItems.SILVER_WOOD_VINES);
-        output.accept(ModItems.SILVER_WOOD_SEED);
-        output.accept(ModItems.SILVER_WOOD_BRANCH);
+        output.accept(ModItems.BUDDING_SILVER_WOOD);
+        output.accept(ModItems.SILVER_TREE_BRANCH_SMALL);
+        output.accept(ModItems.SILVER_TREE_BRANCH_MEDIUM);
+        output.accept(ModItems.SILVER_TREE_BRANCH_LARGE);
+        output.accept(ModItems.SILVER_TREE_BRANCH);
     }
 }

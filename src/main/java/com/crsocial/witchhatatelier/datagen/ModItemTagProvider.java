@@ -37,9 +37,17 @@ public class ModItemTagProvider extends ItemTagsProvider {
         copy(BlockTags.WOODEN_FENCES, ItemTags.WOODEN_FENCES);
         copy(BlockTags.FENCE_GATES, ItemTags.FENCE_GATES);
         copy(BlockTags.LEAVES, ItemTags.LEAVES);
+        copy(BlockTags.WOODEN_PRESSURE_PLATES, ItemTags.WOODEN_PRESSURE_PLATES);
+        copy(BlockTags.WOODEN_BUTTONS, ItemTags.WOODEN_BUTTONS);
+        // Only the standing-sign block tag is copied — vanilla never copies WALL_SIGNS to an
+        // item tag either, since the wall sign has no item form of its own.
+        copy(BlockTags.STANDING_SIGNS, ItemTags.SIGNS);
 
         tag(SILVER_WOOD_LOGS).add(
                 ModItems.SILVER_WOOD_LOG.get(), ModItems.SILVER_WOOD_WOOD.get(),
                 ModItems.STRIPPED_SILVER_LOG.get(), ModItems.STRIPPED_SILVER_WOOD.get());
+
+        tag(ItemTags.BOATS).add(ModItems.SILVER_WOOD_BOAT.get());
+        tag(ItemTags.CHEST_BOATS).add(ModItems.SILVER_WOOD_CHEST_BOAT.get());
     }
 }

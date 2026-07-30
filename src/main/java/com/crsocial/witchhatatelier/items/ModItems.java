@@ -4,6 +4,7 @@ import com.crsocial.witchhatatelier.WitchHatAtelierMod;
 import com.crsocial.witchhatatelier.blocks.ModBlocks;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
+import net.minecraft.world.item.SignItem;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.registries.DeferredItem;
 import net.neoforged.neoforge.registries.DeferredRegister;
@@ -69,11 +70,42 @@ public class ModItems {
     public static final DeferredItem<BlockItem> SILVER_WOOD_VINES = ITEMS.register("silver_wood_vines",
             () -> new BlockItem(ModBlocks.SILVER_WOOD_VINES.get(), new Item.Properties()));
 
+    public static final DeferredItem<BlockItem> BUDDING_SILVER_WOOD = ITEMS.register("budding_silver_wood",
+            () -> new BlockItem(ModBlocks.BUDDING_SILVER_WOOD.get(), new Item.Properties()));
+
+    public static final DeferredItem<BlockItem> SILVER_TREE_BRANCH_SMALL = ITEMS.register("silver_tree_branch_small",
+            () -> new BlockItem(ModBlocks.SILVER_TREE_BRANCH_SMALL.get(), new Item.Properties()));
+
+    public static final DeferredItem<BlockItem> SILVER_TREE_BRANCH_MEDIUM = ITEMS.register("silver_tree_branch_medium",
+            () -> new BlockItem(ModBlocks.SILVER_TREE_BRANCH_MEDIUM.get(), new Item.Properties()));
+
+    public static final DeferredItem<BlockItem> SILVER_TREE_BRANCH_LARGE = ITEMS.register("silver_tree_branch_large",
+            () -> new BlockItem(ModBlocks.SILVER_TREE_BRANCH_LARGE.get(), new Item.Properties()));
+
+    public static final DeferredItem<BlockItem> SILVER_TREE_BRANCH = ITEMS.register("silver_tree_branch",
+            () -> new BlockItem(ModBlocks.SILVER_TREE_BRANCH.get(), new Item.Properties()));
+
     public static final DeferredItem<Item> SILVER_WOOD_SEED = ITEMS.register("silver_wood_seed",
             () -> new Item(new Item.Properties()));
 
     public static final DeferredItem<Item> SILVER_WOOD_BRANCH = ITEMS.register("silver_wood_branch",
             () -> new Item(new Item.Properties()));
+
+    public static final DeferredItem<BlockItem> SILVER_WOOD_PLATE = ITEMS.register("silver_wood_plate",
+            () -> new BlockItem(ModBlocks.SILVER_WOOD_PLATE.get(), new Item.Properties()));
+
+    public static final DeferredItem<BlockItem> SILVER_WOOD_BUTTON = ITEMS.register("silver_wood_button",
+            () -> new BlockItem(ModBlocks.SILVER_WOOD_BUTTON.get(), new Item.Properties()));
+
+    public static final DeferredItem<SignItem> SILVER_WOOD_SIGN = ITEMS.register("silver_wood_sign",
+            () -> new SignItem(new Item.Properties().stacksTo(16),
+                    ModBlocks.SILVER_WOOD_SIGN.get(), ModBlocks.SILVER_WOOD_WALL_SIGN.get()));
+
+    public static final DeferredItem<SilverWoodBoatItem> SILVER_WOOD_BOAT = ITEMS.register("silver_wood_boat",
+            () -> new SilverWoodBoatItem(false, new Item.Properties().stacksTo(1)));
+
+    public static final DeferredItem<SilverWoodBoatItem> SILVER_WOOD_CHEST_BOAT = ITEMS.register("silver_wood_chest_boat",
+            () -> new SilverWoodBoatItem(true, new Item.Properties().stacksTo(1)));
 
     // ── Blank papers (stackable, placeable) ──────────────────────────────────────
 

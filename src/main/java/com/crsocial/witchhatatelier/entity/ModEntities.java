@@ -33,4 +33,22 @@ public final class ModEntities {
                             .updateInterval(1)
                             .build(ResourceLocation.fromNamespaceAndPath(
                                     WitchHatAtelierMod.MODID, "pyreball").toString()));
+
+    public static final DeferredHolder<EntityType<?>, EntityType<SilverWoodBoat>> SILVER_WOOD_BOAT =
+            ENTITY_TYPES.register("silver_wood_boat", () ->
+                    EntityType.Builder.<SilverWoodBoat>of(SilverWoodBoat::new, MobCategory.MISC)
+                            .sized(1.375f, 0.5625f)
+                            .eyeHeight(0.5625f)
+                            .clientTrackingRange(10)
+                            .build(ResourceLocation.fromNamespaceAndPath(
+                                    WitchHatAtelierMod.MODID, "silver_wood_boat").toString()));
+
+    public static final DeferredHolder<EntityType<?>, EntityType<SilverWoodChestBoat>> SILVER_WOOD_CHEST_BOAT =
+            ENTITY_TYPES.register("silver_wood_chest_boat", () ->
+                    EntityType.Builder.<SilverWoodChestBoat>of(SilverWoodChestBoat::new, MobCategory.MISC)
+                            .sized(1.375f, 0.5625f)
+                            .eyeHeight(0.5625f)
+                            .clientTrackingRange(10)
+                            .build(ResourceLocation.fromNamespaceAndPath(
+                                    WitchHatAtelierMod.MODID, "silver_wood_chest_boat").toString()));
 }

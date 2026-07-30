@@ -1,0 +1,10 @@
+{
+  "variants": {
+    "powered=false": {
+      "model": "witchhatateliermod:block/silver_wood_plate"
+    },
+    "powered=true": {
+      "model": "witchhatateliermod:block/silver_wood_plate_down"
+    }
+  }
+}

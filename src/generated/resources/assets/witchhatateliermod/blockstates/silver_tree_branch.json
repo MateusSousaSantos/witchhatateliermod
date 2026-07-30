@@ -1,0 +1,112 @@
+{
+  "variants": {
+    "align_north_south=false,facing=down,waterlogged=false": {
+      "model": "witchhatateliermod:block/silver_tree_branch",
+      "x": 180
+    },
+    "align_north_south=false,facing=down,waterlogged=true": {
+      "model": "witchhatateliermod:block/silver_tree_branch",
+      "x": 180
+    },
+    "align_north_south=false,facing=east,waterlogged=false": {
+      "model": "witchhatateliermod:block/silver_tree_branch",
+      "x": 90,
+      "y": 90
+    },
+    "align_north_south=false,facing=east,waterlogged=true": {
+      "model": "witchhatateliermod:block/silver_tree_branch",
+      "x": 90,
+      "y": 90
+    },
+    "align_north_south=false,facing=north,waterlogged=false": {
+      "model": "witchhatateliermod:block/silver_tree_branch",
+      "x": 90
+    },
+    "align_north_south=false,facing=north,waterlogged=true": {
+      "model": "witchhatateliermod:block/silver_tree_branch",
+      "x": 90
+    },
+    "align_north_south=false,facing=south,waterlogged=false": {
+      "model": "witchhatateliermod:block/silver_tree_branch",
+      "x": 90,
+      "y": 180
+    },
+    "align_north_south=false,facing=south,waterlogged=true": {
+      "model": "witchhatateliermod:block/silver_tree_branch",
+      "x": 90,
+      "y": 180
+    },
+    "align_north_south=false,facing=up,waterlogged=false": {
+      "model": "witchhatateliermod:block/silver_tree_branch"
+    },
+    "align_north_south=false,facing=up,waterlogged=true": {
+      "model": "witchhatateliermod:block/silver_tree_branch"
+    },
+    "align_north_south=false,facing=west,waterlogged=false": {
+      "model": "witchhatateliermod:block/silver_tree_branch",
+      "x": 90,
+      "y": 270
+    },
+    "align_north_south=false,facing=west,waterlogged=true": {
+      "model": "witchhatateliermod:block/silver_tree_branch",
+      "x": 90,
+      "y": 270
+    },
+    "align_north_south=true,facing=down,waterlogged=false": {
+      "model": "witchhatateliermod:block/silver_tree_branch",
+      "x": 180,
+      "y": 90
+    },
+    "align_north_south=true,facing=down,waterlogged=true": {
+      "model": "witchhatateliermod:block/silver_tree_branch",
+      "x": 180,
+      "y": 90
+    },
+    "align_north_south=true,facing=east,waterlogged=false": {
+      "model": "witchhatateliermod:block/silver_tree_branch",
+      "x": 90,
+      "y": 90
+    },
+    "align_north_south=true,facing=east,waterlogged=true": {
+      "model": "witchhatateliermod:block/silver_tree_branch",
+      "x": 90,
+      "y": 90
+    },
+    "align_north_south=true,facing=north,waterlogged=false": {
+      "model": "witchhatateliermod:block/silver_tree_branch",
+      "x": 90
+    },
+    "align_north_south=true,facing=north,waterlogged=true": {
+      "model": "witchhatateliermod:block/silver_tree_branch",
+      "x": 90
+    },
+    "align_north_south=true,facing=south,waterlogged=false": {
+      "model": "witchhatateliermod:block/silver_tree_branch",
+      "x": 90,
+      "y": 180
+    },
+    "align_north_south=true,facing=south,waterlogged=true": {
+      "model": "witchhatateliermod:block/silver_tree_branch",
+      "x": 90,
+      "y": 180
+    },
+    "align_north_south=true,facing=up,waterlogged=false": {
+      "model": "witchhatateliermod:block/silver_tree_branch",
+      "y": 90
+    },
+    "align_north_south=true,facing=up,waterlogged=true": {
+      "model": "witchhatateliermod:block/silver_tree_branch",
+      "y": 90
+    },
+    "align_north_south=true,facing=west,waterlogged=false": {
+      "model": "witchhatateliermod:block/silver_tree_branch",
+      "x": 90,
+      "y": 270
+    },
+    "align_north_south=true,facing=west,waterlogged=true": {
+      "model": "witchhatateliermod:block/silver_tree_branch",
+      "x": 90,
+      "y": 270
+    }
+  }
+}

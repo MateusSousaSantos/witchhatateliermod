@@ -15,6 +15,7 @@ import net.minecraft.world.level.storage.loot.LootTable;
 import net.minecraft.world.level.storage.loot.entries.LootItem;
 import net.minecraft.world.level.storage.loot.entries.LootPoolSingletonContainer;
 import net.minecraft.world.level.storage.loot.predicates.BonusLevelTableCondition;
+import net.minecraft.world.level.storage.loot.providers.number.ConstantValue;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.Set;
@@ -50,6 +51,23 @@ public class ModBlockLootTableProvider extends BlockLootSubProvider {
         dropSelf(ModBlocks.SILVER_WOOD_FENCE_GATE.get());
         add(ModBlocks.SILVER_WOOD_LEAVES.get(), createSilverWoodLeavesDrops());
         add(ModBlocks.SILVER_WOOD_VINES.get(), createShearsOnlyDrop(ModBlocks.SILVER_WOOD_VINES.get()));
+        dropSelf(ModBlocks.SILVER_WOOD_PLATE.get());
+        dropSelf(ModBlocks.SILVER_WOOD_BUTTON.get());
+        // The wall sign has no loot table of its own — signProps().dropsLike(SILVER_WOOD_SIGN)
+        // in ModBlocks points its loot table id directly at the standing sign's, same as
+        // vanilla (there's no oak_wall_sign.json either).
+        dropSelf(ModBlocks.SILVER_WOOD_SIGN.get());
+
+        // ── Budding silver wood ──────────────────────────────────────────────
+        // Mirrors budding_amethyst: drops nothing, not even with silk touch.
+        add(ModBlocks.BUDDING_SILVER_WOOD.get(), LootTable.lootTable());
+        add(ModBlocks.SILVER_TREE_BRANCH_SMALL.get(), createSilkTouchOnlyTable(ModBlocks.SILVER_TREE_BRANCH_SMALL.get()));
+        add(ModBlocks.SILVER_TREE_BRANCH_MEDIUM.get(), createSilkTouchOnlyTable(ModBlocks.SILVER_TREE_BRANCH_MEDIUM.get()));
+        add(ModBlocks.SILVER_TREE_BRANCH_LARGE.get(), createSilkTouchOnlyTable(ModBlocks.SILVER_TREE_BRANCH_LARGE.get()));
+        // Final stage mirrors amethyst_cluster's loot shape: silk touch drops itself,
+        // otherwise drops silver wood branch items.
+        add(ModBlocks.SILVER_TREE_BRANCH.get(), createSingleItemTableWithSilkTouch(
+                ModBlocks.SILVER_TREE_BRANCH.get(), ModItems.SILVER_WOOD_BRANCH.get(), ConstantValue.exactly(2.0F)));
     }
 
     // Mirrors vanilla's leaf loot shape (self via silk touch/shears, otherwise a low fortune-
