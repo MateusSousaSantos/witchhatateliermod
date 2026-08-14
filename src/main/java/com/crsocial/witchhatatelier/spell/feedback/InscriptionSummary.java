@@ -1,9 +1,11 @@
 package com.crsocial.witchhatatelier.spell.feedback;
 
 import com.crsocial.witchhatatelier.spell.compiler.CompileResult;
-import com.crsocial.witchhatatelier.spell.compiler.SigilType;
-import com.crsocial.witchhatatelier.spell.compiler.SignBundle;
-import com.crsocial.witchhatatelier.spell.compiler.SignType;
+import com.crsocial.witchhatatelier.spell.compiler.EffectBundle;
+import com.crsocial.witchhatatelier.spell.compiler.EffectType;
+import com.crsocial.witchhatatelier.spell.compiler.ElementType;
+import com.crsocial.witchhatatelier.spell.compiler.FormBundle;
+import com.crsocial.witchhatatelier.spell.compiler.FormType;
 import com.crsocial.witchhatatelier.spell.compiler.SpellGraph;
 import net.minecraft.ChatFormatting;
 import net.minecraft.nbt.CompoundTag;
@@ -28,32 +30,37 @@ import java.util.Optional;
  * always tell what a paper holds without casting it.
  *
  * @param state                 what the drawing resolved to (see {@link InscriptionState})
- * @param element               the core sigil's element, or {@code null} when no graph compiled
- * @param signs                 sign occurrences in draw order (empty when none / no graph)
- * @param quality               recognizer confidence of the core sigil in [0, 1], or −1 when
+ * @param element               the core element, or {@code null} when no graph compiled
+ * @param forms                 form occurrences in draw order (empty when none / no graph)
+ * @param effects               effect occurrences in draw order (empty when none / no graph)
+ * @param convergence           whether a Convergence glyph was drawn
+ * @param quality               recognizer confidence of the core element in [0, 1], or −1 when
  *                              no graph compiled (no quality line is shown)
  * @param unrecognizedStrokeIds content stroke ids the recognizer could not read (red-tint review)
  */
 public record InscriptionSummary(InscriptionState state,
-                                 @Nullable SigilType element,
-                                 List<SignEntry> signs,
+                                 @Nullable ElementType element,
+                                 List<FormEntry> forms,
+                                 List<EffectEntry> effects,
+                                 boolean convergence,
                                  float quality,
                                  int[] unrecognizedStrokeIds) {
 
     /** Outcome class of a saved drawing, orthogonal to the {@code spent} flag. */
     public enum InscriptionState {
-        /** Compiled and a matrix cell exists — will cast when the ring closes. */
+        /** Compiled into a legible, structured glyph graph. */
         READY,
-        /** Compiled, but no matrix cell is wired for the combination. */
-        INERT,
-        /** Glyphs were recognized but don't form a castable spell. */
+        /** Glyphs were recognized but don't form a structurally valid graph. */
         FIZZLE,
         /** Nothing legible on the paper. */
         ILLEGIBLE
     }
 
-    /** One sign type and how many times it was drawn. */
-    public record SignEntry(SignType sign, int count) {}
+    /** One form type and how many times it was drawn. */
+    public record FormEntry(FormType form, int count) {}
+
+    /** One effect type and how many times it was drawn. */
+    public record EffectEntry(EffectType effect, int count) {}
 
     /** NBT key of the summary sub-compound on the item root tag / BE tag. */
     public static final String NBT_KEY = "inscription";
@@ -61,27 +68,31 @@ public record InscriptionSummary(InscriptionState state,
     // ── Construction ─────────────────────────────────────────────────────────────
 
     /** Derives the summary from a pipeline pass (ring-closed or ring-less alike). */
-    public static InscriptionSummary of(CompileResult result, boolean hasMatrixCell,
+    public static InscriptionSummary of(CompileResult result,
                                         Map<String, Integer> recogCounts, int[] unrecognizedIds) {
         if (result.isSuccess()) {
             SpellGraph graph = result.graph().get();
-            List<SignEntry> signs = new ArrayList<>();
-            for (SignBundle b : graph.signsByType()) {
-                signs.add(new SignEntry(b.type(), b.count()));
+            List<FormEntry> forms = new ArrayList<>();
+            for (FormBundle b : graph.formsByType()) {
+                forms.add(new FormEntry(b.type(), b.count()));
+            }
+            List<EffectEntry> effects = new ArrayList<>();
+            for (EffectBundle b : graph.effectsByType()) {
+                effects.add(new EffectEntry(b.type(), b.count()));
             }
             return new InscriptionSummary(
-                    hasMatrixCell ? InscriptionState.READY : InscriptionState.INERT,
-                    graph.core().type(), List.copyOf(signs), graph.core().quality(),
-                    unrecognizedIds);
+                    InscriptionState.READY,
+                    graph.core().type(), List.copyOf(forms), List.copyOf(effects), graph.convergence(),
+                    graph.core().quality(), unrecognizedIds);
         }
         return new InscriptionSummary(
                 recogCounts.isEmpty() ? InscriptionState.ILLEGIBLE : InscriptionState.FIZZLE,
-                null, List.of(), -1f, unrecognizedIds);
+                null, List.of(), List.of(), false, -1f, unrecognizedIds);
     }
 
     /** Summary for a save with no readable content at all. */
     public static InscriptionSummary illegible() {
-        return new InscriptionSummary(InscriptionState.ILLEGIBLE, null, List.of(), -1f, new int[0]);
+        return new InscriptionSummary(InscriptionState.ILLEGIBLE, null, List.of(), List.of(), false, -1f, new int[0]);
     }
 
     // ── NBT round-trip ───────────────────────────────────────────────────────────
@@ -90,16 +101,27 @@ public record InscriptionSummary(InscriptionState state,
         CompoundTag tag = new CompoundTag();
         tag.putString("state", state.name());
         if (element != null) tag.putString("element", element.name());
-        if (!signs.isEmpty()) {
+        if (!forms.isEmpty()) {
             ListTag list = new ListTag();
-            for (SignEntry e : signs) {
+            for (FormEntry e : forms) {
                 CompoundTag s = new CompoundTag();
-                s.putString("sign", e.sign().name());
+                s.putString("form", e.form().name());
                 s.putInt("count", e.count());
                 list.add(s);
             }
-            tag.put("signs", list);
+            tag.put("forms", list);
         }
+        if (!effects.isEmpty()) {
+            ListTag list = new ListTag();
+            for (EffectEntry e : effects) {
+                CompoundTag s = new CompoundTag();
+                s.putString("effect", e.effect().name());
+                s.putInt("count", e.count());
+                list.add(s);
+            }
+            tag.put("effects", list);
+        }
+        tag.putBoolean("convergence", convergence);
         tag.putFloat("quality", quality);
         tag.putIntArray("unrecognized", unrecognizedStrokeIds);
         return tag;
@@ -119,69 +141,93 @@ public record InscriptionSummary(InscriptionState state,
         } catch (IllegalArgumentException unknown) {
             return Optional.empty(); // forward-safe: a state from a newer version reads as absent
         }
-        SigilType element = null;
+        ElementType element = null;
         if (tag.contains("element", Tag.TAG_STRING)) {
             try {
-                element = SigilType.valueOf(tag.getString("element"));
+                element = ElementType.valueOf(tag.getString("element"));
             } catch (IllegalArgumentException ignored) { /* unknown element → omitted */ }
         }
-        List<SignEntry> signs = new ArrayList<>();
-        for (Tag t : tag.getList("signs", Tag.TAG_COMPOUND)) {
+        List<FormEntry> forms = new ArrayList<>();
+        for (Tag t : tag.getList("forms", Tag.TAG_COMPOUND)) {
             CompoundTag s = (CompoundTag) t;
             try {
-                signs.add(new SignEntry(SignType.valueOf(s.getString("sign")), s.getInt("count")));
-            } catch (IllegalArgumentException ignored) { /* unknown sign → skipped */ }
+                forms.add(new FormEntry(FormType.valueOf(s.getString("form")), s.getInt("count")));
+            } catch (IllegalArgumentException ignored) { /* unknown form → skipped */ }
         }
-        return Optional.of(new InscriptionSummary(state, element, List.copyOf(signs),
-                tag.getFloat("quality"), tag.getIntArray("unrecognized")));
+        List<EffectEntry> effects = new ArrayList<>();
+        for (Tag t : tag.getList("effects", Tag.TAG_COMPOUND)) {
+            CompoundTag s = (CompoundTag) t;
+            try {
+                effects.add(new EffectEntry(EffectType.valueOf(s.getString("effect")), s.getInt("count")));
+            } catch (IllegalArgumentException ignored) { /* unknown effect → skipped */ }
+        }
+        boolean convergence = tag.getBoolean("convergence");
+        return Optional.of(new InscriptionSummary(state, element, List.copyOf(forms), List.copyOf(effects),
+                convergence, tag.getFloat("quality"), tag.getIntArray("unrecognized")));
     }
 
     // ── Display (translatable; keys live in the lang files) ─────────────────────
 
-    public static MutableComponent sigilName(SigilType type) {
+    public static MutableComponent elementName(ElementType type) {
         return Component.translatable("sigil.witchhatateliermod." + type.name().toLowerCase(Locale.ROOT));
     }
 
-    public static MutableComponent signName(SignType type) {
+    public static MutableComponent formName(FormType type) {
+        return Component.translatable("sign.witchhatateliermod." + type.name().toLowerCase(Locale.ROOT));
+    }
+
+    public static MutableComponent effectName(EffectType type) {
         return Component.translatable("sign.witchhatateliermod." + type.name().toLowerCase(Locale.ROOT));
     }
 
     /**
-     * Full composition line, e.g. {@code "Fire — Column ×2 + Dispersion"}; just the
-     * element name when no signs were drawn; empty when no graph compiled.
+     * Full composition line, e.g. {@code "Fire — Column ×2 + Levitation"}; just the
+     * element name when nothing else was drawn; empty when no graph compiled.
      */
     public Optional<MutableComponent> composition() {
         if (element == null) return Optional.empty();
-        MutableComponent elementName = sigilName(element).withStyle(ChatFormatting.YELLOW);
-        if (signs.isEmpty()) return Optional.of(elementName);
+        MutableComponent elementComponent = elementName(element).withStyle(ChatFormatting.YELLOW);
+        if (forms.isEmpty() && effects.isEmpty() && !convergence) return Optional.of(elementComponent);
         return Optional.of(Component.translatable("inscription.witchhatateliermod.composition",
-                elementName, signList(true)));
+                elementComponent, glyphList(true)));
     }
 
     /** Compact composition for the action bar, e.g. {@code "Fire Column"}. */
     public Optional<MutableComponent> compositionCompact() {
         if (element == null) return Optional.empty();
-        MutableComponent elementName = sigilName(element).withStyle(ChatFormatting.YELLOW);
-        if (signs.isEmpty()) return Optional.of(elementName);
+        MutableComponent elementComponent = elementName(element).withStyle(ChatFormatting.YELLOW);
+        if (forms.isEmpty() && effects.isEmpty() && !convergence) return Optional.of(elementComponent);
         return Optional.of(Component.translatable("inscription.witchhatateliermod.composition.compact",
-                elementName, signList(false)));
+                elementComponent, glyphList(false)));
     }
 
-    private MutableComponent signList(boolean withCounts) {
+    private MutableComponent glyphList(boolean withCounts) {
         MutableComponent list = Component.empty();
         boolean first = true;
-        for (SignEntry e : signs) {
+        if (convergence) {
+            list.append(Component.translatable("sign.witchhatateliermod.convergence").withStyle(ChatFormatting.LIGHT_PURPLE));
+            first = false;
+        }
+        for (FormEntry e : forms) {
             if (!first) list.append(Component.literal(" + ").withStyle(ChatFormatting.GRAY));
-            MutableComponent name = signName(e.sign()).withStyle(ChatFormatting.AQUA);
-            if (withCounts && e.count() > 1) {
-                list.append(Component.translatable("inscription.witchhatateliermod.sign_count",
-                        name, e.count()).withStyle(ChatFormatting.AQUA));
-            } else {
-                list.append(name);
-            }
+            list.append(glyphComponent(formName(e.form()), e.count(), withCounts));
+            first = false;
+        }
+        for (EffectEntry e : effects) {
+            if (!first) list.append(Component.literal(" + ").withStyle(ChatFormatting.GRAY));
+            list.append(glyphComponent(effectName(e.effect()), e.count(), withCounts));
             first = false;
         }
         return list;
+    }
+
+    private static MutableComponent glyphComponent(MutableComponent name, int count, boolean withCounts) {
+        MutableComponent styled = name.withStyle(ChatFormatting.AQUA);
+        if (withCounts && count > 1) {
+            return Component.translatable("inscription.witchhatateliermod.sign_count", styled, count)
+                    .withStyle(ChatFormatting.AQUA);
+        }
+        return styled;
     }
 
     /** The state description line, styled per state. */
@@ -189,8 +235,6 @@ public record InscriptionSummary(InscriptionState state,
         return switch (state) {
             case READY -> Component.translatable("inscription.witchhatateliermod.state.ready")
                     .withStyle(ChatFormatting.GREEN);
-            case INERT -> Component.translatable("inscription.witchhatateliermod.state.inert")
-                    .withStyle(ChatFormatting.GRAY, ChatFormatting.ITALIC);
             case FIZZLE -> Component.translatable("inscription.witchhatateliermod.state.fizzle")
                     .withStyle(ChatFormatting.RED);
             case ILLEGIBLE -> Component.translatable("inscription.witchhatateliermod.state.illegible")

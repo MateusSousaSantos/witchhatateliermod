@@ -112,7 +112,7 @@ public class CanvasPressurePlate extends PressurePlateBlock implements EntityBlo
         Player player = trigger instanceof Player p ? p : null;
         SaveGestureHandler.castFromGesture(
                 level, player, points, ringIds, ctx, pos,
-                SaveGestureHandler.Dispatch.PLATE, null);
+                SaveGestureHandler.Dispatch.PLATE);
     }
 
     // ── Right-click → open canvas ────────────────────────────────────────────────

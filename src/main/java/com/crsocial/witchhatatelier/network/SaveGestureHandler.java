@@ -10,15 +10,10 @@ import com.crsocial.witchhatatelier.items.SpellPaperItem;
 import com.crsocial.witchhatatelier.spell.cluster.SigilCluster;
 import com.crsocial.witchhatatelier.spell.cluster.SigilClusterer;
 import com.crsocial.witchhatatelier.ModCommands;
-import com.crsocial.witchhatatelier.spell.cast.PlacedPaperCastManager;
-import com.crsocial.witchhatatelier.spell.cast.SpellCastManager;
 import com.crsocial.witchhatatelier.spell.compiler.CastingContext;
 import com.crsocial.witchhatatelier.spell.compiler.CompileResult;
 import com.crsocial.witchhatatelier.spell.compiler.SpellGraphBuilder;
 import com.crsocial.witchhatatelier.spell.feedback.InscriptionSummary;
-import com.crsocial.witchhatatelier.spell.meaning.ExecutableSpell;
-import com.crsocial.witchhatatelier.spell.meaning.MeaningEngine;
-import com.crsocial.witchhatatelier.spell.meaning.SpellExecutor;
 import com.crsocial.witchhatatelier.spell.trigger.TriggerEvaluator;
 import com.crsocial.witchhatatelier.spell.recognition.PDollarPlusRecognizer;
 import com.crsocial.witchhatatelier.spell.recognition.Point;
@@ -36,7 +31,6 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.InteractionHand;
@@ -85,10 +79,8 @@ public final class SaveGestureHandler {
         context.enqueueWork(() -> {
             Player player = context.player();
 
-            // Save the gesture first; the item path returns the exact inscribed stack
-            // so the channeled cast can be keyed to it regardless of which slot it
-            // lands in. Then run the pipeline and broadcast activation feedback — all
-            // on the server thread, in order.
+            // Save the gesture first, then run the pipeline and broadcast activation
+            // feedback — all on the server thread, in order.
             ItemStack inscribed = null;
             if (payload.blockOrigin() != null) {
                 saveBlockPath(payload, player, payload.blockOrigin());
@@ -96,7 +88,7 @@ public final class SaveGestureHandler {
                 inscribed = saveItemPath(payload, player);
             }
 
-            PipelineResult result = runSpellPipeline(payload, player, inscribed);
+            PipelineResult result = runSpellPipeline(payload, player);
             playActivationEffects(payload, player, result.outcome());
             stampInscription(payload, player, inscribed, result.summary());
         });
@@ -123,14 +115,14 @@ public final class SaveGestureHandler {
 
     /**
      * What actually happened when a closed ring reached the pipeline — the signal the
-     * in-world feedback ({@link #playActivationEffects}) speaks with, so the four
-     * outcomes are distinguishable without reading chat.
+     * in-world feedback ({@link #playActivationEffects}) speaks with, so the outcomes
+     * are distinguishable without reading chat.
      *
      * <ul>
-     *   <li>{@link #CAST} — a spell compiled, resolved a matrix cell, and fired.</li>
-     *   <li>{@link #PREPARED} — a valid glyph compiled but no matrix cell is wired for
-     *       the combination; the inscription holds, ready (draw-now, fire-later).</li>
-     *   <li>{@link #FIZZLE} — glyphs were recognized but don't form a castable spell
+     *   <li>{@link #RECOGNIZED} — the ring closed on a legible, structurally valid
+     *       glyph graph. Nothing manifests in the world yet — this is purely "the
+     *       drawing read as a sigil."</li>
+     *   <li>{@link #FIZZLE} — glyphs were recognized but don't form a valid graph
      *       (no element, or two different elements without nesting).</li>
      *   <li>{@link #UNRECOGNIZED} — nothing legible: every content cluster came back
      *       {@code unknown} (unrecognized, ambiguity-gated, or rejection-template), or
@@ -139,7 +131,7 @@ public final class SaveGestureHandler {
      *       the inscription summary, but nothing triggers) or no points; no in-world feedback.</li>
      * </ul>
      */
-    public enum CastOutcome { CAST, PREPARED, FIZZLE, UNRECOGNIZED, NONE }
+    public enum CastOutcome { RECOGNIZED, FIZZLE, UNRECOGNIZED, NONE }
 
     /**
      * A pipeline pass's in-world outcome plus what to stamp onto the inscription
@@ -258,19 +250,12 @@ public final class SaveGestureHandler {
         }
 
         switch (outcome) {
-            case CAST -> {
-                // Success — the bright, magical activation flourish.
+            case RECOGNIZED -> {
+                // Ring closed on a legible sigil — the bright, magical recognition flourish.
                 serverLevel.playSound(null, x, y, z,
                         SoundEvents.ENCHANTMENT_TABLE_USE, SoundSource.PLAYERS, 1.0f, 1.0f);
                 serverLevel.sendParticles(ParticleTypes.SCRAPE, x, y, z, 40, 0.4, 0.4, 0.4, 0.6);
                 serverLevel.sendParticles(ParticleTypes.ELECTRIC_SPARK, x, y, z, 20, 0.8, 0.2, 0.8, 0.3);
-            }
-            case PREPARED -> {
-                // Valid glyph, no matrix cell yet — a stable, held "glow" that reads as
-                // ready-but-inert rather than failed.
-                serverLevel.playSound(null, x, y, z,
-                        SoundEvents.AMETHYST_BLOCK_CHIME, SoundSource.PLAYERS, 0.7f, 1.2f);
-                serverLevel.sendParticles(ParticleTypes.END_ROD, x, y, z, 14, 0.25, 0.35, 0.25, 0.01);
             }
             case FIZZLE -> {
                 // Glyphs read but don't form a spell — a smoky sputter.
@@ -291,58 +276,57 @@ public final class SaveGestureHandler {
 
     // ── Spell pipeline (cluster → preprocess → recognize) ───────────────────────
 
-    /** Selects the runtime dispatch + medium-consumption behavior for a compiled spell. */
+    /** Selects the action-bar chattiness for a pipeline pass. */
     public enum Dispatch {
-        /** Held-paper hand cast → channeled, aim-following; paper consumed when the channel ends. */
+        /** Held-paper hand save. */
         HAND,
-        /** Placed-paper surface cast → sustained if per-tick, else fire-once and mark spent. */
+        /** Placed-paper surface save. */
         SURFACE,
-        /** Canvas pressure plate → fire once on each trigger; reusable, never consumed. */
+        /** Canvas pressure plate → fires once per trigger; stays silent (no action-bar spam). */
         PLATE
     }
 
-    /** Payload entry point: derive the gesture + casting context from the packet and dispatch. */
-    private static PipelineResult runSpellPipeline(SaveGesturePayload payload, Player player, ItemStack inscribed) {
+    /** Payload entry point: derive the gesture + casting context from the packet and recognize. */
+    private static PipelineResult runSpellPipeline(SaveGesturePayload payload, Player player) {
         if (payload.points().isEmpty()) return new PipelineResult(CastOutcome.NONE, null);
         if (!(player.level() instanceof ServerLevel level)) return new PipelineResult(CastOutcome.NONE, null);
         CastingContext ctx = buildCastingContext(payload, player);
         Dispatch dispatch = payload.blockOrigin() == null ? Dispatch.HAND : Dispatch.SURFACE;
         return runPipeline(level, player, payload.points(), payload.activationRingStrokeIds(),
-                ctx, payload.blockOrigin(), dispatch, inscribed);
+                ctx, payload.blockOrigin(), dispatch);
     }
 
     /**
-     * Runs the recognize → compile → meaning → execute chain for a gesture from any source
-     * (a live draw payload or a stored canvas), then dispatches the compiled spell per
-     * {@code dispatch}. All chat/log output is null-safe on {@code player}.
+     * Runs the recognize → compile chain for a gesture from any source (a live draw
+     * payload or a stored canvas) and reports what it read. All chat/log output is
+     * null-safe on {@code player}.
      *
-     * @param level       server level the cast runs in
+     * @param level       server level the recognition runs in
      * @param player      the caster/trigger, or {@code null} (e.g. a mob stepping on a plate)
      * @param points      normalized gesture points with stroke ids
      * @param ringIds     stroke ids forming the activation ring (must be non-empty to compile)
      * @param ctx         casting context (medium, origin, normal) for this source
-     * @param blockOrigin the source block for surface/plate casts, or {@code null} for hand casts
-     * @param dispatch    how to run the compiled spell + whether to consume the medium
-     * @param inscribed   the inscribed paper stack for {@link Dispatch#HAND}, else {@code null}
+     * @param blockOrigin the source block for surface/plate saves, or {@code null} for hand saves
+     * @param dispatch    action-bar chattiness for this source
      * @return the {@link CastOutcome} the caller can turn into in-world feedback
      */
     public static CastOutcome castFromGesture(ServerLevel level, @Nullable Player player,
                                        List<GesturePoint> points, List<Integer> ringIds,
                                        CastingContext ctx, @Nullable BlockPos blockOrigin,
-                                       Dispatch dispatch, @Nullable ItemStack inscribed) {
-        return runPipeline(level, player, points, ringIds, ctx, blockOrigin, dispatch, inscribed)
+                                       Dispatch dispatch) {
+        return runPipeline(level, player, points, ringIds, ctx, blockOrigin, dispatch)
                 .outcome();
     }
 
     /**
      * Full pipeline pass. Runs on every save — <b>including ring-less ones</b>, where it
      * recognizes and compiles (to learn what the paper holds and stamp/report it) but
-     * never executes; only a closed ring dispatches the compiled spell.
+     * reports {@link CastOutcome#NONE}; only a closed ring reports {@link CastOutcome#RECOGNIZED}.
      */
     private static PipelineResult runPipeline(ServerLevel level, @Nullable Player player,
                                        List<GesturePoint> points, List<Integer> ringIds,
                                        CastingContext ctx, @Nullable BlockPos blockOrigin,
-                                       Dispatch dispatch, @Nullable ItemStack inscribed) {
+                                       Dispatch dispatch) {
         if (points.isEmpty()) return new PipelineResult(CastOutcome.NONE, null);
 
         Map<Integer, List<Point>> byStroke = new LinkedHashMap<>();
@@ -542,8 +526,7 @@ public final class SaveGestureHandler {
             WitchHatAtelierMod.LOGGER.info(
                     "[Compiler] Compiled spell graph for player='{}':\n{}", who, graph.toDebugString());
 
-            java.util.Optional<ExecutableSpell> executable = MeaningEngine.evaluate(graph, ctx, level);
-            summary = InscriptionSummary.of(result, executable.isPresent(), recogCounts, unrecognizedArr);
+            summary = InscriptionSummary.of(result, recogCounts, unrecognizedArr);
 
             // Verbose per-cast chat is a /spell debug tool only — normal play speaks
             // through the action bar, in-world effects, and the inscription tooltip.
@@ -560,67 +543,16 @@ public final class SaveGestureHandler {
                     player.sendSystemMessage(Component.literal("  ")
                             .append(buildRecognitionSummary(recogCounts)));
                 }
-                if (executable.isPresent()) {
-                    player.sendSystemMessage(Component.empty()
-                            .append(Component.literal("  ✓ ").withStyle(ChatFormatting.GREEN))
-                            .append(Component.literal(executable.get().toLogString())
-                                    .withStyle(ChatFormatting.DARK_GREEN)));
-                } else {
-                    player.sendSystemMessage(Component.empty()
-                            .append(Component.literal("  · ").withStyle(ChatFormatting.DARK_GRAY))
-                            .append(Component.literal("Prepared (no matrix cell for this combination)")
-                                    .withStyle(ChatFormatting.GRAY)));
-                }
                 for (String line : graph.toDebugString().split("\n")) {
                     player.sendSystemMessage(Component.literal(line)
                             .withStyle(ChatFormatting.GRAY));
                 }
             }
 
-            if (executable.isPresent() && ringClosed) {
-                WitchHatAtelierMod.LOGGER.info(
-                        "[MeaningEngine] player='{}' → {}", who, executable.get().toLogString());
-
-                // ── Phase 3: dispatch to runtime ──────────────────────────────────
-                ExecutableSpell spell = executable.get();
-                switch (dispatch) {
-                    case HAND -> {
-                        // Hand cast → start a channeled, aim-following cast keyed to the
-                        // inscribed paper just produced. The paper is consumed when the
-                        // channel finishes or is canceled, so we do NOT consume here.
-                        if (player instanceof ServerPlayer sp) {
-                            SpellCastManager.get().start(sp, spell, inscribed);
-                        }
-                    }
-                    case SURFACE -> {
-                        if (spell.totalCostPerTick() > 0f) {
-                            // Per-tick cost → sustained channel anchored to the placed_paper,
-                            // active until its fuel drains; the block is marked spent by the
-                            // manager when the cast ends (so we do NOT consume here).
-                            PlacedPaperCastManager.get().start(level, player, spell, blockOrigin);
-                        } else {
-                            // Instantaneous surface cast → fire once and spend.
-                            boolean fired = SpellExecutor.run(level, player, spell);
-                            if (fired) {
-                                consumeMedium(blockOrigin, player, level);
-                            }
-                        }
-                    }
-                    case PLATE ->
-                        // Canvas pressure plate → fire once per trigger; reusable, never spent.
-                        SpellExecutor.run(level, player, spell);
-                }
-                outcome = CastOutcome.CAST;
-            } else if (!ringClosed) {
-                // Plain save (no trigger) — the drawing holds; nothing fires yet.
-                outcome = CastOutcome.NONE;
-            } else {
-                // Valid glyph, but no matrix cell resolved — inscription is Prepared.
-                outcome = CastOutcome.PREPARED;
-            }
+            outcome = ringClosed ? CastOutcome.RECOGNIZED : CastOutcome.NONE;
         } else {
             WitchHatAtelierMod.LOGGER.info("[Compiler] Rejected: {}", result.rejectionReason());
-            summary = InscriptionSummary.of(result, false, recogCounts, unrecognizedArr);
+            summary = InscriptionSummary.of(result, recogCounts, unrecognizedArr);
             // Glyphs recognized but structurally invalid = fizzle; nothing legible =
             // unrecognized. A ring-less save stays outcome-silent in the world.
             outcome = !ringClosed ? CastOutcome.NONE
@@ -655,7 +587,7 @@ public final class SaveGestureHandler {
         if (player == null || dispatch == Dispatch.PLATE) return;
         Component msg = switch (summary.state()) {
             case READY -> ringClosed
-                    ? Component.translatable("hud.witchhatateliermod.cast",
+                    ? Component.translatable("hud.witchhatateliermod.recognized",
                             summary.compositionCompact().orElseGet(Component::empty),
                             summary.gradeLetter().orElse(Component.literal("?")))
                     : Component.translatable(
@@ -663,41 +595,12 @@ public final class SaveGestureHandler {
                                            : "hud.witchhatateliermod.prepared",
                             summary.compositionCompact().orElseGet(Component::empty))
                             .withStyle(ChatFormatting.WHITE);
-            case INERT -> Component.translatable("hud.witchhatateliermod.inert",
-                            summary.compositionCompact().orElseGet(Component::empty))
-                    .withStyle(ChatFormatting.GRAY);
             case FIZZLE -> Component.translatable("hud.witchhatateliermod.fizzle")
                     .withStyle(ChatFormatting.RED);
             case ILLEGIBLE -> Component.translatable("hud.witchhatateliermod.illegible")
                     .withStyle(ChatFormatting.GRAY);
         };
         player.displayClientMessage(msg, true);
-    }
-
-    // ── Medium consumption (Phase 3: Prepared → Activated → Used) ──────────────
-
-    private static void consumeMedium(@Nullable BlockPos blockOrigin, Player player, ServerLevel level) {
-        if (blockOrigin != null) {
-            // Surface cast: mark the placed_paper as spent so it stays in the world
-            // but rejects any further casts. The inscription is considered consumed.
-            if (level.getBlockEntity(blockOrigin) instanceof PlacedPaperBlockEntity placed) {
-                placed.setSpent(true);
-                WitchHatAtelierMod.LOGGER.info(
-                        "[SaveGesture] Marked placed_paper at {} as spent after spell fired.", blockOrigin);
-            }
-            return;
-        }
-        // Hand cast: mark the held inscribed paper as spent (no shrink) so it
-        // stays in the inventory but can't be re-cast or re-drawn.
-        InteractionHand paperHand = findPaperHand(player);
-        if (paperHand == null) return;
-        ItemStack held = player.getItemInHand(paperHand);
-        if (held.getItem() instanceof SpellPaperItem paper && !paper.isBlank()) {
-            SpellPaperItem.markSpent(held);
-            WitchHatAtelierMod.LOGGER.info(
-                    "[SaveGesture] Marked held {} as spent after spell fired.",
-                    paper.getPaperType().getId());
-        }
     }
 
     private static MutableComponent buildRecognitionSummary(Map<String, Integer> counts) {

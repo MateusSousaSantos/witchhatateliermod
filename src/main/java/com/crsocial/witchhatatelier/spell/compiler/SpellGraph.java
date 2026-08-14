@@ -8,93 +8,84 @@ import java.util.Map;
 import java.util.Optional;
 
 /**
- * Structural representation of one ring's spell, produced by
- * {@link SpellGraphBuilder}. A graph that escapes the builder is guaranteed
- * structurally valid (one sigil, at most one sign per conflicting tier); the
- * meaning engine assumes this and does not re-check.
+ * Structural representation of one ring's spell, produced by {@link
+ * SpellGraphBuilder}. A graph that escapes the builder is guaranteed
+ * structurally valid (exactly one element) — the terminal artifact of the
+ * pipeline today; nothing downstream resolves it into a world effect yet.
  *
  * @param root       the enclosing ring
- * @param core       the central sigil (representative of the ring's single element)
- * @param sigilStack how many identical sigils were drawn ({@code >= 1}); repeats of
- *                   the same element amplify the spell's power in the meaning engine
- * @param modifiers  one node per sign occurrence
- * @param inner      nested inner-ring graph; empty until ring nesting (Phase 6)
- * @param symmetry   sign-placement symmetry report
+ * @param core       the central element (representative of the ring's single element)
+ * @param sigilStack how many identical elements were drawn ({@code >= 1})
+ * @param convergence whether a Convergence glyph was drawn
+ * @param forms      one node per form occurrence
+ * @param effects    one node per effect occurrence
+ * @param inner      nested inner-ring graph; empty until ring nesting is built
+ * @param symmetry   glyph-placement symmetry report (forms + effects combined)
  * @param size       inscription size report
  */
 public record SpellGraph(RingNode root,
-                         SigilNode core,
+                         ElementNode core,
                          int sigilStack,
-                         List<SignNode> modifiers,
+                         boolean convergence,
+                         List<FormNode> forms,
+                         List<EffectNode> effects,
                          Optional<SpellGraph> inner,
                          SymmetryReport symmetry,
                          SizeReport size) {
 
-    /** Occurrences grouped per sign type, for the meaning engine's stacking math. */
-    public List<SignBundle> signsByType() {
-        Map<SignType, List<SignNode>> grouped = new LinkedHashMap<>();
-        for (SignNode n : modifiers) {
+    /** Occurrences grouped per form type, for the composition engine's stacking math. */
+    public List<FormBundle> formsByType() {
+        Map<FormType, List<FormNode>> grouped = new LinkedHashMap<>();
+        for (FormNode n : forms) {
             grouped.computeIfAbsent(n.type(), k -> new ArrayList<>()).add(n);
         }
-        List<SignBundle> out = new ArrayList<>(grouped.size());
-        for (Map.Entry<SignType, List<SignNode>> e : grouped.entrySet()) {
-            out.add(new SignBundle(e.getKey(), e.getValue().size(), List.copyOf(e.getValue())));
+        List<FormBundle> out = new ArrayList<>(grouped.size());
+        for (Map.Entry<FormType, List<FormNode>> e : grouped.entrySet()) {
+            out.add(new FormBundle(e.getKey(), e.getValue().size(), List.copyOf(e.getValue())));
         }
         return out;
     }
 
-    /** Manifestation signs acting as base shapes (Column, Dispersion). Multiple coexist. */
-    public List<SignNode> carriers() {
-        return byRole(SignType.ManifestationRole.CARRIER);
-    }
-
-    /** Manifestation signs that ride on a carrier (Bolt → impacts/projectiles). */
-    public List<SignNode> riders() {
-        return byRole(SignType.ManifestationRole.RIDER);
-    }
-
-    private List<SignNode> byRole(SignType.ManifestationRole role) {
-        List<SignNode> out = new ArrayList<>();
-        for (SignNode n : modifiers) {
-            if (n.type().manifestationRole() == role) out.add(n);
+    /** Occurrences grouped per effect type, for the composition engine's stacking math. */
+    public List<EffectBundle> effectsByType() {
+        Map<EffectType, List<EffectNode>> grouped = new LinkedHashMap<>();
+        for (EffectNode n : effects) {
+            grouped.computeIfAbsent(n.type(), k -> new ArrayList<>()).add(n);
+        }
+        List<EffectBundle> out = new ArrayList<>(grouped.size());
+        for (Map.Entry<EffectType, List<EffectNode>> e : grouped.entrySet()) {
+            out.add(new EffectBundle(e.getKey(), e.getValue().size(), List.copyOf(e.getValue())));
         }
         return out;
     }
 
     /**
-     * Human-readable description of the manifestation form, e.g.
-     * {@code "Column + Dispersion"}, {@code "Dispersion with Bolt impacts"},
-     * {@code "Bolt"}, or {@code "default (no signs)"}.
+     * Human-readable description of what was drawn, e.g. {@code "Column +
+     * Levitation"}, {@code "Convergence + Column"}, or {@code "default (no
+     * forms/effects)"}.
      */
     public String describeForm() {
-        String carriers = distinctNames(carriers());
-        String riders = distinctNames(riders());
-        if (!carriers.isEmpty()) {
-            return riders.isEmpty() ? carriers : carriers + " with " + riders + " impacts";
-        }
-        if (!riders.isEmpty()) {
-            return riders;
-        }
-        return "default (no signs)";
+        List<String> names = new ArrayList<>();
+        if (convergence) names.add("Convergence");
+        names.addAll(distinctNames(forms.stream().map(FormNode::type).map(Enum::name).toList()));
+        names.addAll(distinctNames(effects.stream().map(EffectNode::type).map(Enum::name).toList()));
+        return names.isEmpty() ? "default (no forms/effects)" : String.join(" + ", names);
     }
 
-    private static String distinctNames(List<SignNode> nodes) {
-        StringBuilder sb = new StringBuilder();
-        List<SignType> seen = new ArrayList<>();
-        for (SignNode n : nodes) {
-            if (seen.contains(n.type())) continue;
-            seen.add(n.type());
-            if (!sb.isEmpty()) sb.append(" + ");
-            sb.append(titleCase(n.type().name()));
+    private static List<String> distinctNames(List<String> enumNames) {
+        List<String> seen = new ArrayList<>();
+        for (String n : enumNames) {
+            String title = titleCase(n);
+            if (!seen.contains(title)) seen.add(title);
         }
-        return sb.toString();
+        return seen;
     }
 
     private static String titleCase(String enumName) {
         return enumName.charAt(0) + enumName.substring(1).toLowerCase(Locale.ROOT);
     }
 
-    /** Multi-line structured dump for server logging (Phase 1 verification). */
+    /** Multi-line structured dump for server logging. */
     public String toDebugString() {
         StringBuilder sb = new StringBuilder();
         sb.append("SpellGraph{\n");
@@ -102,21 +93,28 @@ public record SpellGraph(RingNode root,
                 "  ring: strokes=%s arc=%.0f° radius=%.1f%n",
                 root.strokeIds(), root.arcCoverageDeg(), root.radius()));
         sb.append(String.format(Locale.ROOT,
-                "  sigil: %s x%d quality=%.2f centre=(%.1f,%.1f)%n",
+                "  element: %s x%d quality=%.2f centre=(%.1f,%.1f)%n",
                 core.type(), sigilStack, core.quality(), core.centre().x, core.centre().y));
-        sb.append(String.format(Locale.ROOT, "  form: %s%n", describeForm()));
-        sb.append("  signs:");
-        if (signsByType().isEmpty()) {
-            sb.append(" (none — sigil default behaviour)\n");
+        sb.append(String.format(Locale.ROOT, "  convergence: %b%n", convergence));
+        sb.append(String.format(Locale.ROOT, "  composition: %s%n", describeForm()));
+        sb.append("  forms:");
+        if (formsByType().isEmpty()) {
+            sb.append(" (none)\n");
         } else {
             sb.append('\n');
-            for (SignBundle b : signsByType()) {
-                String role = b.type().tier() == SignType.Tier.MANIFESTATION
-                        ? b.type().manifestationRole().toString()
-                        : b.type().tier().toString();
+            for (FormBundle b : formsByType()) {
+                sb.append(String.format(Locale.ROOT, "    %s x%d [%s]%n", b.type(), b.count(), b.type().role()));
+            }
+        }
+        sb.append("  effects:");
+        if (effectsByType().isEmpty()) {
+            sb.append(" (none)\n");
+        } else {
+            sb.append('\n');
+            for (EffectBundle b : effectsByType()) {
                 sb.append(String.format(Locale.ROOT,
-                        "    %s x%d [%s, %s]%n",
-                        b.type(), b.count(), role, b.type().stackingMode()));
+                        "    %s x%d [canCarry=%b, mode=%s]%n",
+                        b.type(), b.count(), b.type().canCarry(), b.type().modeTag()));
             }
         }
         sb.append(String.format(Locale.ROOT,

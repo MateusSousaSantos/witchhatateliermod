@@ -4,8 +4,9 @@ import com.crsocial.witchhatatelier.WitchHatAtelierMod;
 import com.crsocial.witchhatatelier.blocks.ModBlocks;
 import com.crsocial.witchhatatelier.blocks.PlacedPaperBlockEntity;
 import com.crsocial.witchhatatelier.items.PaperType;
-import com.crsocial.witchhatatelier.spell.compiler.SigilType;
-import com.crsocial.witchhatatelier.spell.compiler.SignType;
+import com.crsocial.witchhatatelier.spell.compiler.ElementType;
+import com.crsocial.witchhatatelier.spell.compiler.EffectType;
+import com.crsocial.witchhatatelier.spell.compiler.FormType;
 import com.crsocial.witchhatatelier.spell.feedback.InscriptionSummary;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
@@ -31,9 +32,10 @@ public class InscriptionGameTests {
     private static InscriptionSummary sample() {
         return new InscriptionSummary(
                 InscriptionSummary.InscriptionState.READY,
-                SigilType.FIRE,
-                List.of(new InscriptionSummary.SignEntry(SignType.COLUMN, 2),
-                        new InscriptionSummary.SignEntry(SignType.LEVITATION, 1)),
+                ElementType.FIRE,
+                List.of(new InscriptionSummary.FormEntry(FormType.COLUMN, 2)),
+                List.of(new InscriptionSummary.EffectEntry(EffectType.LEVITATION, 1)),
+                false,
                 0.87f,
                 new int[]{3, 5});
     }
@@ -42,7 +44,9 @@ public class InscriptionGameTests {
                                              InscriptionSummary expected, InscriptionSummary actual) {
         if (actual.state() != expected.state()
                 || actual.element() != expected.element()
-                || !actual.signs().equals(expected.signs())
+                || !actual.forms().equals(expected.forms())
+                || !actual.effects().equals(expected.effects())
+                || actual.convergence() != expected.convergence()
                 || actual.quality() != expected.quality()
                 || !Arrays.equals(actual.unrecognizedStrokeIds(), expected.unrecognizedStrokeIds())) {
             helper.fail("Inscription summary changed across round-trip: expected "

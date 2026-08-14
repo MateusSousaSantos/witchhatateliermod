@@ -107,17 +107,15 @@
   "inscription.witchhatateliermod.composition": "%1$s — %2$s",
   "inscription.witchhatateliermod.composition.compact": "%1$s %2$s",
   "inscription.witchhatateliermod.sign_count": "%1$s ×%2$s",
-  "inscription.witchhatateliermod.state.ready": "Preparado — feche o anel para conjurar",
-  "inscription.witchhatateliermod.state.inert": "A combinação ainda não possui significado",
-  "inscription.witchhatateliermod.state.fizzle": "Os sigilos conflitam — não será conjurado",
+  "inscription.witchhatateliermod.state.ready": "Reconhecido — os glifos formam uma estrutura válida",
+  "inscription.witchhatateliermod.state.fizzle": "Os sigilos conflitam — estrutura inválida",
   "inscription.witchhatateliermod.state.illegible": "Ilegível — os glifos não puderam ser lidos",
   "inscription.witchhatateliermod.quality": "Qualidade: %s",
 
-  "hud.witchhatateliermod.cast": "✦ %1$s — %2$s",
+  "hud.witchhatateliermod.recognized": "✦ %1$s — %2$s",
   "hud.witchhatateliermod.prepared": "◈ Preparado: %s",
-  "hud.witchhatateliermod.prepared.ring_hint": "◈ Preparado: %s — termine o anel para conjurar",
+  "hud.witchhatateliermod.prepared.ring_hint": "◈ Preparado: %s — termine o anel para revelar",
   "hud.witchhatateliermod.ring_unfinished": "◈ O anel está inacabado",
-  "hud.witchhatateliermod.inert": "◈ %s — a combinação ainda não possui significado",
   "hud.witchhatateliermod.fizzle": "✗ O feitiço falha",
   "hud.witchhatateliermod.illegible": "· A tinta não diz nada"
 }

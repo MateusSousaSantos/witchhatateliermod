@@ -107,17 +107,15 @@
   "inscription.witchhatateliermod.composition": "%1$s — %2$s",
   "inscription.witchhatateliermod.composition.compact": "%1$s %2$s",
   "inscription.witchhatateliermod.sign_count": "%1$s ×%2$s",
-  "inscription.witchhatateliermod.state.ready": "Prepared — close the ring to cast",
-  "inscription.witchhatateliermod.state.inert": "The combination holds no meaning yet",
-  "inscription.witchhatateliermod.state.fizzle": "The sigils clash — this will not cast",
+  "inscription.witchhatateliermod.state.ready": "Recognized — the glyphs form a valid structure",
+  "inscription.witchhatateliermod.state.fizzle": "The sigils clash — not a valid structure",
   "inscription.witchhatateliermod.state.illegible": "Illegible — the glyphs could not be read",
   "inscription.witchhatateliermod.quality": "Quality: %s",
 
-  "hud.witchhatateliermod.cast": "✦ %1$s — %2$s",
+  "hud.witchhatateliermod.recognized": "✦ %1$s — %2$s",
   "hud.witchhatateliermod.prepared": "◈ Prepared: %s",
-  "hud.witchhatateliermod.prepared.ring_hint": "◈ Prepared: %s — finish the ring to cast",
+  "hud.witchhatateliermod.prepared.ring_hint": "◈ Prepared: %s — finish the ring to reveal it",
   "hud.witchhatateliermod.ring_unfinished": "◈ The ring is unfinished",
-  "hud.witchhatateliermod.inert": "◈ %s — the combination holds no meaning yet",
   "hud.witchhatateliermod.fizzle": "✗ The spell fizzles",
   "hud.witchhatateliermod.illegible": "· The ink says nothing"
 }

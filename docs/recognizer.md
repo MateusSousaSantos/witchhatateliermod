@@ -40,7 +40,7 @@ Two non-obvious design commitments frame everything below:
 
 ```
 client: Draw → Recognize ($P+ preview) → Validate (closed Ring) ──SaveGesturePayload──► server
-server: cluster strokes → preprocess → RECOGNIZE ($P+) → SpellGraphBuilder → MeaningEngine → …
+server: cluster strokes → preprocess → RECOGNIZE ($P+) → SpellGraphBuilder → CompositionEngine → …
 ```
 
 The server-side orchestrator is `SaveGestureHandler.runSpellPipeline()`
@@ -381,8 +381,9 @@ the config comments themselves (`Config.java:83-86`, `:191-210`).
   flag (`TemplateRegistry.java:30-38`), so the recognizer never tries to match a
   content sigil against the activation ring.
 
-**Adding a sigil** is therefore: drop a `spell_templates/*.json` shape, and (to wire
-meaning) add the `SigilType` enum constant + matrix cells. Existing signs/sigils
+**Adding a glyph** is therefore: drop a `spell_templates/*.json` shape, and (to wire
+meaning) add the `ElementType`/`FormType`/`EffectType` enum constant + its default
+implementation (see `docs/spell_pipeline.md` §9). Existing elements/forms/effects
 combine with it automatically. The recognizer needs nothing else.
 
 ---

@@ -6,11 +6,12 @@ import org.joml.Vector2f;
 import java.util.List;
 
 /**
- * Computes the {@link SymmetryReport} from sign placement around the central
- * sigil. Each sign is treated as a force vector — its displacement from the
- * sigil centre, weighted by recognizer quality — and the report describes how
- * those forces sum. Opposing placements of similar quality pull against each
- * other and the net direction approaches zero; a configurable deadzone
+ * Computes the {@link SymmetryReport} from glyph placement around the central
+ * element. Each glyph (form or effect occurrence alike — see {@link
+ * GlyphPlacement}) is treated as a force vector — its displacement from the
+ * element centre, weighted by recognizer quality — and the report describes
+ * how those forces sum. Opposing placements of similar quality pull against
+ * each other and the net direction approaches zero; a configurable deadzone
  * ({@link Config#SYMMETRY_CANCEL_DEADZONE}) snaps near-balanced placements all
  * the way to zero so deliberately-balanced spells are easy to draw.
  */
@@ -24,22 +25,22 @@ public final class SymmetryAnalyzer {
 
     private SymmetryAnalyzer() {}
 
-    public static SymmetryReport analyze(Vector2f sigilCentre, List<SignNode> signs) {
-        if (signs.isEmpty()) {
-            // No signs around the sigil → trivially balanced.
+    public static SymmetryReport analyze(Vector2f centre, List<GlyphPlacement> glyphs) {
+        if (glyphs.isEmpty()) {
+            // No glyphs around the element → trivially balanced.
             return new SymmetryReport(1f, 0f, new Vector2f(0f, 0f), true);
         }
 
-        // Each sign contributes a force: its displacement from the sigil centre,
+        // Each glyph contributes a force: its displacement from the element centre,
         // weighted by recognizer quality. The vector sum is the net pull; the scalar
-        // sum of the individual lengths is what the net would be if every sign pulled
+        // sum of the individual lengths is what the net would be if every glyph pulled
         // the same way, so net / total is a [0, 1] imbalance measure.
         Vector2f net = new Vector2f();
         float totalMagnitude = 0f;
-        for (SignNode s : signs) {
-            float q = s.quality();
-            float fx = (s.position().x - sigilCentre.x) * q;
-            float fy = (s.position().y - sigilCentre.y) * q;
+        for (GlyphPlacement g : glyphs) {
+            float q = g.quality();
+            float fx = (g.position().x - centre.x) * q;
+            float fy = (g.position().y - centre.y) * q;
             net.add(fx, fy);
             totalMagnitude += (float) Math.sqrt(fx * fx + fy * fy);
         }
@@ -51,7 +52,7 @@ public final class SymmetryAnalyzer {
 
         // Deadzone: when opposing forces nearly cancel, snap the residual to zero so a
         // slightly-imperfect mirror placement still yields a balanced (directionless)
-        // spell. Two opposite signs of similar quality therefore cancel out even if the
+        // spell. Two opposite glyphs of similar quality therefore cancel out even if the
         // drawing isn't pixel-perfect, instead of leaking a small leftover direction.
         float deadzone = Config.SYMMETRY_CANCEL_DEADZONE.get().floatValue();
         if (imbalance <= deadzone) {

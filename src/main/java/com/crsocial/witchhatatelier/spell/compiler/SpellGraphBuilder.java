@@ -9,19 +9,19 @@ import org.joml.Vector2f;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 
 /**
- * Builds a {@link SpellGraph} from a closed ring's recognized content. The only
- * structural rule enforced is <b>exactly one Sigil per ring</b> (multi-element
- * spells use nested rings, per {@code docs/magic_system/02_spell_compiler.md}).
+ * Builds a {@link SpellGraph} from a closed ring's recognized content. The
+ * only structural rule enforced is <b>exactly one Element per ring</b>
+ * (multi-element spells use nested rings).
  *
- * <p>Signs combine freely: multiple occurrences of the same type stack, and
- * different types coexist. Manifestation signs follow a carrier/rider hierarchy
- * (Column/Dispersion are carriers, Bolt is a rider) exposed via
- * {@link SpellGraph#carriers()} / {@link SpellGraph#riders()}; Force signs
- * simply coexist. On a missing sigil the builder emits no graph and the
- * inscription falls back to the Prepared state.
+ * <p>Forms and effects combine freely: multiple occurrences of the same type
+ * stack, and different types coexist. Convergence is a bare boolean flag —
+ * drawing its glyph densifies the working material rather than adding a form
+ * or effect node. On a missing element the builder emits no graph and the
+ * inscription falls back to the Prepared state.</p>
  */
 public final class SpellGraphBuilder {
 
@@ -33,7 +33,7 @@ public final class SpellGraphBuilder {
      * @param clusters     content clusters, parallel to {@code recognitions}
      * @param recognitions recognizer result per cluster, parallel to {@code clusters}
      * @param ctx          per-cast environment (currently unused by the builder;
-     *                     threaded for the meaning engine and future ink/wand systems)
+     *                     threaded for the composition engine and future ink/wand systems)
      */
     public static CompileResult build(TriggerResult trigger,
                                       List<List<Point>> ringStrokes,
@@ -45,53 +45,68 @@ public final class SpellGraphBuilder {
                     "clusters/recognitions size mismatch: " + clusters.size() + " vs " + recognitions.size());
         }
 
-        List<SigilNode> sigils = new ArrayList<>();
-        List<SignNode> signs = new ArrayList<>();
+        List<ElementNode> elements = new ArrayList<>();
+        List<FormNode> forms = new ArrayList<>();
+        List<EffectNode> effects = new ArrayList<>();
+        boolean convergence = false;
 
         for (int i = 0; i < clusters.size(); i++) {
             RecognitionResult r = recognitions.get(i);
             if (RecognitionResult.UNKNOWN.equals(r.spellName())) continue;
 
             Vector2f centre = centroid(clusters.get(i));
+            float orientationDeg = (float) Math.toDegrees(r.indicativeAngle());
 
-            Optional<SigilType> sigil = SigilType.fromSpellName(r.spellName());
-            if (sigil.isPresent()) {
-                sigils.add(new SigilNode(sigil.get(), centre, r.confidenceScore()));
+            Optional<ElementType> element = ElementType.fromSpellName(r.spellName());
+            if (element.isPresent()) {
+                elements.add(new ElementNode(element.get(), centre, r.confidenceScore()));
                 continue;
             }
-            Optional<SignType> sign = SignType.fromSpellName(r.spellName());
-            if (sign.isPresent()) {
-                signs.add(new SignNode(sign.get(), centre,
-                        (float) Math.toDegrees(r.indicativeAngle()), r.confidenceScore()));
+            Optional<FormType> form = FormType.fromSpellName(r.spellName());
+            if (form.isPresent()) {
+                forms.add(new FormNode(form.get(), centre, orientationDeg, r.confidenceScore()));
+                continue;
+            }
+            Optional<EffectType> effect = EffectType.fromSpellName(r.spellName());
+            if (effect.isPresent()) {
+                effects.add(new EffectNode(effect.get(), centre, orientationDeg, r.confidenceScore()));
+                continue;
+            }
+            if ("convergence".equals(r.spellName().toLowerCase(Locale.ROOT))) {
+                convergence = true;
                 continue;
             }
             WitchHatAtelierMod.LOGGER.info(
-                    "[Compiler] Ignoring recognized but non-sigil/non-sign content '{}'.", r.spellName());
+                    "[Compiler] Ignoring recognized but non-element/non-form/non-effect content '{}'.",
+                    r.spellName());
         }
 
-        // ── Rule: one Sigil ELEMENT per ring; repeats of that element stack ──────
+        // ── Rule: one ELEMENT per ring; repeats of that element stack ───────────
         // Drawing the same element twice (e.g. fire + fire) is no longer an error:
         // the copies amplify power. Two *different* elements still need nested rings.
-        if (sigils.isEmpty()) {
-            return CompileResult.rejected("No sigil recognized inside the ring");
+        if (elements.isEmpty()) {
+            return CompileResult.rejected("No element recognized inside the ring");
         }
-        SigilType element = sigils.getFirst().type();
-        SigilNode core = sigils.getFirst();
-        for (SigilNode s : sigils) {
-            if (s.type() != element) {
-                return CompileResult.rejected("Mixed elements in one ring (" + element + " + " + s.type()
+        ElementType element = elements.getFirst().type();
+        ElementNode core = elements.getFirst();
+        for (ElementNode e : elements) {
+            if (e.type() != element) {
+                return CompileResult.rejected("Mixed elements in one ring (" + element + " + " + e.type()
                         + "); only one element per ring — combine different elements via nested rings");
             }
-            if (s.quality() > core.quality()) core = s; // best-drawn copy represents the stack
+            if (e.quality() > core.quality()) core = e; // best-drawn copy represents the stack
         }
-        int sigilStack = sigils.size(); // repeats of the same element amplify the spell's power
+        int sigilStack = elements.size(); // repeats of the same element amplify the spell's power
 
         RingNode ring = buildRing(trigger.ringStrokeIds(), ringStrokes);
-        SymmetryReport symmetry = SymmetryAnalyzer.analyze(core.centre(), signs);
+        List<GlyphPlacement> glyphs = new ArrayList<>(forms.size() + effects.size());
+        for (FormNode f : forms) glyphs.add(GlyphPlacement.of(f));
+        for (EffectNode e : effects) glyphs.add(GlyphPlacement.of(e));
+        SymmetryReport symmetry = SymmetryAnalyzer.analyze(core.centre(), glyphs);
         SizeReport size = buildSize(clusters, ringStrokes);
 
-        return CompileResult.success(new SpellGraph(ring, core, sigilStack, List.copyOf(signs),
-                Optional.empty(), symmetry, size));
+        return CompileResult.success(new SpellGraph(ring, core, sigilStack, convergence,
+                List.copyOf(forms), List.copyOf(effects), Optional.empty(), symmetry, size));
     }
 
     // ── Geometry helpers ─────────────────────────────────────────────────────────

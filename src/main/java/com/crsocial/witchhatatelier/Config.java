@@ -371,70 +371,7 @@ public class Config {
                     "Range: 3 – 32. Default: 8.")
             .defineInRange("dotInjectionCirclePoints", 8, 3, 32);
 
-    // ── Spell meaning (sigil stacking) ──────────────────────────────────────────
-
-    public static final ModConfigSpec.DoubleValue SIGIL_STACK_POWER_PER_EXTRA = BUILDER
-            .comment("Power bonus per DUPLICATE sigil of the same element drawn in one ring.",
-                    "Drawing the same element N times multiplies the spell's power by",
-                    "1 + (N - 1) * this value. Example at 0.5: one fire = ×1.0, two fire = ×1.5,",
-                    "three fire = ×2.0. Different elements in one ring are still rejected (combine",
-                    "them via nested rings); only repeats of the SAME element stack here.",
-                    "Range: 0.0 – 4.0. Default: 0.5 (each extra sigil = +50% power).")
-            .defineInRange("sigilStackPowerPerExtra", 0.5, 0.0, 4.0);
-
-    public static final ModConfigSpec.DoubleValue SIZE_POWER_MAX = BUILDER
-            .comment("Power/reach multiplier a sigil reaches at FULL drawn size. Drawn size is",
-                    "the content bounding box as a fraction of the ring (0 = a dot, 1 = fills the",
-                    "ring). The curve is anchored (see sizePowerReference) so a reference-sized",
-                    "sigil = ×1.0 and a full-size one = this value, letting 'draw it big' amplify",
-                    "a spell instead of only ever shrinking it. Affects both the abstract power",
-                    "(Pyreball, Wind shove) and effect reach (pillar/column height).",
-                    "Example at 3.5: one full-size column ≈ three-to-four reference-size",
-                    "columns. Set 2.0 to make one big column ≈ two small ones. Range: 1.0 – 8.0.",
-                    "Default: 3.5.")
-            .defineInRange("sizePowerMax", 3.5, 1.0, 8.0);
-    public static final ModConfigSpec.DoubleValue SIZE_POWER_REFERENCE = BUILDER
-            .comment("The drawn size that maps to ×1.0 power — the anchor of the size curve.",
-                    "Sigils drawn at this size are unaffected; larger ones amplify toward",
-                    "sizePowerMax, smaller ones fall toward a 0.1 floor. Lower it to make more",
-                    "drawings count as 'large', raise it to make amplification harder to reach.",
-                    "Range: 0.05 – 0.95. Default: 0.5.")
-            .defineInRange("sizePowerReference", 0.5, 0.05, 0.95);
-    public static final ModConfigSpec.DoubleValue SIZE_POWER_EXPONENT = BUILDER
-            .comment("Shape of the size→power curve on each side of the reference anchor.",
-                    "1.0 = linear ramp. >1.0 = big-heavy (size barely matters until near full,",
-                    "then ramps hard). <1.0 = front-loaded (small size gains matter most).",
-                    "Range: 0.25 – 4.0. Default: 1.0.")
-            .defineInRange("sizePowerExponent", 1.0, 0.25, 4.0);
-    public static final ModConfigSpec.DoubleValue DIRECTION_SIZE_EXPONENT = BUILDER
-            .comment("Extra weight size carries on a DIRECTIONAL cast's steering force (the",
-                    "Column sign's lean), over and above its effect on power. The steering skew",
-                    "uses the size→power multiplier raised to this exponent, so >1.0 makes a big",
-                    "off-centre sign steer much harder while a small one barely leans. 1.0 = the",
-                    "steering tracks size exactly like power does. Range: 0.5 – 4.0. Default: 1.5.")
-            .defineInRange("directionSizeExponent", 1.5, 0.5, 4.0);
-
-    public static final ModConfigSpec.DoubleValue COLUMN_STEER_DEADZONE = BUILDER
-            .comment("How far off the sigil centre a Column sign must be drawn before it steers",
-                    "the pillar at all, in canvas units (the displacement of the Column from the",
-                    "sigil centre; the whole canvas is 1.0 wide). Inside this radius the pillar",
-                    "goes STRAIGHT UP — raise it to make 'straight up' easier to hit by hand,",
-                    "lower it toward 0 to let even a slightly off-centre Column lean.",
-                    "Range: 0.0 – 0.5. Default: 0.10.")
-            .defineInRange("columnSteerDeadzone", 0.10, 0.0, 0.5);
-    public static final ModConfigSpec.DoubleValue COLUMN_STEER_FULL_DISTANCE = BUILDER
-            .comment("The off-centre distance (canvas units) at which a Column reaches its FULL",
-                    "lean (columnSteerMaxSkew). Between columnSteerDeadzone and this, the lean",
-                    "ramps up linearly, so the further you draw the Column to one side the harder",
-                    "the pillar tilts. Must be above the deadzone. Range: 0.05 – 0.71. Default: 0.40.")
-            .defineInRange("columnSteerFullDistance", 0.40, 0.05, 0.71);
-    public static final ModConfigSpec.DoubleValue COLUMN_STEER_MAX_SKEW = BUILDER
-            .comment("Strength of a Column sign's lean at full off-centre distance and quality.",
-                    "It is the length of the horizontal steering bias added to the pillar's",
-                    "(unit-length) upward direction before re-normalizing: 1.0 = a 45-degree lean",
-                    "at most, higher = closer to horizontal. Lower this to keep pillars more",
-                    "upright even when steered. Range: 0.0 – 8.0. Default: 2.5.")
-            .defineInRange("columnSteerMaxSkew", 2.5, 0.0, 8.0);
+    // ── Glyph symmetry (compiler) ───────────────────────────────────────────────
 
     public static final ModConfigSpec.DoubleValue SYMMETRY_CANCEL_DEADZONE = BUILDER
             .comment("How close to balanced opposing signs must be before the spell's net",
@@ -448,26 +385,6 @@ public class Config {
                     "0.0 = only exact cancellation balances (old behaviour). Higher = more",
                     "forgiving. Range: 0.0 – 1.0. Default: 0.2.")
             .defineInRange("symmetryCancelDeadzone", 0.2, 0.0, 1.0);
-
-    // ── Spell casting & fuel system ─────────────────────────────────────────────
-
-    public static final ModConfigSpec.DoubleValue DEFAULT_SPELL_FUEL = BUILDER
-            .comment("Default fuel units a spell starts with. Will be replaced by",
-                    "ink-type-driven values in a future update, but for now all spells",
-                    "start with this much fuel. A spell ends when fuel reaches zero.",
-                    "Per-tick costs drain this each tick; per-use costs drain on trigger/event.",
-                    "Range: 1.0 – 10000.0. Default: 100.0.")
-            .defineInRange("defaultSpellFuel", 1200.0, 1.0, 10000.0);
-    public static final ModConfigSpec.DoubleValue COST_POWER_SCALING = BUILDER
-            .comment("How strongly fuel cost tracks a spell's power. The matrix cost.per_tick/",
-                    "per_use values are the BASE, paid in full by a spell drawn at its reference",
-                    "power. Amplifiers (quality, size, sign stacking, sign behaviours, repeated",
-                    "sigils) raise power above that baseline; cost is multiplied by",
-                    "1 + (powerFactor - 1) * this, where powerFactor = finalPower / basePower.",
-                    "0.0 = flat cost (old behaviour). 1.0 = cost rises 1:1 with power",
-                    "(double power → double cost). >1.0 = a steeper toll on heavy casts.",
-                    "Range: 0.0 – 4.0. Default: 1.0.")
-            .defineInRange("costPowerScaling", 1.0, 0.0, 4.0);
 
     // Must be declared AFTER all values so the builder has them all registered before building.
     static final ModConfigSpec SPEC = BUILDER.build();

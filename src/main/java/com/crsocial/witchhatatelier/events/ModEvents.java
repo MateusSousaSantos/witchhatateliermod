@@ -3,7 +3,6 @@ package com.crsocial.witchhatatelier.events;
 import com.crsocial.witchhatatelier.WitchHatAtelierMod;
 import com.crsocial.witchhatatelier.client.gesture.GestureCanvasClient;
 import com.crsocial.witchhatatelier.items.Wand;
-import com.crsocial.witchhatatelier.spell.meaning.MatrixLoader;
 import com.crsocial.witchhatatelier.spell.recognition.SpellTemplateLoader;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.item.ItemStack;
@@ -65,14 +64,13 @@ public class ModEvents {
     }
 
     /**
-     * Registers the datapack loaders for gesture templates and the spell matrix.
-     * Fires once at server start and again on every {@code /reload}, so authors
-     * can iterate on either without restarting.
+     * Registers the datapack loader for gesture templates. Fires once at server
+     * start and again on every {@code /reload}, so authors can iterate without
+     * restarting.
      */
     @SubscribeEvent
     public static void onAddReloadListeners(AddReloadListenerEvent event) {
         event.addListener(new SpellTemplateLoader());
-        event.addListener(new MatrixLoader());
     }
 }
 
