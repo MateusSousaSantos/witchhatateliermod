@@ -9,15 +9,19 @@ shaped the way it is.
 > Orchestrator: `network/SaveGestureHandler.runSpellPipeline()`
 > Companion doc: `docs/recognizer.md` covers everything *up to* recognition.
 
-**Status: step 0.** The pipeline stops here on purpose. A previous iteration
-(`spell/composition/` + `spell/cast/` — a **compositional** engine that resolved the
-graph into mechanical numbers and ran channeled/instantaneous casts against the world)
-grew into more machinery than the project needed and was removed wholesale to restart
-that half of the design from scratch. Nothing downstream of `SpellGraph` exists right
-now: closing a ring reports what was recognized (action-bar + `/spell debug` chat +
-the `InscriptionSummary` stamped on the paper) and nothing else — no world effect, no
-channel, no fuel/duration. What replaces `CompositionEngine` is future work, not yet
-designed.
+**Status: `SpellGraph` is no longer terminal, but nothing runs in the world yet.** A
+previous iteration (`spell/composition/` + `spell/cast/` — a compositional engine that
+resolved the graph into mechanical numbers and ran channeled/instantaneous casts
+against the world) grew into more machinery than the project needed and was removed
+wholesale to restart that half of the design from scratch. That redesign,
+`spell/composition/`'s `CompositionEngine`, now exists — see `docs/new_spell_engine.md`
+(the engine) and `docs/sigils_and_signs.md` (the concrete elements/forms/effects it
+resolves). It turns a `SpellGraph` into a compiled, in-memory `ExecutableSpell`, but
+that engine's own scope stops there: no executor/`SpellCastManager` consumes an
+`ExecutableSpell` yet, so closing a ring in real gameplay still only reports what was
+recognized (action-bar + `/spell debug` chat + the `InscriptionSummary` stamped on the
+paper) — no world effect, no channel, no fuel/duration. `CompositionEngine` is reachable
+today only from gametests that hand-build a `SpellGraph`, not from `SaveGestureHandler`.
 
 ---
 
@@ -33,10 +37,12 @@ recognitions ─► SpellGraphBuilder ─► SpellGraph   (structure: what was d
                               InscriptionSummary    (feedback: action-bar / tooltip / debug chat)
 ```
 
-`SpellGraph` is the **terminal** artifact of the pipeline today — nothing consumes it
-to produce a world effect. The orchestration lives in `SaveGestureHandler.runPipeline`
-— read that method first if you only read one thing; the section below expands the
-graph-building stage.
+`SpellGraph` is still the pipeline's terminal artifact **as wired into real gameplay**
+today — `SaveGestureHandler.runPipeline` doesn't call anything past it. `spell/
+composition/CompositionEngine` (see `docs/new_spell_engine.md`) can turn a `SpellGraph`
+into an `ExecutableSpell`, but nothing invokes that from the actual save-gesture path
+yet — it's exercised only by gametests. Read `SaveGestureHandler.runPipeline` first if
+you only read one thing; the section below expands the graph-building stage.
 
 ---
 
@@ -153,9 +159,14 @@ feedback — there is no material/behaviour resolution layer to also register wi
 
 ## 6. Explicitly deferred
 
-- **Everything downstream of `SpellGraph`.** World-effect resolution (was
-  `CompositionEngine`) and cast execution (was `spell/cast/`) were removed and are
-  being redesigned from scratch.
+- **Wiring `CompositionEngine` into real gameplay.** `spell/composition/
+  CompositionEngine` (§new engine, see `docs/new_spell_engine.md`) resolves a
+  `SpellGraph` into an `ExecutableSpell`, but nothing calls it from
+  `SaveGestureHandler` — closing a ring still only reports recognition.
+- **Cast execution.** The tick loop for a Continuous spell, the trigger watch for a
+  Reactive one, fuel/cost draining (was `spell/cast/`) — sketched only as "SpellExecutor
+  / SpellCastManager / PlacedPaperCastManager" in `new_spell_engine.md`'s pipeline
+  diagram, with no internal design yet.
 - **Combining forms.** A carrier/rider split (`column + bolt` = a column that fires
   bolts) — `FormType.FormRole` is reserved for it but no mechanism resolves it yet.
 - **Completion by joining two halves.** A possible second ring-closure-alternative

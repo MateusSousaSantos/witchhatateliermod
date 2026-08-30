@@ -1,6 +1,5 @@
 {
   "spell_name": "dispersion",
-  "is_rejection": true,
   "variants": [
     {
       "name": "variant_1",
